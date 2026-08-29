@@ -23,6 +23,10 @@
 # misc
 .DS_Store
 *.pem
+*.pid
+*.log
+cbt-app.log
+.cbt-app.pid
 
 # debug
 npm-debug.log*
