@@ -116,7 +116,7 @@ export async function POST(
     let currentSisaDetik = computedSisaDetik;
     if (peserta.waktuMulai && peserta.status === 'SEDANG_MENGERJAKAN') {
       const elapsedSinceStudentStart = Math.floor((now.getTime() - new Date(peserta.waktuMulai).getTime()) / 1000);
-      const studentRemaining = (peserta.sisaDetik || totalMaxDetik) - elapsedSinceStudentStart;
+      const studentRemaining = totalMaxDetik - elapsedSinceStudentStart;
       currentSisaDetik = Math.max(0, Math.min(computedSisaDetik, studentRemaining));
     }
 
@@ -133,7 +133,7 @@ export async function POST(
         data: {
           status: 'SEDANG_MENGERJAKAN',
           waktuMulai: now,
-          sisaDetik: computedSisaDetik,
+          sisaDetik: currentSisaDetik,
           urutanSoalIds: JSON.stringify(soalIds),
         },
       });
@@ -144,7 +144,7 @@ export async function POST(
           userId: user.userId,
           pesertaUjianId: peserta.id,
           aktivitas: 'MULAI_UJIAN',
-          detail: `Siswa ${user.name} (${user.username}) memulai pengerjaan ujian. Sisa waktu: ${Math.floor(computedSisaDetik / 60)} menit.`,
+          detail: `Siswa ${user.name} (${user.username}) memulai pengerjaan ujian. Sisa waktu: ${Math.floor(currentSisaDetik / 60)} menit.`,
         },
       });
     } else {

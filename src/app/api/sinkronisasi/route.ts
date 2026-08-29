@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionUser } from '@/lib/auth';
+import { getSessionUser, mapSimasmuhRoleToCbt } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Client } from 'pg';
 import bcrypt from 'bcryptjs';
@@ -13,6 +13,8 @@ async function getSimasmuhClient() {
   await client.connect();
   return client;
 }
+
+import { normalizeJurusan, DAFTAR_JURUSAN_MUHIPO } from '@/lib/constants';
 
 // GET: Cek Status Sinkronisasi Real-Time antara SIMASMUH & CBT MUHIPO
 export async function GET() {
@@ -28,16 +30,22 @@ export async function GET() {
       kelasCount: 0,
       mapelCount: 0,
       guruCount: 0,
+      adminCount: 0,
+      programs: [] as any[],
     };
 
     try {
       const client = await getSimasmuhClient();
       try {
-        const [stRes, clRes, sbRes, tcRes] = await Promise.all([
+        const [stRes, clRes, sbRes, tcRes, admRes, prgRes] = await Promise.all([
           client.query('SELECT count(*) FROM "Student"'),
           client.query('SELECT count(*) FROM "Class"'),
           client.query('SELECT count(*) FROM "Subject"'),
-          client.query('SELECT count(*) FROM "TeacherProfile"'),
+          client.query('SELECT count(*) FROM "User" WHERE role = \'GURU\''),
+          client.query(
+            "SELECT count(*) FROM \"User\" WHERE role IN ('SUPERADMIN', 'ADMIN_IT', 'ADMIN_TU', 'ADMIN', 'PEGAWAI', 'KEPALA_SEKOLAH') OR role LIKE '%ADMIN%'"
+          ),
+          client.query('SELECT id, code, name, description FROM "ProgramConfig" ORDER BY name ASC').catch(() => ({ rows: [] })),
         ]);
 
         simasmuhStats = {
@@ -45,6 +53,8 @@ export async function GET() {
           kelasCount: parseInt(clRes.rows[0].count, 10) || 0,
           mapelCount: parseInt(sbRes.rows[0].count, 10) || 0,
           guruCount: parseInt(tcRes.rows[0].count, 10) || 0,
+          adminCount: parseInt(admRes.rows[0].count, 10) || 0,
+          programs: prgRes.rows || [],
         };
         isSimasmuhConnected = true;
       } finally {
@@ -56,6 +66,8 @@ export async function GET() {
 
     // Ambil data lokal CBT MUHIPO
     const [
+      cbtAdminCount,
+      cbtGuruCount,
       cbtSiswaCount,
       cbtKelasCount,
       cbtMapelCount,
@@ -63,6 +75,8 @@ export async function GET() {
       cbtSoalCount,
       cbtUjianCount,
     ] = await Promise.all([
+      prisma.user.count({ where: { role: 'ADMIN' } }),
+      prisma.user.count({ where: { role: 'GURU' } }),
       prisma.user.count({ where: { role: 'SISWA' } }),
       prisma.kelas.count(),
       prisma.mataPelajaran.count(),
@@ -91,6 +105,8 @@ export async function GET() {
         },
         cbt: {
           port: 54332,
+          adminCount: cbtAdminCount,
+          guruCount: cbtGuruCount,
           siswaCount: cbtSiswaCount,
           kelasCount: cbtKelasCount,
           mapelCount: cbtMapelCount,
@@ -117,7 +133,7 @@ export async function GET() {
   }
 }
 
-// POST: Jalankan Sinkronisasi Penuh (Siswa, NIS/NISN, Kelas, Mapel & Guru)
+// POST: Jalankan Sinkronisasi Penuh (Admin, Guru, Siswa, Kelas, Mapel)
 export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser();
@@ -126,23 +142,29 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { target = 'ALL' } = body; // 'ALL' | 'SISWA' | 'KELAS_MAPEL'
+    const { target = 'ALL' } = body; // 'ALL' | 'SISWA' | 'KELAS_MAPEL' | 'ADMIN_GURU'
 
     const client = await getSimasmuhClient();
 
     let stats = {
       kelasCount: 0,
       mapelCount: 0,
-      siswaCount: 0,
+      adminCount: 0,
       guruCount: 0,
+      siswaCount: 0,
     };
 
     try {
       // 1. SINKRONISASI KELAS (Class SIMASMUH -> Kelas CBT)
-      if (target === 'ALL' || target === 'KELAS_MAPEL') {
-        const classesRes = await client.query('SELECT id, name, "gradeLevel" FROM "Class"');
+      if (target === 'ALL' || target === 'KELAS_MAPEL' || target === 'KELAS') {
+        const classesRes = await client.query(`
+          SELECT c.id, c.name, c."gradeLevel", 
+            (SELECT s.program FROM "Student" s WHERE s."classId" = c.id AND s.program IS NOT NULL LIMIT 1) as "sampleProgram"
+          FROM "Class" c
+        `);
         for (const row of classesRes.rows) {
-          const jurusan = row.name.toUpperCase().includes('IPS') ? 'IPS' : 'MIPA';
+          const rawProgram = row.sampleProgram || row.name;
+          const jurusan = normalizeJurusan(rawProgram);
           await prisma.kelas.upsert({
             where: { nama: row.name },
             update: {
@@ -157,8 +179,10 @@ export async function POST(request: NextRequest) {
           });
           stats.kelasCount++;
         }
+      }
 
-        // 2. SINKRONISASI MATA PELAJARAN (Subject SIMASMUH -> MataPelajaran CBT)
+      // 2. SINKRONISASI MATA PELAJARAN (Subject SIMASMUH -> MataPelajaran CBT)
+      if (target === 'ALL' || target === 'KELAS_MAPEL' || target === 'MAPEL') {
         const subjectsRes = await client.query('SELECT id, name, code FROM "Subject"');
         for (const row of subjectsRes.rows) {
           await prisma.mataPelajaran.upsert({
@@ -173,47 +197,99 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // 3. SINKRONISASI SISWA (Student SIMASMUH -> User SISWA CBT)
-      if (target === 'ALL' || target === 'SISWA') {
-        const defaultPasswordHash = await bcrypt.hash('123456', 10);
-        const studentsRes = await client.query(`
-          SELECT s.id, s.nisn, s.nis, s.name, s.gender, c.name as class_name
-          FROM "Student" s
-          LEFT JOIN "Class" c ON s."classId" = c.id
+      // 3. SINKRONISASI ADMIN & GURU (SIMASMUH User & TeacherProfile -> CBT User)
+      if (target === 'ALL' || target === 'ADMIN_GURU' || target === 'GURU') {
+        const usersRes = await client.query(`
+          SELECT 
+            u.id, 
+            u.username, 
+            u.password as password_hash, 
+            u.name, 
+            u.role,
+            tp.nip
+          FROM "User" u
+          LEFT JOIN "TeacherProfile" tp ON tp."userId" = u.id
+          WHERE u.role != 'SISWA'
         `);
 
+        for (const u of usersRes.rows) {
+          const cbtRole = mapSimasmuhRoleToCbt(u.role);
+
+          // Lewati jika role SISWA atau WALI_MURID
+          if (cbtRole === 'SISWA') continue;
+
+          await prisma.user.upsert({
+            where: { username: u.username },
+            update: {
+              name: u.name,
+              password: u.password_hash,
+              role: cbtRole,
+              nip: u.nip || undefined,
+            },
+            create: {
+              username: u.username,
+              password: u.password_hash,
+              name: u.name,
+              role: cbtRole,
+              nip: u.nip || undefined,
+            },
+          });
+
+          if (cbtRole === 'ADMIN') {
+            stats.adminCount++;
+          } else if (cbtRole === 'GURU') {
+            stats.guruCount++;
+          }
+        }
+      }
+
+      // 4. SINKRONISASI SISWA (Student SIMASMUH -> User SISWA CBT)
+      if (target === 'ALL' || target === 'SISWA') {
+        const studentsRes = await client.query(`
+          SELECT s.id, s.nisn, s.nis, s.name, s.gender, c.name as class_name, u.password as password_hash
+          FROM "Student" s
+          LEFT JOIN "Class" c ON s."classId" = c.id
+          LEFT JOIN "User" u ON s."userId" = u.id OR s.nis = u.username
+        `);
+
+        const validNisList: string[] = [];
+
         for (const s of studentsRes.rows) {
-          // Cari ID Kelas Lokal CBT
+          const cleanNis = s.nis ? String(s.nis).trim() : '';
+          const cleanNisn = s.nisn ? String(s.nisn).trim() : '';
+          if (!cleanNis && !cleanNisn) continue;
+
+          const username = cleanNis || cleanNisn;
+          validNisList.push(username);
+
           let cbtKelasId: string | null = null;
           if (s.class_name) {
             const k = await prisma.kelas.findUnique({ where: { nama: s.class_name } });
             if (k) cbtKelasId = k.id;
           }
 
-          // Gunakan NIS sebagai username utama CBT
-          const cleanNis = s.nis ? String(s.nis).trim() : '';
-          const cleanNisn = s.nisn ? String(s.nisn).trim() : '';
-          const username = cleanNis || cleanNisn || `siswa_${s.id.slice(0, 8)}`;
-          const nomorPeserta = cleanNis || cleanNisn || username;
+          const passwordHash = s.password_hash || (await bcrypt.hash(cleanNis || '123456', 10));
 
           await prisma.user.upsert({
             where: { username },
             update: {
               name: s.name,
+              password: passwordHash,
+              role: 'SISWA',
               nis: cleanNis || undefined,
               nisn: cleanNisn || undefined,
-              nomorPeserta,
+              nomorPeserta: cleanNis || cleanNisn,
               kelasId: cbtKelasId,
               jenisKelamin: s.gender === 'P' ? 'P' : 'L',
             },
             create: {
               username,
-              password: defaultPasswordHash,
+              password: passwordHash,
               name: s.name,
               role: 'SISWA',
               nis: cleanNis || username,
               nisn: cleanNisn || null,
-              nomorPeserta,
+              nomorPeserta: cleanNis || cleanNisn,
               kelasId: cbtKelasId,
               jenisKelamin: s.gender === 'P' ? 'P' : 'L',
               ruangUjian: 'Lab Komputer 1',
@@ -222,8 +298,8 @@ export async function POST(request: NextRequest) {
           });
           stats.siswaCount++;
         }
+
         // Hapus siswa CBT yang tidak terdaftar di SIMASMUH
-        const validNisList = studentsRes.rows.map((r: any) => r.nis ? String(r.nis).trim() : '').filter(Boolean);
         if (validNisList.length > 0) {
           await prisma.user.deleteMany({
             where: {
@@ -233,11 +309,49 @@ export async function POST(request: NextRequest) {
             },
           });
         }
+
+        // Otomatis daftarkan siswa resmi ke ujian yang ada
+        const activeUjians = await prisma.ujian.findMany();
+        const allSiswa = await prisma.user.findMany({ where: { role: 'SISWA' } });
+        for (const uj of activeUjians) {
+          for (const sw of allSiswa) {
+            await prisma.pesertaUjian.upsert({
+              where: {
+                ujianId_siswaId: {
+                  ujianId: uj.id,
+                  siswaId: sw.id,
+                },
+              },
+              update: {},
+              create: {
+                ujianId: uj.id,
+                siswaId: sw.id,
+                status: 'BELUM_MULAI',
+                sisaDetik: uj.durasiMenit * 60,
+              },
+            });
+          }
+        }
+      }
+
+      let messageDetail = '';
+      if (target === 'GURU') {
+        messageDetail = `Sinkronisasi Guru Berhasil (${stats.guruCount} Guru)`;
+      } else if (target === 'KELAS') {
+        messageDetail = `Sinkronisasi Kelas Berhasil (${stats.kelasCount} Rombel Kelas)`;
+      } else if (target === 'MAPEL') {
+        messageDetail = `Sinkronisasi Mata Pelajaran Berhasil (${stats.mapelCount} Mapel)`;
+      } else if (target === 'KELAS_MAPEL') {
+        messageDetail = `Sinkronisasi Kelas & Mapel Berhasil (${stats.kelasCount} Kelas, ${stats.mapelCount} Mapel)`;
+      } else if (target === 'SISWA') {
+        messageDetail = `Sinkronisasi Siswa Berhasil (${stats.siswaCount} Siswa)`;
+      } else {
+        messageDetail = `Sinkronisasi SIMASMUH Berhasil! (${stats.adminCount} Admin, ${stats.guruCount} Guru, ${stats.siswaCount} Siswa, ${stats.kelasCount} Rombel Kelas, ${stats.mapelCount} Mapel)`;
       }
 
       return NextResponse.json({
         success: true,
-        message: `Sinkronisasi SIMASMUH Berhasil! (${stats.siswaCount} Siswa, ${stats.kelasCount} Rombel Kelas, ${stats.mapelCount} Mapel)`,
+        message: messageDetail,
         stats,
       });
     } finally {
@@ -247,7 +361,7 @@ export async function POST(request: NextRequest) {
     console.error('Sinkronisasi POST error:', error);
     return NextResponse.json({
       success: false,
-      message: `Gagal sinkronisasi data SIMASMUH: ${error.message}. Pastikan container SIMASMUH (port 54322) aktif.`,
+      message: `Gagal sinkronisasi data SIMASMUH: ${error.message}. Pastikan database SIMASMUH aktif.`,
     }, { status: 500 });
   }
 }

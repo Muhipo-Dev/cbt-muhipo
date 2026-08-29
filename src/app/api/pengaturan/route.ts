@@ -1,6 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import fs from 'fs';
+import path from 'path';
+
+function saveBase64ToFile(dataUrl: string | undefined | null, filePrefix: string): string | undefined {
+  if (!dataUrl) return undefined;
+  if (!dataUrl.startsWith('data:image/')) return dataUrl; // Already a static URL or path
+
+  try {
+    const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+    if (!matches || matches.length < 3) return dataUrl;
+
+    let ext = matches[1].toLowerCase();
+    if (ext === 'jpeg') ext = 'jpg';
+    if (ext === 'svg+xml') ext = 'svg';
+
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const filename = `${filePrefix}-${Date.now()}.${ext}`;
+    const filePath = path.join(uploadsDir, filename);
+
+    fs.writeFileSync(filePath, buffer);
+    return `/uploads/${filename}`;
+  } catch (err) {
+    console.error(`Failed to save base64 to file (${filePrefix}):`, err);
+    return dataUrl;
+  }
+}
 
 // GET: Ambil pengaturan sistem publik / admin
 export async function GET() {
@@ -28,7 +61,7 @@ export async function GET() {
 
     const serverNow = new Date();
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: settings,
       serverTime: {
@@ -50,6 +83,9 @@ export async function GET() {
         }),
       },
     });
+
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    return response;
   } catch (error: any) {
     console.error('Settings GET API error:', error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
@@ -65,7 +101,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const {
+    let {
       schoolName,
       appTitle,
       academicYear,
@@ -76,6 +112,14 @@ export async function POST(request: NextRequest) {
       backgroundUrl,
       timeSyncOffsetMs,
     } = body;
+
+    // Simpan file base64 ke disk public/uploads/ agar permanen dan cepat di-cache browser
+    if (logoUrl && logoUrl.startsWith('data:image/')) {
+      logoUrl = saveBase64ToFile(logoUrl, 'logo-cbt');
+    }
+    if (backgroundUrl && backgroundUrl.startsWith('data:image/')) {
+      backgroundUrl = saveBase64ToFile(backgroundUrl, 'wallpaper-cbt');
+    }
 
     const updated = await (prisma as any).pengaturanSistem.upsert({
       where: { id: 'default-settings' },
@@ -106,7 +150,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Pengaturan sistem CBT berhasil disimpan!',
+      message: 'Pengaturan sistem CBT & aset berkas berhasil disimpan permanen!',
       data: updated,
     });
   } catch (error: any) {

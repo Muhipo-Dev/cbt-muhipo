@@ -116,8 +116,14 @@ export async function POST(
       }
     }
 
-    // Hitung persentase nilai jika semua objektif
-    const nilaiTotal = totalNilaiPG;
+    const bankSoal = pesertaUjian.ujian.bankSoal;
+    const maxNilai = bankSoal.nilaiMaksimal ?? 100.0;
+    const minNilai = bankSoal.nilaiMinimal ?? 0.0;
+
+    // Pastikan nilai tidak melebihi nilai maksimal dan di-round 2 digit desimal
+    const rawTotalPG = Number(totalNilaiPG.toFixed(2));
+    const finalNilaiPG = Math.min(maxNilai, Math.max(minNilai, rawTotalPG));
+    const nilaiTotal = finalNilaiPG;
 
     // Update status peserta Ujian
     await prisma.pesertaUjian.update({
@@ -126,7 +132,7 @@ export async function POST(
         status: StatusPeserta.SELESAI,
         waktuSelesai: new Date(),
         sisaDetik: 0,
-        nilaiPG: totalNilaiPG,
+        nilaiPG: finalNilaiPG,
         nilaiTotal,
         isKoreksiSelesai: !adaSoalEsai, // Jika tidak ada essay, koreksi otomatis selesai 100%
       },

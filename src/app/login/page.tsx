@@ -72,7 +72,7 @@ export default function SingleSignInLoginPage() {
 
       {/* Top Header Navbar */}
       <header className="w-full px-4 sm:px-6 lg:px-10 py-3.5 sm:py-4 border-b border-slate-200/80 dark:border-white/10 bg-white/85 dark:bg-slate-950/85 backdrop-blur-xl flex items-center justify-between z-10 shadow-xs">
-        <SchoolBrandHeader subtitle="Computer Based Test System" />
+        <SchoolBrandHeader subtitle="Portal Ujian SMA Muhammadiyah 1 Ponorogo" />
         <div className="flex items-center gap-2.5 sm:gap-3 text-xs font-medium">
           <ThemeToggle />
           <span className="hidden sm:flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full text-emerald-700 dark:text-emerald-300 shadow-2xs font-semibold">
@@ -93,11 +93,10 @@ export default function SingleSignInLoginPage() {
                 setActivePortal('SISWA');
                 setErrorMessage('');
               }}
-              className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activePortal === 'SISWA'
+              className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activePortal === 'SISWA'
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
+                }`}
             >
               <GraduationCap className="w-4 h-4" />
               <span>Portal Siswa</span>
@@ -108,11 +107,10 @@ export default function SingleSignInLoginPage() {
                 setActivePortal('ADMIN');
                 setErrorMessage('');
               }}
-              className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activePortal === 'ADMIN'
+              className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activePortal === 'ADMIN'
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
+                }`}
             >
               <Shield className="w-4 h-4" />
               <span>Admin / Guru</span>

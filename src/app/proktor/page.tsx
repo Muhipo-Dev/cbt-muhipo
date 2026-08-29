@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SchoolBrandHeader } from '@/components/SchoolBrandHeader';
+import { NotificationModal, NotificationType } from '@/components/NotificationModal';
 import {
   MonitorPlay,
   RotateCcw,
@@ -34,8 +35,94 @@ export default function ProktorPage() {
   const [extraMinutes, setExtraMinutes] = useState(15);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // In-App Notification / Dialog Modal State
+  const [notifModal, setNotifModal] = useState<{
+    isOpen: boolean;
+    type: NotificationType;
+    title: string;
+    message: string | React.ReactNode;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }>({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+  });
+
+  const showNotification = (
+    title: string,
+    message: string | React.ReactNode,
+    type: NotificationType = 'info',
+    onConfirm?: () => void
+  ) => {
+    setNotifModal({
+      isOpen: true,
+      type,
+      title,
+      message,
+      confirmText: 'Tutup',
+      onConfirm: () => {
+        setNotifModal((prev) => ({ ...prev, isOpen: false }));
+        if (onConfirm) onConfirm();
+      },
+    });
+  };
+
+  const showConfirm = (
+    title: string,
+    message: string | React.ReactNode,
+    onConfirm: () => void,
+    type: NotificationType = 'warning',
+    confirmText = 'Ya, Lanjutkan',
+    cancelText = 'Batal'
+  ) => {
+    setNotifModal({
+      isOpen: true,
+      type,
+      title,
+      message,
+      confirmText,
+      cancelText,
+      onConfirm: () => {
+        setNotifModal((prev) => ({ ...prev, isOpen: false }));
+        onConfirm();
+      },
+      onCancel: () => {
+        setNotifModal((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
+  };
+  const [settings, setSettings] = useState<{
+    logoUrl?: string | null;
+    backgroundUrl?: string | null;
+    appTitle?: string;
+    schoolName?: string;
+  }>({
+    logoUrl: '/pic_logo.png',
+    backgroundUrl: '/muhipo-front.jpg',
+    appTitle: 'CBT MUHIPO',
+    schoolName: 'SMA Muhammadiyah 1 Ponorogo',
+  });
+
   useEffect(() => {
     fetchMonitorData();
+    fetch('/api/pengaturan')
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success && json.data) {
+          setSettings({
+            logoUrl: json.data.logoUrl || '/pic_logo.png',
+            backgroundUrl: json.data.backgroundUrl || '/muhipo-front.jpg',
+            appTitle: json.data.appTitle || 'CBT MUHIPO',
+            schoolName: json.data.schoolName || 'SMA Muhammadiyah 1 Ponorogo',
+          });
+        }
+      })
+      .catch(() => {});
+
     // Auto-refresh data status peserta setiap 10 detik
     const interval = setInterval(() => {
       fetchMonitorData(true);
@@ -78,25 +165,31 @@ export default function ProktorPage() {
 
   // Reset Login Siswa
   const handleResetLogin = async (pesertaUjianId: string, namaSiswa: string) => {
-    if (!confirm(`Reset status login siswa "${namaSiswa}" agar dapat login & ujian kembali?`)) return;
-
-    try {
-      const res = await fetch('/api/proktor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'RESET_LOGIN',
-          pesertaUjianId,
-        }),
-      });
-      const resJson = await res.json();
-      if (resJson.success) {
-        alert(resJson.message);
-        fetchMonitorData(true);
+    showConfirm(
+      'Reset Login Peserta',
+      `Reset status login siswa "${namaSiswa}" agar dapat login & ujian kembali?`,
+      async () => {
+        try {
+          const res = await fetch('/api/proktor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'RESET_LOGIN',
+              pesertaUjianId,
+            }),
+          });
+          const resJson = await res.json();
+          if (resJson.success) {
+            showNotification('Reset Berhasil', resJson.message, 'success');
+            fetchMonitorData(true);
+          } else {
+            showNotification('Gagal', resJson.message || 'Gagal mereset status peserta', 'error');
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal mereset status peserta', 'error');
+        }
       }
-    } catch (e) {
-      alert('Gagal mereset status peserta');
-    }
+    );
   };
 
   // Generate / Ganti Token Ujian Baru
@@ -115,15 +208,125 @@ export default function ProktorPage() {
       });
       const resJson = await res.json();
       if (resJson.success) {
-        alert(resJson.message);
+        showNotification('Token Diperbarui', resJson.message, 'success');
         setTokenModal(false);
         fetchMonitorData(true);
+      } else {
+        showNotification('Gagal', resJson.message || 'Gagal update token', 'error');
       }
     } catch (e) {
-      alert('Gagal update token');
+      showNotification('Error', 'Gagal update token', 'error');
     } finally {
       setActionLoading(false);
     }
+  };
+
+  // Reset Login Semua Siswa
+  const handleResetAllLogins = async () => {
+    if (!data?.activeUjian?.id) return;
+    showConfirm(
+      'Reset Login Massal',
+      `Reset seluruh status login peserta untuk ujian "${data.activeUjian.judul}"? Siswa yang bermasalah akan dapat login ulang.`,
+      async () => {
+        try {
+          const res = await fetch('/api/proktor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'RESET_ALL_LOGINS',
+              ujianId: data.activeUjian.id,
+            }),
+          });
+          const resJson = await res.json();
+          if (resJson.success) {
+            showNotification('Reset Massal Sukses', resJson.message, 'success');
+            fetchMonitorData(true);
+          } else {
+            showNotification('Gagal', resJson.message || 'Gagal mereset login massal', 'error');
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal mereset login massal', 'error');
+        }
+      },
+      'warning',
+      'Ya, Reset Semua Peserta'
+    );
+  };
+
+  // Kunci Ujian Siswa
+  const handleLockExam = async (pesertaUjianId: string, namaSiswa: string) => {
+    showConfirm(
+      'Kunci Lembar Ujian',
+      `Kunci lembar ujian siswa "${namaSiswa}" karena pelanggaran?`,
+      async () => {
+        try {
+          const res = await fetch('/api/proktor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'LOCK_EXAM', pesertaUjianId }),
+          });
+          const resJson = await res.json();
+          if (resJson.success) {
+            showNotification('Ujian Terkunci', resJson.message, 'warning');
+            fetchMonitorData(true);
+          } else {
+            showNotification('Gagal', resJson.message || 'Gagal mengunci ujian', 'error');
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal mengunci ujian', 'error');
+        }
+      },
+      'error',
+      'Ya, Kunci Ujian'
+    );
+  };
+
+  // Buka Kunci Siswa
+  const handleUnlockExam = async (pesertaUjianId: string, namaSiswa: string) => {
+    try {
+      const res = await fetch('/api/proktor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'UNLOCK_EXAM', pesertaUjianId }),
+      });
+      const resJson = await res.json();
+      if (resJson.success) {
+        showNotification('Kunci Dibuka', resJson.message, 'success');
+        fetchMonitorData(true);
+      } else {
+        showNotification('Gagal', resJson.message || 'Gagal membuka kunci ujian', 'error');
+      }
+    } catch (e) {
+      showNotification('Error', 'Gagal membuka kunci ujian', 'error');
+    }
+  };
+
+  // Selesaikan Paksa Ujian Siswa
+  const handleFinishForce = async (pesertaUjianId: string, namaSiswa: string) => {
+    showConfirm(
+      'Selesaikan Paksa Ujian',
+      `Selesaikan dan kumpulkan lembar ujian siswa "${namaSiswa}" secara paksa?`,
+      async () => {
+        try {
+          const res = await fetch('/api/proktor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'FINISH_FORCE', pesertaUjianId }),
+          });
+          const resJson = await res.json();
+          if (resJson.success) {
+            showNotification('Ujian Diselesaikan', resJson.message, 'success');
+            fetchMonitorData(true);
+          } else {
+            showNotification('Gagal', resJson.message || 'Gagal menyelesaikan paksa ujian', 'error');
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal menyelesaikan paksa ujian', 'error');
+        }
+      },
+      'error',
+      'Ya, Selesaikan Paksa'
+    );
   };
 
   // Tambah Waktu Ujian untuk Siswa Tertentu
@@ -142,12 +345,14 @@ export default function ProktorPage() {
       });
       const resJson = await res.json();
       if (resJson.success) {
-        alert(resJson.message);
+        showNotification('Waktu Tambahan', resJson.message, 'success');
         setExtraTimeModal(null);
         fetchMonitorData(true);
+      } else {
+        showNotification('Gagal', resJson.message || 'Gagal menambah waktu ujian', 'error');
       }
     } catch (e) {
-      alert('Gagal menambah waktu ujian');
+      showNotification('Error', 'Gagal menambah waktu ujian', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -182,7 +387,11 @@ export default function ProktorPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-cyan-500 selection:text-white">
       {/* Proktor Topbar */}
       <header className="px-6 py-4 bg-slate-900/90 border-b border-slate-800 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between">
-        <SchoolBrandHeader subtitle="Ruang Monitoring Proktor & Pengawas Ruangan" />
+        <SchoolBrandHeader
+          subtitle={`Ruang Monitoring Proktor & Pengawas - ${settings.schoolName || 'SMA Muhammadiyah 1 Ponorogo'}`}
+          logoUrl={settings.logoUrl}
+          appTitle={settings.appTitle || 'CBT'}
+        />
 
         <div className="flex items-center gap-3">
           <button
@@ -298,20 +507,31 @@ export default function ProktorPage() {
                 Live Status & Aktivitas Siswa di Ruangan
               </h3>
               <p className="text-xs text-slate-400">
-                Pantau proses pengerjaan, deteksi potensi kecurangan, dan reset login jika siswa mengalami kendala perangkat.
+                Pantau proses pengerjaan, tangani kendala perangkat, kunci pelanggaran, atau selesaikan ujian.
               </p>
             </div>
 
-            {/* Search Input */}
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                placeholder="Cari nama siswa / NIS..."
-                className="pl-10 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 w-full sm:w-64"
-              />
+            {/* Actions & Search Input */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleResetAllLogins}
+                className="px-3.5 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800 text-rose-300 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset Semua Login</span>
+              </button>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  placeholder="Cari nama siswa / NIS..."
+                  className="pl-10 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 w-full sm:w-64"
+                />
+              </div>
             </div>
           </div>
 
@@ -324,9 +544,9 @@ export default function ProktorPage() {
                   <th className="py-3 px-4">Nama Siswa</th>
                   <th className="py-3 px-4">Kelas</th>
                   <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-center">Progress / Soal Terjawab</th>
+                  <th className="py-3 px-4 text-center">Progress / Soal</th>
                   <th className="py-3 px-4">Catatan Log / Peringatan</th>
-                  <th className="py-3 px-4 text-right">Aksi Proktor</th>
+                  <th className="py-3 px-4 text-right">Aksi Pengawas / Proktor</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -340,6 +560,7 @@ export default function ProktorPage() {
                   filteredPeserta.map((peserta: any) => {
                     const isSelesai = peserta.status === 'SELESAI';
                     const isMengerjakan = peserta.status === 'SEDANG_MENGERJAKAN';
+                    const isTerkunci = peserta.status === 'TERKUNCI';
 
                     return (
                       <tr key={peserta.pesertaUjianId} className="hover:bg-slate-800/40 transition">
@@ -355,6 +576,10 @@ export default function ProktorPage() {
                           {isSelesai ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                               <CheckCircle2 className="w-3 h-3" /> Selesai
+                            </span>
+                          ) : isTerkunci ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                              <AlertCircle className="w-3 h-3" /> Terkunci
                             </span>
                           ) : isMengerjakan ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30 animate-pulse">
@@ -375,29 +600,60 @@ export default function ProktorPage() {
                               ⚠️ {peserta.logsTerakhir[0].aktivitas}: {peserta.logsTerakhir[0].detail}
                             </div>
                           ) : (
-                            <span className="text-[11px] text-slate-500">Normal (Tidak ada pelanggaran)</span>
+                            <span className="text-[11px] text-slate-500">Normal (Stabil)</span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-right space-x-2">
+                        <td className="py-3 px-4 text-right space-x-1.5">
                           <button
                             type="button"
                             onClick={() => handleResetLogin(peserta.pesertaUjianId, peserta.name)}
                             title="Reset Login Siswa"
-                            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/70 border border-slate-700 hover:border-rose-700 text-slate-300 hover:text-rose-300 text-[11px] font-semibold transition cursor-pointer"
+                            className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-semibold transition cursor-pointer"
                           >
-                            <RotateCcw className="w-3.5 h-3.5 inline mr-1" />
-                            Reset Login
+                            <RotateCcw className="w-3.5 h-3.5 inline mr-0.5" />
+                            Reset
                           </button>
 
                           {isMengerjakan && (
                             <button
                               type="button"
                               onClick={() => setExtraTimeModal(peserta)}
-                              title="Tambah Waktu"
-                              className="px-2.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500/40 text-cyan-300 text-[11px] font-semibold transition cursor-pointer"
+                              title="Tambah Waktu Ujian"
+                              className="px-2 py-1 rounded-lg bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 text-[11px] font-semibold transition cursor-pointer"
                             >
-                              <PlusCircle className="w-3.5 h-3.5 inline mr-1" />
+                              <PlusCircle className="w-3.5 h-3.5 inline mr-0.5" />
                               +Waktu
+                            </button>
+                          )}
+
+                          {isTerkunci ? (
+                            <button
+                              type="button"
+                              onClick={() => handleUnlockExam(peserta.pesertaUjianId, peserta.name)}
+                              title="Buka Kunci Ujian"
+                              className="px-2 py-1 rounded-lg bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-800 text-emerald-300 text-[11px] font-semibold transition cursor-pointer"
+                            >
+                              Buka Kunci
+                            </button>
+                          ) : !isSelesai ? (
+                            <button
+                              type="button"
+                              onClick={() => handleLockExam(peserta.pesertaUjianId, peserta.name)}
+                              title="Kunci Ujian Siswa"
+                              className="px-2 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-800 text-amber-300 text-[11px] font-semibold transition cursor-pointer"
+                            >
+                              Kunci
+                            </button>
+                          ) : null}
+
+                          {!isSelesai && (
+                            <button
+                              type="button"
+                              onClick={() => handleFinishForce(peserta.pesertaUjianId, peserta.name)}
+                              title="Kumpulkan Paksa Ujian Siswa"
+                              className="px-2 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-[11px] font-semibold transition cursor-pointer"
+                            >
+                              Selesaikan
                             </button>
                           )}
                         </td>
@@ -494,6 +750,18 @@ export default function ProktorPage() {
       <footer className="w-full py-4 text-center text-xs text-slate-500 border-t border-slate-900">
         © 2026 Proktor Station — CBT SMA Muhammadiyah 1 Ponorogo
       </footer>
+
+      {/* Global In-App Notification & Confirmation Dialog Modal */}
+      <NotificationModal
+        isOpen={notifModal.isOpen}
+        type={notifModal.type}
+        title={notifModal.title}
+        message={notifModal.message}
+        confirmText={notifModal.confirmText}
+        cancelText={notifModal.cancelText}
+        onConfirm={notifModal.onConfirm}
+        onCancel={notifModal.onCancel}
+      />
     </div>
   );
 }

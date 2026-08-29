@@ -12,7 +12,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const ujianId = searchParams.get('ujianId');
 
+    // Filter ujian: GURU hanya melihat ujian dari bank soal miliknya
+    const ujianWhereClause: any = {};
+    if (user.role === 'GURU') {
+      ujianWhereClause.bankSoal = { pembuatId: user.userId };
+    }
+
     const ujianList = await prisma.ujian.findMany({
+      where: ujianWhereClause,
       include: {
         bankSoal: {
           include: { mataPelajaran: true },
@@ -26,8 +33,14 @@ export async function GET(request: NextRequest) {
     let activeUjian: any = null;
 
     if (activeUjianId) {
-      activeUjian = await prisma.ujian.findUnique({
-        where: { id: activeUjianId },
+      // Pastikan guru berhak mengakses ujian ini
+      const singleUjianWhere: any = { id: activeUjianId };
+      if (user.role === 'GURU') {
+        singleUjianWhere.bankSoal = { pembuatId: user.userId };
+      }
+
+      activeUjian = await prisma.ujian.findFirst({
+        where: singleUjianWhere,
         include: {
           bankSoal: {
             include: {
@@ -40,22 +53,24 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      const peserta = await prisma.pesertaUjian.findMany({
-        where: { ujianId: activeUjianId },
-        include: {
-          siswa: {
-            include: { kelas: true },
-          },
-          jawabanPeserta: {
-            include: {
-              soal: true,
+      if (activeUjian) {
+        const peserta = await prisma.pesertaUjian.findMany({
+          where: { ujianId: activeUjianId },
+          include: {
+            siswa: {
+              include: { kelas: true },
+            },
+            jawabanPeserta: {
+              include: {
+                soal: true,
+              },
             },
           },
-        },
-        orderBy: { siswa: { name: 'asc' } },
-      });
+          orderBy: { siswa: { name: 'asc' } },
+        });
 
-      hasilList = peserta;
+        hasilList = peserta;
+      }
     }
 
     return NextResponse.json({

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { comparePassword, signToken } from '@/lib/auth';
+import { comparePassword, mapSimasmuhRoleToCbt, signToken } from '@/lib/auth';
 import { Client } from 'pg';
 import bcrypt from 'bcryptjs';
 
@@ -101,14 +101,7 @@ export async function POST(request: NextRequest) {
               cbtKelasId = k.id;
             }
 
-            const cbtRole =
-              simUser.role === 'ADMIN' || simUser.role === 'SUPERADMIN'
-                ? 'ADMIN'
-                : simUser.role === 'GURU'
-                ? 'GURU'
-                : simUser.role === 'PROKTOR'
-                ? 'PROKTOR'
-                : 'SISWA';
+            const cbtRole = mapSimasmuhRoleToCbt(simUser.role);
 
             const cleanNisn = simUser.nisn || simUser.nis || null;
             const nomorPeserta = `MHP-${simUser.nis || simUser.nisn || simUser.username}`;

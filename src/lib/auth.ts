@@ -16,6 +16,37 @@ export interface TokenPayload {
   kelasNama?: string | null;
 }
 
+export function mapSimasmuhRoleToCbt(simasmuhRole?: string | null): 'ADMIN' | 'GURU' | 'PROKTOR' | 'SISWA' {
+  if (!simasmuhRole) return 'SISWA';
+  const role = String(simasmuhRole).toUpperCase().trim();
+
+  // Semua role admin di SIMASMUH (superadmin, admin IT, admin TU/pegawai, kepala sekolah) mendapatkan role ADMIN di CBT
+  if (
+    role === 'SUPERADMIN' ||
+    role === 'SUPER_ADMIN' ||
+    role.includes('ADMIN') ||
+    role === 'PEGAWAI' ||
+    role === 'TU' ||
+    role === 'KEPALA_SEKOLAH' ||
+    role === 'KEPSEK'
+  ) {
+    return 'ADMIN';
+  }
+
+  // Role Guru di SIMASMUH mendapatkan role GURU di CBT
+  if (role === 'GURU' || role === 'TEACHER' || role.includes('GURU')) {
+    return 'GURU';
+  }
+
+  // Role Proktor
+  if (role === 'PROKTOR' || role.includes('PROKTOR')) {
+    return 'PROKTOR';
+  }
+
+  // Siswa
+  return 'SISWA';
+}
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = await bcrypt.genSalt(10);
   return bcrypt.hash(password, salt);

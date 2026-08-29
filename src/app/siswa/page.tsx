@@ -142,7 +142,7 @@ export default function SiswaPortalPage() {
       {/* 3. AppNavbar Terpadu: Menampilkan Tahun Ajaran & Semester dari Pengaturan Admin CBT */}
       <AppNavbar
         appTitle={pengaturan?.appTitle || 'CBT MUHIPO'}
-        subtitle="Portal Ujian Siswa — SMA Muhammadiyah 1 Ponorogo"
+        subtitle="Sistem Ujian SMA Muhammadiyah 1 Ponorogo"
         logoUrl={pengaturan?.logoUrl}
         userProfile={{
           name: siswa?.name || 'Siswa CBT',
@@ -181,10 +181,7 @@ export default function SiswaPortalPage() {
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="px-3.5 py-1.5 rounded-xl bg-slate-100/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 font-bold text-slate-700 dark:text-slate-200 backdrop-blur-sm">
-              Rombel: {siswa?.kelas?.nama || siswa?.kelas || '-'}
-            </span>
-            <span className="px-3.5 py-1.5 rounded-xl bg-slate-100/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 font-bold text-slate-700 dark:text-slate-200 backdrop-blur-sm">
-              Ruang: {siswa?.ruangUjian || 'Lab 1'} (Sesi {siswa?.sesiUjian || 1})
+              Kelas: {siswa?.kelas?.nama || siswa?.kelas || '-'}
             </span>
           </div>
         </div>

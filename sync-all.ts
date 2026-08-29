@@ -108,41 +108,59 @@ async function syncAllData() {
     }
     console.log(`  -> Berhasil Menyinkronkan ${mapelCount} Mata Pelajaran.`);
 
-    // 4. SINKRONISASI GURU PENGAMPU
-    console.log('\n[4/5] Menyinkronkan Guru Pengampu...');
-    const teachersRes = await client.query(`
-      SELECT tp.id, tp.nip, u.name, u.username, u.password
-      FROM "TeacherProfile" tp
-      JOIN "User" u ON tp."userId" = u.id
+    // 4. SINKRONISASI ADMIN & GURU DARI SIMASMUH
+    console.log('\n[4/5] Menyinkronkan Akun Admin & Guru dari SIMASMUH...');
+    const nonStudentRes = await client.query(`
+      SELECT u.id, u.username, u.password, u.name, u.role, tp.nip
+      FROM "User" u
+      LEFT JOIN "TeacherProfile" tp ON tp."userId" = u.id
+      WHERE u.role != 'SISWA'
     `);
+
+    let adminCount = 0;
     let guruCount = 0;
-    for (const t of teachersRes.rows) {
+
+    for (const u of nonStudentRes.rows) {
+      const roleStr = String(u.role || '').toUpperCase();
+      let targetRole: 'ADMIN' | 'GURU' | 'PROKTOR' = 'ADMIN';
+
+      if (roleStr === 'GURU' || roleStr.includes('GURU') || roleStr === 'TEACHER') {
+        targetRole = 'GURU';
+      } else {
+        // SUPERADMIN, ADMIN_IT, ADMIN_TU, PEGAWAI (TU/Keuangan), KEPALA_SEKOLAH, dsb.
+        targetRole = 'ADMIN';
+      }
+
       const existingUser = await prisma.user.findFirst({
-        where: { OR: [{ username: t.username }, ...(t.nip ? [{ nip: t.nip }] : [])] },
+        where: { OR: [{ username: u.username }, ...(u.nip ? [{ nip: u.nip }] : [])] },
       });
 
       if (existingUser) {
         await prisma.user.update({
           where: { id: existingUser.id },
           data: {
-            name: t.name,
-            nip: t.nip || existingUser.nip,
+            name: u.name,
+            password: u.password || existingUser.password,
+            role: targetRole,
+            nip: u.nip || existingUser.nip,
           },
         });
       } else {
         await prisma.user.create({
           data: {
-            username: t.username,
-            password: t.password || (await bcrypt.hash('123456', 10)),
-            name: t.name,
-            role: 'GURU',
-            nip: t.nip || undefined,
+            username: u.username,
+            password: u.password || (await bcrypt.hash('123456', 10)),
+            name: u.name,
+            role: targetRole,
+            nip: u.nip || undefined,
           },
         });
       }
-      guruCount++;
+
+      if (targetRole === 'ADMIN') adminCount++;
+      else if (targetRole === 'GURU') guruCount++;
     }
-    console.log(`  -> Berhasil Menyinkronkan ${guruCount} Guru Pengampu.`);
+    console.log(`  -> Berhasil Menyinkronkan ${adminCount} Admin CBT & ${guruCount} Guru Pengampu.`);
 
     // 5. SINKRONISASI DATA SISWA
     console.log('\n[5/5] Menyinkronkan Data Siswa Peserta CBT...');

@@ -138,4 +138,19 @@ npx tsx clean-sync-simasmuh.ts
 
 ---
 
+## 📝 Changelog & Riwayat Pembaruan
+
+### [v1.2.0] — 29 Agustus 2026
+- **Sinkronisasi SIMASMUH Granular**:
+  - Penambahan tombol **Tarik Data SIMASMUH** langsung pada area Data Guru, Daftar Kelas (Rombel), dan Daftar Mata Pelajaran di Admin Dashboard.
+  - Penambahan backend endpoint `/api/sinkronisasi` untuk target selektif (`GURU`, `KELAS`, `MAPEL`, `SISWA`, `ALL`).
+- **In-App Notification & Modal System**:
+  - Migrasi menyeluruh dari popup bawaan browser (`alert()` / `confirm()`) ke **`NotificationModal`** kustom bergaya glassmorphism Tailwind & Lucide icons di Admin, Guru, dan Proktor.
+- **Pembersihan Data Dummy & Real-Time Sync**:
+  - Pembersihan total data dummy mata pelajaran; CBT kini secara nyata dan konsisten merefleksikan data aktual di database SIMASMUH.
+- **Perbaikan Skema & Tipe Data**:
+  - Penyesuaian konfigurasi Nilai Standar Bank Soal (KKM, Nilai Minimal, Nilai Maksimal) dan integrasi kalkulasi otomatis bobot butir soal.
+
+---
+
 © 2026 Muhipo Dev — SMA Muhammadiyah 1 Ponorogo. All rights reserved.

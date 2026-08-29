@@ -9,21 +9,26 @@ async function testSimasmuh() {
     const studentsRes = await client.query('SELECT count(*) FROM "Student"');
     const classesRes = await client.query('SELECT count(*) FROM "Class"');
     const subjectsRes = await client.query('SELECT count(*) FROM "Subject"');
-    const sampleStudents = await client.query(
-      'SELECT id, nisn, nis, name, gender, "classId" FROM "Student" LIMIT 3'
-    );
-    console.log('SIMASMUH CONNECTED SUCCESSFULLY:');
-    console.log({
-      students: studentsRes.rows[0].count,
-      classes: classesRes.rows[0].count,
-      subjects: subjectsRes.rows[0].count,
-      sampleStudents: sampleStudents.rows,
-    });
+    const rolesRes = await client.query('SELECT DISTINCT role FROM "User"');
+    const usersRes = await client.query('SELECT id, username, role, name FROM "User"');
+    console.log('SIMASMUH ROLES:', rolesRes.rows);
+    console.log('SIMASMUH USERS:', usersRes.rows);
   } catch (err: any) {
     console.error('SIMASMUH CONNECTION FAILED:', err.message);
   } finally {
     await client.end();
   }
+
+  const { prisma } = await import('./src/lib/prisma');
+  await prisma.user.deleteMany({
+    where: { username: { in: ['085156001102', 'siswa01', 'siswa02'] } },
+  });
+  const cbtUsers = await prisma.user.findMany({
+    select: { id: true, username: true, role: true, name: true, nip: true, nis: true },
+    orderBy: { role: 'asc' },
+  });
+  console.log('CBT LOCAL USERS COUNT:', cbtUsers.length);
+  console.log('CBT LOCAL USERS:', cbtUsers);
 }
 
 testSimasmuh();

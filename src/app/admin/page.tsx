@@ -43,6 +43,13 @@ import {
   Trash2,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { DAFTAR_JURUSAN_MUHIPO } from '@/lib/constants'
+import { NotificationModal, NotificationType } from '@/components/NotificationModal'
+
+const formatLocalDatetime = (date: Date = new Date()) => {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
 
 export default function ComprehensiveAdminDashboard() {
   const router = useRouter()
@@ -73,6 +80,7 @@ export default function ComprehensiveAdminDashboard() {
     nama: '',
     tingkat: 12,
     jurusan: 'MIPA',
+    jamMulai: '09:00',
     durasiMenit: 90,
     mataPelajaranId: '',
   })
@@ -106,6 +114,15 @@ export default function ComprehensiveAdminDashboard() {
   const [syncData, setSyncData] = useState<any>(null)
   const [syncing, setSyncing] = useState(false)
 
+  // 6b. Cetak Dokumen State
+  const [cetakDocType, setCetakDocType] = useState<'kartu' | 'daftar_hadir' | 'berita_acara' | 'rekap_nilai'>('kartu')
+  const [cetakKelasFilter, setCetakKelasFilter] = useState('ALL')
+  const [cetakSesiFilter, setCetakSesiFilter] = useState('ALL')
+  const [cetakRuangFilter, setCetakRuangFilter] = useState('ALL')
+  const [cetakJadwalId, setCetakJadwalId] = useState('')
+  const [cetakPengawas1, setCetakPengawas1] = useState('Drs. H. Pengawas 1, M.Pd.')
+  const [cetakPengawas2, setCetakPengawas2] = useState('Pengawas Ruang 2, S.Pd.')
+
   // 7. Settings State
   const [settingsForm, setSettingsForm] = useState({
     schoolName: 'SMA Muhammadiyah 1 Ponorogo',
@@ -120,6 +137,67 @@ export default function ComprehensiveAdminDashboard() {
   })
   const [serverTimeData, setServerTimeData] = useState<any>(null)
   const [savingSettings, setSavingSettings] = useState(false)
+
+  // In-App Notification / Dialog Modal State
+  const [notifModal, setNotifModal] = useState<{
+    isOpen: boolean
+    type: NotificationType
+    title: string
+    message: string | React.ReactNode
+    confirmText?: string
+    cancelText?: string
+    onConfirm?: () => void
+    onCancel?: () => void
+  }>({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+  })
+
+  const showNotification = (
+    title: string,
+    message: string | React.ReactNode,
+    type: NotificationType = 'info',
+    onConfirm?: () => void
+  ) => {
+    setNotifModal({
+      isOpen: true,
+      type,
+      title,
+      message,
+      confirmText: 'Tutup',
+      onConfirm: () => {
+        setNotifModal((prev) => ({ ...prev, isOpen: false }))
+        if (onConfirm) onConfirm()
+      },
+    })
+  }
+
+  const showConfirm = (
+    title: string,
+    message: string | React.ReactNode,
+    onConfirm: () => void,
+    type: NotificationType = 'warning',
+    confirmText = 'Ya, Lanjutkan',
+    cancelText = 'Batal'
+  ) => {
+    setNotifModal({
+      isOpen: true,
+      type,
+      title,
+      message,
+      confirmText,
+      cancelText,
+      onConfirm: () => {
+        setNotifModal((prev) => ({ ...prev, isOpen: false }))
+        onConfirm()
+      },
+      onCancel: () => {
+        setNotifModal((prev) => ({ ...prev, isOpen: false }))
+      },
+    })
+  }
 
   // Modals
   const [showSiswaModal, setShowSiswaModal] = useState(false)
@@ -192,7 +270,7 @@ export default function ComprehensiveAdminDashboard() {
     { id: 'jadwal', name: 'Jadwal Ujian', icon: Calendar },
     { id: 'siswa', name: 'Data Siswa (NIS/NISN)', icon: GraduationCap },
     { id: 'guru', name: 'Data Guru Pengampu', icon: Users },
-    { id: 'kelas_mapel', name: 'Rombel Kelas & Mapel', icon: School },
+    { id: 'kelas_mapel', name: 'Data Kelas & Mapel', icon: School },
     { id: 'cetak', name: 'Cetak Dokumen Ujian', icon: Printer },
     { id: 'pengaturan', name: 'Pengaturan Sistem', icon: Settings },
   ]
@@ -208,6 +286,28 @@ export default function ComprehensiveAdminDashboard() {
       const meJson = await meRes.json()
       if (meJson.success) {
         setCurrentUser(meJson.user)
+      }
+
+      // Selalu muat Pengaturan Sistem (Logo, Wallpaper, Identitas) di awal agar tidak reset saat refresh
+      try {
+        const pRes = await fetch('/api/pengaturan')
+        const pJson = await pRes.json()
+        if (pJson.success && pJson.data) {
+          setSettingsForm({
+            schoolName: pJson.data.schoolName || 'SMA Muhammadiyah 1 Ponorogo',
+            appTitle: pJson.data.appTitle || 'CBT MUHIPO',
+            academicYear: pJson.data.academicYear || '2026/2027',
+            semester: pJson.data.semester || 'Ganjil',
+            timezone: pJson.data.timezone || 'Asia/Jakarta',
+            serverLocation: pJson.data.serverLocation || 'Ponorogo, Jawa Timur',
+            logoUrl: pJson.data.logoUrl || '/pic_logo.png',
+            backgroundUrl: pJson.data.backgroundUrl || '/muhipo-front.jpg',
+            timeSyncOffsetMs: pJson.data.timeSyncOffsetMs || 0,
+          })
+          if (pJson.serverTime) setServerTimeData(pJson.serverTime)
+        }
+      } catch (err) {
+        console.error('Failed to load settings:', err)
       }
 
       if (activeTab === 'dashboard') {
@@ -262,23 +362,25 @@ export default function ComprehensiveAdminDashboard() {
         const [kJson, mJson] = await Promise.all([kRes.json(), mRes.json()])
         if (kJson.success) setKelasList(kJson.data)
         if (mJson.success) setMapelList(mJson.data)
-      } else if (activeTab === 'pengaturan') {
-        const res = await fetch('/api/pengaturan')
-        const json = await res.json()
-        if (json.success) {
-          setSettingsForm({
-            schoolName: json.data.schoolName || 'SMA Muhammadiyah 1 Ponorogo',
-            appTitle: json.data.appTitle || 'CBT MUHIPO',
-            academicYear: json.data.academicYear || '2026/2027',
-            semester: json.data.semester || 'Ganjil',
-            timezone: json.data.timezone || 'Asia/Jakarta',
-            serverLocation: json.data.serverLocation || 'Ponorogo, Jawa Timur',
-            logoUrl: json.data.logoUrl || '/pic_logo.png',
-            backgroundUrl: json.data.backgroundUrl || '/muhipo-front.jpg',
-            timeSyncOffsetMs: json.data.timeSyncOffsetMs || 0,
-          })
-          setServerTimeData(json.serverTime)
+      } else if (activeTab === 'cetak') {
+        const [sRes, jRes, kRes] = await Promise.all([
+          fetch('/api/admin?tab=siswa'),
+          fetch('/api/admin?tab=jadwal'),
+          fetch('/api/admin?tab=kelas'),
+        ]);
+        const [sJson, jJson, kJson] = await Promise.all([
+          sRes.json(),
+          jRes.json(),
+          kRes.json(),
+        ]);
+        if (sJson.success) setSiswaData(sJson.data)
+        if (jJson.success) {
+          setJadwalData(jJson.data)
+          if (jJson.data?.jadwalList?.length > 0 && !cetakJadwalId) {
+            setCetakJadwalId(jJson.data.jadwalList[0].id)
+          }
         }
+        if (kJson.success) setKelasList(kJson.data)
       }
     } catch (e) {
       console.error(e)
@@ -296,10 +398,14 @@ export default function ComprehensiveAdminDashboard() {
         body: JSON.stringify({ target }),
       })
       const json = await res.json()
-      alert(json.message)
+      if (json.success) {
+        showNotification('Sinkronisasi SIMASMUH', json.message, 'success')
+      } else {
+        showNotification('Gagal Sinkronisasi', json.message || 'Gagal sinkronisasi data SIMASMUH.', 'error')
+      }
       fetchSessionAndAdminData()
     } catch (e) {
-      alert('Gagal menjalankan sinkronisasi data.')
+      showNotification('Koneksi Error', 'Gagal menjalankan sinkronisasi data dari SIMASMUH. Pastikan database SIMASMUH aktif.', 'error')
     } finally {
       setSyncing(false)
     }
@@ -314,11 +420,23 @@ export default function ComprehensiveAdminDashboard() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
-      const compressed = await compressImageFile(file, { maxWidth: 600, maxHeight: 600, quality: 0.8 })
-      setSettingsForm((prev) => ({ ...prev, logoUrl: compressed.dataUrl }))
+      const compressed = await compressImageFile(file, { maxWidth: 600, maxHeight: 600, quality: 0.85 })
+      const newSettings = { ...settingsForm, logoUrl: compressed.dataUrl }
+      setSettingsForm(newSettings)
+
+      // Auto-save langsung ke server & database agar tidak hilang jika refresh
+      const res = await fetch('/api/pengaturan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSettings),
+      })
+      const json = await res.json()
+      if (json.success && json.data?.logoUrl) {
+        setSettingsForm((prev) => ({ ...prev, logoUrl: json.data.logoUrl }))
+      }
     } catch (err) {
       console.error('Gagal mengompres logo:', err)
-      alert('Terjadi kesalahan saat memproses logo.')
+      showNotification('Peringatan', 'Terjadi kesalahan saat memproses logo.', 'warning')
     }
   }
 
@@ -326,11 +444,23 @@ export default function ComprehensiveAdminDashboard() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
-      const compressed = await compressImageFile(file, { maxWidth: 1920, maxHeight: 1080, quality: 0.82 })
-      setSettingsForm((prev) => ({ ...prev, backgroundUrl: compressed.dataUrl }))
+      const compressed = await compressImageFile(file, { maxWidth: 1920, maxHeight: 1080, quality: 0.85 })
+      const newSettings = { ...settingsForm, backgroundUrl: compressed.dataUrl }
+      setSettingsForm(newSettings)
+
+      // Auto-save langsung ke server & database agar tidak hilang jika refresh
+      const res = await fetch('/api/pengaturan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSettings),
+      })
+      const json = await res.json()
+      if (json.success && json.data?.backgroundUrl) {
+        setSettingsForm((prev) => ({ ...prev, backgroundUrl: json.data.backgroundUrl }))
+      }
     } catch (err) {
       console.error('Gagal mengompres background master:', err)
-      alert('Terjadi kesalahan saat memproses wallpaper background.')
+      showNotification('Peringatan', 'Terjadi kesalahan saat memproses wallpaper background.', 'warning')
     }
   }
 
@@ -345,49 +475,78 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        alert('Pengaturan sistem CBT berhasil disimpan!')
+        showNotification('Pengaturan Disimpan', 'Pengaturan sistem CBT & aset berkas berhasil disimpan!', 'success')
+        if (json.data) {
+          setSettingsForm({
+            schoolName: json.data.schoolName || settingsForm.schoolName,
+            appTitle: json.data.appTitle || settingsForm.appTitle,
+            academicYear: json.data.academicYear || settingsForm.academicYear,
+            semester: json.data.semester || settingsForm.semester,
+            timezone: json.data.timezone || settingsForm.timezone,
+            serverLocation: json.data.serverLocation || settingsForm.serverLocation,
+            logoUrl: json.data.logoUrl || settingsForm.logoUrl,
+            backgroundUrl: json.data.backgroundUrl || settingsForm.backgroundUrl,
+            timeSyncOffsetMs: json.data.timeSyncOffsetMs ?? settingsForm.timeSyncOffsetMs,
+          })
+        }
         fetchSessionAndAdminData()
       } else {
-        alert(json.message || 'Gagal menyimpan pengaturan.')
+        showNotification('Gagal Simpan', json.message || 'Gagal menyimpan pengaturan.', 'error')
       }
     } catch (e) {
-      alert('Terjadi kesalahan saat menyimpan pengaturan.')
+      showNotification('Error', 'Terjadi kesalahan saat menyimpan pengaturan.', 'error')
     } finally {
       setSavingSettings(false)
     }
   }
 
   const handleResetPassword = async (userId: string, userName: string) => {
-    if (!confirm(`Reset kata sandi ${userName} ke default (123456)?`)) return
-    try {
-      const res = await fetch('/api/admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'RESET_PASSWORD', userId }),
-      })
-      const json = await res.json()
-      alert(json.message)
-    } catch (e) {
-      alert('Gagal reset password')
-    }
+    showConfirm(
+      'Reset Kata Sandi',
+      `Reset kata sandi ${userName} ke default (123456)?`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'RESET_PASSWORD', userId }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Reset Berhasil', json.message, 'success')
+          } else {
+            showNotification('Gagal', json.message || 'Gagal reset password', 'error')
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal reset password', 'error')
+        }
+      }
+    )
   }
 
   const handleResetLogin = async (pesertaUjianId: string, namaSiswa: string) => {
-    if (!confirm(`Reset status ujian siswa "${namaSiswa}" agar dapat login kembali?`)) return
-    try {
-      const res = await fetch('/api/proktor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'RESET_LOGIN', pesertaUjianId }),
-      })
-      const json = await res.json()
-      if (json.success) {
-        alert(json.message)
-        fetchSessionAndAdminData()
+    showConfirm(
+      'Reset Login Ujian',
+      `Reset status ujian siswa "${namaSiswa}" agar dapat login kembali?`,
+      async () => {
+        try {
+          const res = await fetch('/api/proktor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'RESET_LOGIN', pesertaUjianId }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Reset Status Ujian', json.message, 'success')
+            fetchSessionAndAdminData()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal reset status ujian', 'error')
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal reset status ujian', 'error')
+        }
       }
-    } catch (e) {
-      alert('Gagal reset status ujian')
-    }
+    )
   }
 
   const handleAddExtraTime = async () => {
@@ -404,12 +563,14 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        alert(json.message)
+        showNotification('Waktu Tambahan', json.message, 'success')
         setExtraTimeModal(null)
         fetchSessionAndAdminData()
+      } else {
+        showNotification('Gagal', json.message || 'Gagal tambah waktu', 'error')
       }
     } catch (e) {
-      alert('Gagal tambah waktu')
+      showNotification('Error', 'Gagal tambah waktu', 'error')
     }
   }
 
@@ -433,12 +594,14 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        alert('Bank Soal berhasil dibuat!')
+        showNotification('Bank Soal Dibuat', 'Bank Soal berhasil dibuat!', 'success')
         setShowCreateBankModal(false)
         fetchSessionAndAdminData()
+      } else {
+        showNotification('Gagal', json.message || 'Gagal membuat bank soal', 'error')
       }
     } catch (e) {
-      alert('Gagal membuat bank soal')
+      showNotification('Error', 'Gagal membuat bank soal', 'error')
     }
   }
 
@@ -461,59 +624,147 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        alert('Bank Soal berhasil diperbarui!')
+        showNotification('Bank Soal Diperbarui', 'Bank Soal berhasil diperbarui!', 'success')
         setEditBankModal(null)
         fetchSessionAndAdminData()
         if (selectedBankSoal?.id === editBankModal.id) {
           handleSelectBankSoal(editBankModal.id)
         }
       } else {
-        alert(json.message || 'Gagal memperbarui bank soal')
+        showNotification('Gagal', json.message || 'Gagal memperbarui bank soal', 'error')
       }
     } catch (e) {
-      alert('Terjadi kesalahan saat memperbarui bank soal')
+      showNotification('Error', 'Terjadi kesalahan saat memperbarui bank soal', 'error')
     }
+  }
+
+  const handleCreateJadwal = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!jadwalForm.bankSoalId) {
+      showNotification('Peringatan', 'Silakan pilih Bank Soal terlebih dahulu.', 'warning')
+      return
+    }
+    if (!jadwalForm.kelasIds || jadwalForm.kelasIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 kelas tujuan ujian.', 'warning')
+      return
+    }
+
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'CREATE_UJIAN',
+          ...jadwalForm,
+        }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        showNotification('Jadwal Berhasil Dibuat', json.message || 'Jadwal Ujian berhasil dibuat dan didistribusikan ke peserta!', 'success')
+        setShowJadwalModal(false)
+        setJadwalForm({
+          kodeUjian: '',
+          judul: '',
+          bankSoalId: '',
+          durasiMenit: 90,
+          waktuMulai: formatLocalDatetime(),
+          waktuSelesai: formatLocalDatetime(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+          lockBrowser: true,
+          acakSoal: true,
+          acakOpsi: true,
+          kelasIds: [],
+        })
+        fetchSessionAndAdminData()
+      } else {
+        showNotification('Gagal', json.message || 'Gagal membuat jadwal ujian', 'error')
+      }
+    } catch (e) {
+      showNotification('Error', 'Terjadi kesalahan saat membuat jadwal ujian.', 'error')
+    }
+  }
+
+  const handleDeleteJadwal = async (ujianId: string, judul: string) => {
+    showConfirm(
+      'Hapus Jadwal Ujian',
+      `Hapus Jadwal Ujian "${judul}" beserta seluruh data pengerjaan peserta terkait?`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'DELETE_UJIAN', ujianId }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Jadwal Dihapus', 'Jadwal Ujian berhasil dihapus!', 'success')
+            fetchSessionAndAdminData()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal menghapus jadwal ujian', 'error')
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal menghapus jadwal ujian', 'error')
+        }
+      },
+      'error',
+      'Ya, Hapus Jadwal'
+    )
   }
 
   const handleDeleteBankSoal = async (bankSoalId: string, nama: string) => {
-    if (!confirm(`Hapus Bank Soal "${nama}" beserta seluruh butir soal dan jadwal terkait?`)) return
-    try {
-      const res = await fetch('/api/guru/soal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'DELETE_BANK_SOAL', bankSoalId }),
-      })
-      const json = await res.json()
-      if (json.success) {
-        alert(json.message)
-        if (selectedBankSoal?.id === bankSoalId) {
-          setSelectedBankSoal(null)
+    showConfirm(
+      'Hapus Bank Soal',
+      `Hapus Bank Soal "${nama}" beserta seluruh butir soal dan jadwal terkait?`,
+      async () => {
+        try {
+          const res = await fetch('/api/guru/soal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'DELETE_BANK_SOAL', bankSoalId }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Bank Soal Dihapus', json.message, 'success')
+            if (selectedBankSoal?.id === bankSoalId) {
+              setSelectedBankSoal(null)
+            }
+            fetchSessionAndAdminData()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal menghapus bank soal', 'error')
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal menghapus bank soal', 'error')
         }
-        fetchSessionAndAdminData()
-      } else {
-        alert(json.message || 'Gagal menghapus bank soal')
-      }
-    } catch (e) {
-      alert('Gagal menghapus bank soal')
-    }
+      },
+      'error',
+      'Ya, Hapus Bank Soal'
+    )
   }
 
   const handleDeleteSingleSoal = async (soalId: string) => {
-    if (!confirm('Yakin ingin menghapus butir soal ini?')) return
-    try {
-      const res = await fetch('/api/guru/soal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'DELETE_SOAL', soalId }),
-      })
-      const json = await res.json()
-      if (json.success) {
-        alert('Soal berhasil dihapus!')
-        if (selectedBankSoal) handleSelectBankSoal(selectedBankSoal.id)
-      }
-    } catch (e) {
-      alert('Gagal menghapus soal')
-    }
+    showConfirm(
+      'Hapus Butir Soal',
+      'Yakin ingin menghapus butir soal ini?',
+      async () => {
+        try {
+          const res = await fetch('/api/guru/soal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'DELETE_SOAL', soalId }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Soal Dihapus', 'Soal berhasil dihapus!', 'success')
+            if (selectedBankSoal) handleSelectBankSoal(selectedBankSoal.id)
+          } else {
+            showNotification('Gagal', json.message || 'Gagal menghapus soal', 'error')
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal menghapus soal', 'error')
+        }
+      },
+      'error',
+      'Ya, Hapus Soal'
+    )
   }
 
   // Unduh Template Format Import Excel Soal
@@ -607,7 +858,7 @@ export default function ComprehensiveAdminDashboard() {
         const data = XLSX.utils.sheet_to_json(ws)
 
         if (!data || data.length === 0) {
-          alert('File Excel kosong atau format tidak sesuai.')
+          showNotification('Peringatan Format', 'File Excel kosong atau format tidak sesuai.', 'warning')
           return
         }
 
@@ -639,15 +890,15 @@ export default function ComprehensiveAdminDashboard() {
         }).filter((item) => item.pertanyaan.trim() !== '')
 
         if (parsedItems.length === 0) {
-          alert('Tidak ditemukan baris pertanyaan soal yang valid pada file Excel.')
+          showNotification('Peringatan Data', 'Tidak ditemukan baris pertanyaan soal yang valid pada file Excel.', 'warning')
           return
         }
 
         setImportFileText(JSON.stringify(parsedItems))
-        alert(`Berhasil membaca ${parsedItems.length} butir soal dari file Excel. Klik "Proses Import Soal" untuk menyimpan.`)
+        showNotification('File Terbaca', `Berhasil membaca ${parsedItems.length} butir soal dari file Excel. Klik "Proses Import Soal" untuk menyimpan.`, 'success')
       } catch (err) {
         console.error(err)
-        alert('Gagal membaca file Excel. Pastikan file menggunakan format Template Resmi.')
+        showNotification('Gagal Membaca File', 'Gagal membaca file Excel. Pastikan file menggunakan format Template Resmi.', 'error')
       }
     }
     reader.readAsBinaryString(file)
@@ -656,11 +907,11 @@ export default function ComprehensiveAdminDashboard() {
   // Eksekusi Simpan Soal Import ke Database
   const handleExecuteImportSoal = async () => {
     if (!importingBankId) {
-      alert('Pilih Bank Soal tujuan import terlebih dahulu.')
+      showNotification('Peringatan', 'Pilih Bank Soal tujuan import terlebih dahulu.', 'warning')
       return
     }
     if (!importFileText) {
-      alert('Silakan pilih file Excel soal terlebih dahulu.')
+      showNotification('Peringatan', 'Silakan pilih file Excel soal terlebih dahulu.', 'warning')
       return
     }
 
@@ -679,16 +930,16 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        alert(json.message)
+        showNotification('Import Berhasil', json.message, 'success')
         setShowImportModal(false)
         setImportFileText('')
         handleSelectBankSoal(importingBankId)
         fetchSessionAndAdminData()
       } else {
-        alert(json.message || 'Gagal mengimport butir soal')
+        showNotification('Gagal Import', json.message || 'Gagal mengimport butir soal', 'error')
       }
     } catch (e) {
-      alert('Terjadi kesalahan saat mengimport soal.')
+      showNotification('Error', 'Terjadi kesalahan saat mengimport soal.', 'error')
     } finally {
       setImportLoading(false)
     }
@@ -699,7 +950,7 @@ export default function ComprehensiveAdminDashboard() {
     e.preventDefault()
     if (!distributeModal) return
     if (!distributeForm.kelasIds.length) {
-      alert('Pilih minimal 1 kelas tujuan distribusi ujian.')
+      showNotification('Peringatan', 'Pilih minimal 1 kelas tujuan distribusi ujian.', 'warning')
       return
     }
 
@@ -715,14 +966,14 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        alert(json.message)
+        showNotification('Distribusi Ujian Sukses', json.message, 'success')
         setDistributeModal(null)
         fetchSessionAndAdminData()
       } else {
-        alert(json.message || 'Gagal mendistribusikan soal ke kelas')
+        showNotification('Gagal', json.message || 'Gagal mendistribusikan soal ke kelas', 'error')
       }
     } catch (e) {
-      alert('Terjadi kesalahan saat mendistribusikan soal ke kelas.')
+      showNotification('Error', 'Terjadi kesalahan saat mendistribusikan soal ke kelas.', 'error')
     }
   }
 
@@ -741,7 +992,7 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        alert('Soal berhasil disimpan!')
+        showNotification('Soal Disimpan', 'Soal berhasil disimpan!', 'success')
         handleSelectBankSoal(selectedBankSoal.id)
         setSoalForm({
           soalId: '',
@@ -757,9 +1008,11 @@ export default function ComprehensiveAdminDashboard() {
             { label: 'E', konten: '', isBenar: false },
           ],
         })
+      } else {
+        showNotification('Gagal Simpan', json.message || 'Gagal menyimpan butir soal', 'error')
       }
     } catch (e) {
-      alert('Gagal simpan soal')
+      showNotification('Error', 'Gagal simpan soal', 'error')
     }
   }
 
@@ -773,12 +1026,14 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        alert('Siswa berhasil didaftarkan!')
+        showNotification('Siswa Didaftarkan', 'Siswa berhasil didaftarkan!', 'success')
         setShowSiswaModal(false)
         fetchSessionAndAdminData()
+      } else {
+        showNotification('Gagal', json.message || 'Gagal tambah siswa', 'error')
       }
     } catch (e) {
-      alert('Gagal tambah siswa')
+      showNotification('Error', 'Gagal tambah siswa', 'error')
     }
   }
 
@@ -792,12 +1047,14 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        alert('Guru berhasil didaftarkan!')
+        showNotification('Guru Didaftarkan', 'Guru berhasil didaftarkan!', 'success')
         setShowGuruModal(false)
         fetchSessionAndAdminData()
+      } else {
+        showNotification('Gagal', json.message || 'Gagal tambah guru', 'error')
       }
     } catch (e) {
-      alert('Gagal tambah guru')
+      showNotification('Error', 'Gagal tambah guru', 'error')
     }
   }
 
@@ -811,12 +1068,14 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        alert('Kelas berhasil ditambahkan!')
+        showNotification('Kelas Dibuat', 'Kelas berhasil ditambahkan!', 'success')
         setShowKelasModal(false)
         fetchSessionAndAdminData()
+      } else {
+        showNotification('Gagal', json.message || 'Gagal tambah kelas', 'error')
       }
     } catch (e) {
-      alert('Gagal tambah kelas')
+      showNotification('Error', 'Gagal tambah kelas', 'error')
     }
   }
 
@@ -830,37 +1089,22 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        alert('Mata Pelajaran berhasil ditambahkan!')
+        showNotification('Mapel Dibuat', 'Mata Pelajaran berhasil ditambahkan!', 'success')
         setShowMapelModal(false)
         fetchSessionAndAdminData()
+      } else {
+        showNotification('Gagal', json.message || 'Gagal tambah mapel', 'error')
       }
     } catch (e) {
-      alert('Gagal tambah mapel')
+      showNotification('Error', 'Gagal tambah mapel', 'error')
     }
   }
 
-  const handleCreateJadwal = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      const res = await fetch('/api/admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'CREATE_UJIAN', ...jadwalForm }),
-      })
-      const json = await res.json()
-      if (json.success) {
-        alert('Jadwal Ujian berhasil dibuat!')
-        setShowJadwalModal(false)
-        fetchSessionAndAdminData()
-      }
-    } catch (e) {
-      alert('Gagal membuat jadwal ujian')
-    }
-  }
+
 
   const handleExportExcel = () => {
     if (!koreksiData?.hasilList?.length) {
-      alert('Belum ada data nilai untuk diekspor.')
+      showNotification('Informasi', 'Belum ada data nilai untuk diekspor.', 'info')
       return
     }
     const rows = koreksiData.hasilList.map((p: any, idx: number) => ({
@@ -939,7 +1183,7 @@ export default function ComprehensiveAdminDashboard() {
         {/* Navbar Induk Terpadu (Kiri Logo & AppTitle, Kanan Tahun Ajaran, Switch Theme, Profil, Logout) */}
         <AppNavbar
           appTitle={settingsForm.appTitle || 'CBT MUHIPO'}
-          subtitle="Portal Ujian SMA Muhammadiyah 1 Ponorogo"
+          subtitle="Manajemen Ujian SMA Muhammadiyah 1 Ponorogo"
           logoUrl={settingsForm.logoUrl}
           onToggleSidebar={() => setSidebarOpen(true)}
           userProfile={{
@@ -1003,7 +1247,7 @@ export default function ComprehensiveAdminDashboard() {
                       <span className="text-xl font-bold text-slate-900 dark:text-white">{syncData.simasmuh.siswaCount}</span>
                     </div>
                     <div className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-950/80 border border-slate-200/60 dark:border-white/5 backdrop-blur-sm">
-                      <span className="text-slate-500 dark:text-slate-400 block">Rombel Kelas</span>
+                      <span className="text-slate-500 dark:text-slate-400 block">Daftar Rombel</span>
                       <span className="text-xl font-bold text-slate-900 dark:text-white">{syncData.simasmuh.kelasCount}</span>
                     </div>
                     <div className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-950/80 border border-slate-200/60 dark:border-white/5 backdrop-blur-sm">
@@ -1331,7 +1575,7 @@ export default function ComprehensiveAdminDashboard() {
                             </span>
                             <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate">{bs.nama}</h4>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                              {bs.mataPelajaran?.nama} • Tingkat {bs.tingkat} ({bs.jurusan || 'UMUM'}) • {bs.durasiMenit || 90} Mnt
+                              {bs.mataPelajaran?.nama} • Guru: <b className="text-slate-800 dark:text-slate-200">{bs.pembuat?.name || 'Admin'}</b> • {bs.durasiMenit || 90} Mnt
                             </p>
                           </div>
                           <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0 font-mono">
@@ -1357,10 +1601,10 @@ export default function ComprehensiveAdminDashboard() {
                               setDistributeForm({
                                 kodeUjian: `PAS-${bs.kodeBank}-${new Date().getFullYear()}`,
                                 judul: `Ujian ${bs.nama}`,
-                                durasiMenit: 90,
+                                durasiMenit: bs.durasiMenit || 90,
                                 kelasIds: [],
-                                waktuMulai: new Date().toISOString().slice(0, 16),
-                                waktuSelesai: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
+                                waktuMulai: formatLocalDatetime(),
+                                waktuSelesai: formatLocalDatetime(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
                                 lockBrowser: true,
                                 acakSoal: true,
                                 acakOpsi: true,
@@ -1404,7 +1648,7 @@ export default function ComprehensiveAdminDashboard() {
                             {selectedBankSoal.kodeBank}
                           </span>
                           <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                            {selectedBankSoal.mataPelajaran?.nama}
+                            {selectedBankSoal.mataPelajaran?.nama} • Guru: <b>{selectedBankSoal.pembuat?.name || 'Admin'}</b>
                           </span>
                         </div>
                         <h3 className="font-black text-lg text-slate-900 dark:text-white mt-1">
@@ -1428,10 +1672,10 @@ export default function ComprehensiveAdminDashboard() {
                             setDistributeForm({
                               kodeUjian: `PAS-${selectedBankSoal.kodeBank}-${new Date().getFullYear()}`,
                               judul: `Ujian ${selectedBankSoal.nama}`,
-                              durasiMenit: 90,
+                              durasiMenit: selectedBankSoal.durasiMenit || 90,
                               kelasIds: [],
-                              waktuMulai: new Date().toISOString().slice(0, 16),
-                              waktuSelesai: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
+                              waktuMulai: formatLocalDatetime(),
+                              waktuSelesai: formatLocalDatetime(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
                               lockBrowser: true,
                               acakSoal: true,
                               acakOpsi: true,
@@ -1754,33 +1998,80 @@ export default function ComprehensiveAdminDashboard() {
           {/* TAB 5: JADWAL UJIAN */}
           {activeTab === 'jadwal' && (
             <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-white/10">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Jadwal Ujian Aktif</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Atur jadwal dan distribusi ujian ke kelas peserta</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <span>Jadwal Ujian Aktif</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Atur jadwal, jam mulai, durasi pengerjaan, dan distribusi ujian ke rombel kelas</p>
                 </div>
                 <button
-                  onClick={() => setShowJadwalModal(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white cursor-pointer"
+                  onClick={() => {
+                    setJadwalForm({
+                      kodeUjian: `PAS-${new Date().getFullYear()}`,
+                      judul: '',
+                      bankSoalId: bankSoalList[0]?.id || '',
+                      durasiMenit: bankSoalList[0]?.durasiMenit || 90,
+                      waktuMulai: formatLocalDatetime(),
+                      waktuSelesai: formatLocalDatetime(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+                      lockBrowser: true,
+                      acakSoal: true,
+                      acakOpsi: true,
+                      kelasIds: [],
+                    })
+                    setShowJadwalModal(true)
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white shadow-md shadow-blue-600/20 cursor-pointer transition active:scale-95 shrink-0"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Buat Jadwal</span>
+                  <span>+ Buat Jadwal Ujian Baru</span>
                 </button>
               </div>
 
               <div className="space-y-3">
-                {jadwalData?.jadwalList?.map((u: any) => (
-                  <div key={u.id} className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-950 border border-slate-200/60 dark:border-white/10 flex flex-col sm:flex-row justify-between sm:items-center gap-2 text-xs backdrop-blur-sm">
-                    <div>
-                      <span className="font-mono text-blue-600 dark:text-blue-400 font-bold">{u.kodeUjian}</span>
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{u.judul}</h4>
-                      <p className="text-slate-500 dark:text-slate-400">Durasi: {u.durasiMenit} Menit • Peserta: {u._count.pesertaUjian} Siswa</p>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold self-start sm:self-center">
-                      {u.status}
-                    </span>
+                {(!jadwalData?.jadwalList || jadwalData.jadwalList.length === 0) ? (
+                  <div className="text-center py-12 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 rounded-2xl text-xs text-slate-400">
+                    <CalendarDays className="w-8 h-8 mx-auto mb-2 text-slate-400 opacity-60" />
+                    <p className="font-semibold text-slate-600 dark:text-slate-300">Belum ada Jadwal Ujian yang dibuat.</p>
+                    <p className="mt-1">Klik tombol <b>+ Buat Jadwal Ujian Baru</b> di atas atau masuk ke menu <b>Bank Soal</b> dan klik <b>Kirim ke Kelas</b>.</p>
                   </div>
-                ))}
+                ) : (
+                  jadwalData.jadwalList.map((u: any) => (
+                    <div key={u.id} className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-950 border border-slate-200/60 dark:border-white/10 flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs backdrop-blur-sm shadow-xs">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-blue-600 dark:text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded">
+                            {u.kodeUjian}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                            {u.status}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">{u.judul}</h4>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            Mulai: <b>{new Date(u.waktuMulai).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })} WIB</b>
+                          </span>
+                          <span>• Durasi: <b>{u.durasiMenit} Menit</b></span>
+                          <span>• Peserta Terdaftar: <b>{u._count?.pesertaUjian || 0} Siswa</b></span>
+                          <span>• Bank Soal: <b>{u.bankSoal?.nama || '-'}</b></span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        <button
+                          onClick={() => handleDeleteJadwal(u.id, u.judul)}
+                          className="px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer transition flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Hapus Jadwal</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -1870,18 +2161,28 @@ export default function ComprehensiveAdminDashboard() {
           {/* TAB 7: DATA GURU */}
           {activeTab === 'guru' && (
             <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Data Guru Pengampu</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Guru pembuat soal CBT</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Data Guru Pengampu (Tersinkron SIMASMUH)</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Guru pembuat soal CBT & data akun SIMASMUH</p>
                 </div>
-                <button
-                  onClick={() => setShowGuruModal(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Tambah Guru</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleRunSync('GURU')}
+                    disabled={syncing}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white cursor-pointer shadow-md disabled:opacity-50 transition"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                    <span>Tarik Data SIMASMUH</span>
+                  </button>
+                  <button
+                    onClick={() => setShowGuruModal(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white cursor-pointer shadow-md"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Tambah Guru</span>
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -1924,14 +2225,29 @@ export default function ComprehensiveAdminDashboard() {
           {activeTab === 'kelas_mapel' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Daftar Rombel / Kelas</h3>
-                  <button
-                    onClick={() => setShowKelasModal(true)}
-                    className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Daftar Kelas (Rombel)</h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Tersinkron dengan SIMASMUH</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleRunSync('KELAS')}
+                      disabled={syncing}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md cursor-pointer disabled:opacity-50 transition"
+                      title="Sinkronisasi Rombel Kelas dari SIMASMUH"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                      <span>Sync SIMASMUH</span>
+                    </button>
+                    <button
+                      onClick={() => setShowKelasModal(true)}
+                      className="p-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white cursor-pointer shadow-md"
+                      title="Tambah Kelas Manual"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   {kelasList.map((k: any) => (
@@ -1947,63 +2263,509 @@ export default function ComprehensiveAdminDashboard() {
               </div>
 
               <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Daftar Mata Pelajaran (SIMASMUH Sync)</h3>
-                  <button
-                    onClick={() => setShowMapelModal(true)}
-                    className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Daftar Mata Pelajaran</h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Tersinkron dengan SIMASMUH</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleRunSync('MAPEL')}
+                      disabled={syncing}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md cursor-pointer disabled:opacity-50 transition"
+                      title="Sinkronisasi Mata Pelajaran dari SIMASMUH"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                      <span>Sync SIMASMUH</span>
+                    </button>
+                    <button
+                      onClick={() => setShowMapelModal(true)}
+                      className="p-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white cursor-pointer shadow-md"
+                      title="Tambah Mapel Manual"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  {mapelList.map((m: any) => (
-                    <div key={m.id} className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-950 border border-slate-200/60 dark:border-white/10 flex justify-between items-center text-xs backdrop-blur-sm">
-                      <div>
-                        <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold block">{m.kode}</span>
-                        <h4 className="font-bold text-slate-900 dark:text-white">{m.nama}</h4>
-                      </div>
-                      <span className="font-mono text-slate-500 dark:text-slate-400">{m._count?.bankSoalList || 0} Bank Soal</span>
+                  {mapelList.length === 0 ? (
+                    <div className="p-8 text-center rounded-2xl bg-slate-50/50 dark:bg-slate-950/50 border border-dashed border-slate-200 dark:border-white/10 space-y-2">
+                      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Belum ada data mata pelajaran di CBT.
+                      </p>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                        Data akan otomatis terisi saat SIMASMUH memiliki mata pelajaran dan Anda menekan tombol <b>Sync SIMASMUH</b>.
+                      </p>
                     </div>
-                  ))}
+                  ) : (
+                    mapelList.map((m: any) => (
+                      <div key={m.id} className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-950 border border-slate-200/60 dark:border-white/10 flex justify-between items-center text-xs backdrop-blur-sm">
+                        <div>
+                          <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold block">{m.kode}</span>
+                          <h4 className="font-bold text-slate-900 dark:text-white">{m.nama}</h4>
+                        </div>
+                        <span className="font-mono text-slate-500 dark:text-slate-400">{m._count?.bankSoalList || 0} Bank Soal</span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 9: CETAK */}
+          {/* TAB 9: CETAK DOKUMEN UJIAN RESMI */}
           {activeTab === 'cetak' && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-              <div className="p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 space-y-3 shadow-sm dark:shadow-xl backdrop-blur-xl">
-                <Printer className="w-6 h-6 text-blue-500" />
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white">Cetak Kartu Ujian Siswa</h4>
-                <button
-                  onClick={() => window.print()}
-                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs cursor-pointer"
-                >
-                  Cetak Kartu Ujian
-                </button>
+            <div className="space-y-6">
+              {/* Toolbar Pilihan Dokumen & Filter */}
+              <div className="p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4 print:hidden">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-slate-800">
+                  <div>
+                    <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white flex items-center gap-2">
+                      <Printer className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      Pusat Cetak Dokumen Ujian CBT
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Pilih format dokumen resmi, sesuaikan filter rombel/ruangan, dan cetak langsung.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-blue-600/20 cursor-pointer active:scale-95 transition"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Cetak Sekarang (Print / PDF)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tab Pilihan Dokumen */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'kartu', label: '🪪 Kartu Peserta Ujian', desc: 'Kartu ujian per siswa' },
+                    { id: 'daftar_hadir', label: '📋 Daftar Hadir Ujian', desc: 'Presensi tanda tangan' },
+                    { id: 'berita_acara', label: '📜 Berita Acara Ujian', desc: 'Laporan pengawas ruang' },
+                    { id: 'rekap_nilai', label: '📊 Rekap Nilai Ujian', desc: 'Daftar nilai per mapel' },
+                  ].map((doc) => (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => setCetakDocType(doc.id as any)}
+                      className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
+                        cetakDocType === doc.id
+                          ? 'bg-blue-50 dark:bg-blue-600/20 border-blue-500 text-blue-700 dark:text-blue-300 shadow-xs'
+                          : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-400 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="font-bold text-xs block">{doc.label}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">{doc.desc}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Filter Options */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 text-xs">
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Filter Rombel Kelas:
+                    </label>
+                    <select
+                      value={cetakKelasFilter}
+                      onChange={(e) => setCetakKelasFilter(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
+                    >
+                      <option value="ALL">Semua Kelas ({siswaData?.siswaList?.length || 0} Siswa)</option>
+                      {kelasList.map((k: any) => (
+                        <option key={k.id} value={k.id}>
+                          Kelas {k.nama}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Filter Jadwal Ujian:
+                    </label>
+                    <select
+                      value={cetakJadwalId}
+                      onChange={(e) => setCetakJadwalId(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
+                    >
+                      {(jadwalData?.jadwalList || []).map((j: any) => (
+                        <option key={j.id} value={j.id}>
+                          {j.kodeUjian} — {j.judul}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Nama Pengawas 1:
+                    </label>
+                    <input
+                      type="text"
+                      value={cetakPengawas1}
+                      onChange={(e) => setCetakPengawas1(e.target.value)}
+                      placeholder="Nama Pengawas 1"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Nama Pengawas 2 / Proktor:
+                    </label>
+                    <input
+                      type="text"
+                      value={cetakPengawas2}
+                      onChange={(e) => setCetakPengawas2(e.target.value)}
+                      placeholder="Nama Pengawas 2"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-medium"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 space-y-3 shadow-sm dark:shadow-xl backdrop-blur-xl">
-                <Printer className="w-6 h-6 text-cyan-500" />
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white">Cetak Daftar Hadir</h4>
-                <button
-                  onClick={() => window.print()}
-                  className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs cursor-pointer"
-                >
-                  Cetak Daftar Hadir
-                </button>
-              </div>
-              <div className="p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 space-y-3 shadow-sm dark:shadow-xl backdrop-blur-xl">
-                <Printer className="w-6 h-6 text-emerald-500" />
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white">Cetak Berita Acara</h4>
-                <button
-                  onClick={() => window.print()}
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer"
-                >
-                  Cetak Berita Acara
-                </button>
-              </div>
+
+              {/* Area Tampilan Dokumen Cetak */}
+              {(() => {
+                const rawStudents = (siswaData?.siswaList || []).filter((s: any) => {
+                  if (cetakKelasFilter !== 'ALL' && s.kelasId !== cetakKelasFilter) return false;
+                  return true;
+                });
+
+                const activeJadwal = (jadwalData?.jadwalList || []).find((j: any) => j.id === cetakJadwalId) || (jadwalData?.jadwalList || [])[0];
+
+                return (
+                  <div className="bg-white text-slate-900 p-6 sm:p-10 rounded-2xl shadow-xl border border-slate-200 print:border-0 print:shadow-none print:p-0 print:m-0 print:bg-white print:text-black">
+                    {/* 1. DOKUMEN: KARTU PESERTA UJIAN */}
+                    {cetakDocType === 'kartu' && (
+                      <div>
+                        <div className="text-center pb-4 mb-6 border-b-2 border-black print:border-black">
+                          <h2 className="text-lg font-black uppercase tracking-wide">
+                            {settingsForm.schoolName || 'SMA MUHAMMADIYAH 1 PONOROGO'}
+                          </h2>
+                          <h3 className="text-base font-bold text-blue-700 print:text-black uppercase">
+                            KARTU PESERTA UJIAN BERBASIS KOMPUTER (CBT)
+                          </h3>
+                          <p className="text-xs text-slate-600 print:text-black">
+                            Tahun Pelajaran {settingsForm.academicYear} • Semester {settingsForm.semester}
+                          </p>
+                        </div>
+
+                        {rawStudents.length === 0 ? (
+                          <div className="text-center py-12 text-slate-400 text-xs">
+                            Tidak ada siswa yang sesuai dengan filter.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 print:grid-cols-2 print:gap-4">
+                            {rawStudents.map((st: any) => (
+                              <div
+                                key={st.id}
+                                className="border-2 border-slate-800 rounded-xl p-3.5 bg-white text-slate-900 relative space-y-2.5 print:break-inside-avoid"
+                              >
+                                {/* Header Kartu */}
+                                <div className="flex items-center gap-2 pb-2 border-b border-slate-300">
+                                  <img
+                                    src={settingsForm.logoUrl || '/pic_logo.png'}
+                                    alt="Logo"
+                                    className="w-9 h-9 object-contain shrink-0"
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLImageElement).src = '/pic_logo.png';
+                                    }}
+                                  />
+                                  <div className="min-w-0">
+                                    <h5 className="font-extrabold text-[11px] uppercase truncate leading-tight">
+                                      {settingsForm.schoolName || 'SMA MUHAMMADIYAH 1'}
+                                    </h5>
+                                    <span className="text-[9px] text-blue-600 font-bold uppercase tracking-wider block">
+                                      KARTU PESERTA CBT
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Body Info Siswa */}
+                                <div className="flex gap-2.5 text-[11px] leading-tight">
+                                  <div className="w-16 h-20 bg-slate-100 border border-slate-300 rounded flex flex-col items-center justify-center text-[8px] text-slate-400 shrink-0 font-mono">
+                                    <span>FOTO</span>
+                                    <span>2 x 3</span>
+                                  </div>
+                                  <div className="space-y-1 min-w-0 flex-1">
+                                    <div>
+                                      <span className="text-[9px] text-slate-500 block">Nama Lengkap:</span>
+                                      <b className="font-bold text-slate-900 block truncate">{st.name}</b>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-1 text-[10px]">
+                                      <div>
+                                        <span className="text-[8px] text-slate-500 block">NIS / Login:</span>
+                                        <b className="font-mono">{st.username}</b>
+                                      </div>
+                                      <div>
+                                        <span className="text-[8px] text-slate-500 block">NISN:</span>
+                                        <b className="font-mono">{st.nisn || '-'}</b>
+                                      </div>
+                                    </div>
+                                    <div className="text-[10px]">
+                                      <span className="text-[8px] text-slate-500 block">Kelas:</span>
+                                      <b>{st.kelas?.nama || '-'}</b>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Footer Kartu & Password */}
+                                <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-[9px] bg-slate-50 p-1.5 rounded">
+                                  <div>
+                                    <span className="text-slate-500 block text-[8px]">Kata Sandi Ujian:</span>
+                                    <b className="font-mono text-[10px] text-blue-700 font-bold">{st.username}</b>
+                                  </div>
+                                  <div className="text-right text-[8px] text-slate-500">
+                                    <span>Ponorogo, {new Date().toLocaleDateString('id-ID')}</span>
+                                    <span className="block font-bold text-slate-700">Panitia CBT MUHIPO</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 2. DOKUMEN: DAFTAR HADIR PESERTA UJIAN */}
+                    {cetakDocType === 'daftar_hadir' && (
+                      <div className="space-y-4">
+                        {/* Kop Resmi */}
+                        <div className="flex items-center gap-4 pb-4 border-b-2 border-black">
+                          <img
+                            src={settingsForm.logoUrl || '/pic_logo.png'}
+                            alt="Logo Sekolah"
+                            className="w-16 h-16 object-contain"
+                          />
+                          <div className="text-center flex-1">
+                            <h2 className="text-base sm:text-lg font-black uppercase tracking-wide">
+                              {settingsForm.schoolName || 'SMA MUHAMMADIYAH 1 PONOROGO'}
+                            </h2>
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-blue-700 print:text-black">
+                              DAFTAR HADIR PESERTA UJIAN BERBASIS KOMPUTER (CBT)
+                            </h3>
+                            <p className="text-xs text-slate-600 print:text-black">
+                              Tahun Pelajaran {settingsForm.academicYear} • Semester {settingsForm.semester}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Rincian Ujian */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs py-2 bg-slate-50 print:bg-transparent p-2 rounded border border-slate-200 print:border-0">
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Mata Pelajaran:</span>
+                            <b className="font-bold">{activeJadwal?.bankSoal?.mataPelajaran?.nama || 'Semua Mapel'}</b>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Kode Ujian:</span>
+                            <b className="font-mono">{activeJadwal?.kodeUjian || '-'}</b>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Rombel Kelas:</span>
+                            <b>{cetakKelasFilter === 'ALL' ? 'Semua Rombel' : kelasList.find((k: any) => k.id === cetakKelasFilter)?.nama || '-'}</b>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Hari / Tanggal:</span>
+                            <b>{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</b>
+                          </div>
+                        </div>
+
+                        {/* Tabel Presensi */}
+                        <table className="w-full text-xs border-collapse border border-black">
+                          <thead>
+                            <tr className="bg-slate-100 print:bg-slate-100 text-center font-bold">
+                              <th className="border border-black p-2 w-10">No</th>
+                              <th className="border border-black p-2 w-28">NIS / No. Peserta</th>
+                              <th className="border border-black p-2 text-left">Nama Lengkap Siswa</th>
+                              <th className="border border-black p-2 w-24">Kelas</th>
+                              <th className="border border-black p-2 w-20">Ruang / Sesi</th>
+                              <th className="border border-black p-2 w-36 text-center" colSpan={2}>
+                                Tanda Tangan
+                              </th>
+                              <th className="border border-black p-2 w-20">Keterangan</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rawStudents.map((st: any, idx: number) => (
+                              <tr key={st.id} className="border-b border-black">
+                                <td className="border border-black p-2 text-center font-mono">{idx + 1}</td>
+                                <td className="border border-black p-2 font-mono text-center">{st.username}</td>
+                                <td className="border border-black p-2 font-semibold uppercase">{st.name}</td>
+                                <td className="border border-black p-2 text-center">{st.kelas?.nama || '-'}</td>
+                                <td className="border border-black p-2 text-center text-[10px]">
+                                  {st.ruangUjian || 'Lab 1'} / S{st.sesiUjian || 1}
+                                </td>
+                                <td className="border border-black p-2 w-18 h-8 text-[9px] text-slate-400 align-top">
+                                  {idx % 2 === 0 ? `${idx + 1}. .........` : ''}
+                                </td>
+                                <td className="border border-black p-2 w-18 h-8 text-[9px] text-slate-400 align-top">
+                                  {idx % 2 !== 0 ? `${idx + 1}. .........` : ''}
+                                </td>
+                                <td className="border border-black p-2 text-center text-[10px]">Hadir</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+
+                        {/* Tanda Tangan Pengawas */}
+                        <div className="pt-6 grid grid-cols-2 gap-8 text-xs text-center print:break-inside-avoid">
+                          <div className="space-y-16">
+                            <p>Pengawas Ruang 1,</p>
+                            <div>
+                              <b className="underline font-bold block">{cetakPengawas1}</b>
+                              <span className="text-[10px] text-slate-500">NIP. .................................................</span>
+                            </div>
+                          </div>
+                          <div className="space-y-16">
+                            <p>Pengawas Ruang 2 / Proktor,</p>
+                            <div>
+                              <b className="underline font-bold block">{cetakPengawas2}</b>
+                              <span className="text-[10px] text-slate-500">NIP. .................................................</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. DOKUMEN: BERITA ACARA UJIAN */}
+                    {cetakDocType === 'berita_acara' && (
+                      <div className="space-y-5">
+                        {/* Kop Resmi */}
+                        <div className="flex items-center gap-4 pb-4 border-b-2 border-black">
+                          <img
+                            src={settingsForm.logoUrl || '/pic_logo.png'}
+                            alt="Logo Sekolah"
+                            className="w-16 h-16 object-contain"
+                          />
+                          <div className="text-center flex-1">
+                            <h2 className="text-base sm:text-lg font-black uppercase tracking-wide">
+                              {settingsForm.schoolName || 'SMA MUHAMMADIYAH 1 PONOROGO'}
+                            </h2>
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-blue-700 print:text-black">
+                              BERITA ACARA PELAKSANAAN UJIAN BERBASIS KOMPUTER (CBT)
+                            </h3>
+                            <p className="text-xs text-slate-600 print:text-black">
+                              Tahun Pelajaran {settingsForm.academicYear} • Semester {settingsForm.semester}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-xs leading-relaxed space-y-3">
+                          <p>
+                            Pada hari ini, <b>{new Date().toLocaleDateString('id-ID', { weekday: 'long' })}</b> tanggal{' '}
+                            <b>{new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</b>,
+                            telah diselenggarakan Penilaian / Ujian Berbasis Komputer (CBT) untuk:
+                          </p>
+
+                          <div className="grid grid-cols-2 gap-y-1.5 gap-x-4 p-3 bg-slate-50 print:bg-transparent rounded border border-slate-200 print:border-black">
+                            <div>Mata Pelajaran: <b>{activeJadwal?.bankSoal?.mataPelajaran?.nama || 'Matematika'}</b></div>
+                            <div>Kode Ujian: <b>{activeJadwal?.kodeUjian || '-'}</b></div>
+                            <div>Kelas: <b>{cetakKelasFilter === 'ALL' ? 'Semua Kelas' : kelasList.find((k: any) => k.id === cetakKelasFilter)?.nama || '-'}</b></div>
+                            <div>Durasi Ujian: <b>{activeJadwal?.durasiMenit || 90} Menit</b></div>
+                          </div>
+
+                          <div className="space-y-1.5 pt-2">
+                            <h4 className="font-bold">Rincian Kehadiran Peserta Ujian:</h4>
+                            <ul className="list-disc list-inside space-y-1">
+                              <li>Jumlah Peserta Terdaftar : <b>{rawStudents.length} Siswa</b></li>
+                              <li>Jumlah Peserta Hadir : <b>{rawStudents.length} Siswa</b></li>
+                              <li>Jumlah Peserta Tidak Hadir : <b>0 Siswa</b></li>
+                            </ul>
+                          </div>
+
+                          <div className="space-y-1.5 pt-2">
+                            <h4 className="font-bold">Catatan Selama Pelaksanaan Ujian:</h4>
+                            <div className="border border-slate-300 print:border-black rounded p-3 min-h-[70px] text-slate-600 print:text-black">
+                              Pelaksanaan ujian berlangsung tertib, aman, lancar, dan seluruh peserta terkoneksi secara stabil ke server CBT MUHIPO.
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Tanda Tangan Pengawas & Proktor */}
+                        <div className="pt-8 grid grid-cols-2 gap-8 text-xs text-center print:break-inside-avoid">
+                          <div className="space-y-16">
+                            <p>Pengawas Ruang 1,</p>
+                            <div>
+                              <b className="underline font-bold block">{cetakPengawas1}</b>
+                              <span className="text-[10px] text-slate-500">NIP. .................................................</span>
+                            </div>
+                          </div>
+                          <div className="space-y-16">
+                            <p>Pengawas Ruang 2 / Proktor,</p>
+                            <div>
+                              <b className="underline font-bold block">{cetakPengawas2}</b>
+                              <span className="text-[10px] text-slate-500">NIP. .................................................</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 4. DOKUMEN: REKAP NILAI UJIAN */}
+                    {cetakDocType === 'rekap_nilai' && (
+                      <div className="space-y-4">
+                        {/* Kop Resmi */}
+                        <div className="flex items-center gap-4 pb-4 border-b-2 border-black">
+                          <img
+                            src={settingsForm.logoUrl || '/pic_logo.png'}
+                            alt="Logo Sekolah"
+                            className="w-16 h-16 object-contain"
+                          />
+                          <div className="text-center flex-1">
+                            <h2 className="text-base sm:text-lg font-black uppercase tracking-wide">
+                              {settingsForm.schoolName || 'SMA MUHAMMADIYAH 1 PONOROGO'}
+                            </h2>
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-blue-700 print:text-black">
+                              REKAPITULASI HASIL NILAI UJIAN CBT
+                            </h3>
+                            <p className="text-xs text-slate-600 print:text-black">
+                              Mata Pelajaran: <b>{activeJadwal?.bankSoal?.mataPelajaran?.nama || 'Matematika'}</b> • Tahun {settingsForm.academicYear}
+                            </p>
+                          </div>
+                        </div>
+
+                        <table className="w-full text-xs border-collapse border border-black">
+                          <thead>
+                            <tr className="bg-slate-100 text-center font-bold">
+                              <th className="border border-black p-2 w-10">No</th>
+                              <th className="border border-black p-2 w-28">NIS / No. Peserta</th>
+                              <th className="border border-black p-2 text-left">Nama Lengkap Siswa</th>
+                              <th className="border border-black p-2 w-24">Kelas</th>
+                              <th className="border border-black p-2 w-24">Nilai PG</th>
+                              <th className="border border-black p-2 w-24">Nilai Essay</th>
+                              <th className="border border-black p-2 w-24">Total Nilai</th>
+                              <th className="border border-black p-2 w-24">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rawStudents.map((st: any, idx: number) => (
+                              <tr key={st.id} className="border-b border-black text-center">
+                                <td className="border border-black p-2 font-mono">{idx + 1}</td>
+                                <td className="border border-black p-2 font-mono">{st.username}</td>
+                                <td className="border border-black p-2 text-left font-semibold uppercase">{st.name}</td>
+                                <td className="border border-black p-2">{st.kelas?.nama || '-'}</td>
+                                <td className="border border-black p-2 font-mono">100.0</td>
+                                <td className="border border-black p-2 font-mono">0.0</td>
+                                <td className="border border-black p-2 font-mono font-bold text-blue-700 print:text-black">
+                                  100.0
+                                </td>
+                                <td className="border border-black p-2 font-bold text-emerald-600 print:text-black">
+                                  TUNTAS
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -2066,6 +2828,9 @@ export default function ComprehensiveAdminDashboard() {
                             src={settingsForm.logoUrl}
                             alt="Preview Logo"
                             className="w-12 h-12 object-contain rounded-xl border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800 shrink-0 shadow-xs"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = '/pic_logo.png';
+                            }}
                           />
                         )}
                         <input
@@ -2264,6 +3029,216 @@ export default function ComprehensiveAdminDashboard() {
       </div>
 
       {/* Modals */}
+      {showJadwalModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4 text-xs max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-white/10">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  <span>Buat Jadwal Ujian Baru</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Tentukan bank soal, waktu mulai, durasi pengerjaan, dan distribusikan ke rombel kelas target.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowJadwalModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateJadwal} className="space-y-3.5">
+              {/* 1. Pilih Bank Soal */}
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                  Pilih Sumber Bank Soal:
+                </label>
+                <select
+                  required
+                  value={jadwalForm.bankSoalId}
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    const bs = bankSoalList.find((b) => b.id === selectedId);
+                    setJadwalForm({
+                      ...jadwalForm,
+                      bankSoalId: selectedId,
+                      kodeUjian: bs ? `PAS-${bs.kodeBank}-${new Date().getFullYear()}` : jadwalForm.kodeUjian,
+                      judul: bs ? `Ujian ${bs.nama}` : jadwalForm.judul,
+                      durasiMenit: bs?.durasiMenit || 90,
+                    });
+                  }}
+                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-medium"
+                >
+                  <option value="">-- Pilih Bank Soal --</option>
+                  {bankSoalList.map((bs) => (
+                    <option key={bs.id} value={bs.id}>
+                      [{bs.kodeBank}] {bs.nama} ({bs.mataPelajaran?.nama} • Tingkat {bs.tingkat})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 2. Kode & Judul Ujian */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Kode Ujian</label>
+                  <input
+                    type="text"
+                    required
+                    value={jadwalForm.kodeUjian}
+                    onChange={(e) => setJadwalForm({ ...jadwalForm, kodeUjian: e.target.value })}
+                    placeholder="Contoh: PAS-MTK-10-2026"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Judul Ujian</label>
+                  <input
+                    type="text"
+                    required
+                    value={jadwalForm.judul}
+                    onChange={(e) => setJadwalForm({ ...jadwalForm, judul: e.target.value })}
+                    placeholder="Contoh: Penilaian Akhir Semester Matematika"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {/* 3. Waktu Mulai & Durasi */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                    Tanggal & Jam Mulai Ujian:
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={jadwalForm.waktuMulai}
+                    onChange={(e) => setJadwalForm({ ...jadwalForm, waktuMulai: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Durasi (Menit)</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    max={360}
+                    value={jadwalForm.durasiMenit}
+                    onChange={(e) => setJadwalForm({ ...jadwalForm, durasiMenit: Number(e.target.value) })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Info Sinkronisasi Real-Time */}
+              <div className="p-3 rounded-2xl bg-cyan-50/80 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/40 text-[11px] text-cyan-800 dark:text-cyan-300 flex items-start gap-2.5">
+                <Clock className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0 mt-0.5" />
+                <div className="leading-tight">
+                  <b className="font-bold">Sinkronisasi Waktu Real-Time:</b>
+                  <p className="mt-0.5 text-[10.5px] text-cyan-700 dark:text-cyan-300/90">
+                    Siswa yang mulai di atas jam mulai otomatis sisa durasinya terpotong proporsional mengikuti jam server real-time.
+                  </p>
+                </div>
+              </div>
+
+              {/* 4. Pilihan Rombel Kelas Target */}
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1.5">
+                  Pilih Kelas Peserta Ujian (Centang Kelas):
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10">
+                  {kelasList.map((k) => {
+                    const isChecked = jadwalForm.kelasIds.includes(k.id);
+                    return (
+                      <label
+                        key={k.id}
+                        className={`p-2 rounded-lg border flex items-center gap-2 cursor-pointer transition ${
+                          isChecked
+                            ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-800 dark:text-blue-200 font-bold'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setJadwalForm({
+                                ...jadwalForm,
+                                kelasIds: [...jadwalForm.kelasIds, k.id],
+                              });
+                            } else {
+                              setJadwalForm({
+                                ...jadwalForm,
+                                kelasIds: jadwalForm.kelasIds.filter((id) => id !== k.id),
+                              });
+                            }
+                          }}
+                          className="rounded text-blue-600"
+                        />
+                        <span className="truncate">Kelas {k.nama}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 5. Fitur Keamanan & Anti-Cheat */}
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <label className="flex items-center gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 cursor-pointer text-[11px] text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={jadwalForm.acakSoal}
+                    onChange={(e) => setJadwalForm({ ...jadwalForm, acakSoal: e.target.checked })}
+                    className="rounded text-blue-600"
+                  />
+                  <span>Acak Soal</span>
+                </label>
+                <label className="flex items-center gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 cursor-pointer text-[11px] text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={jadwalForm.acakOpsi}
+                    onChange={(e) => setJadwalForm({ ...jadwalForm, acakOpsi: e.target.checked })}
+                    className="rounded text-blue-600"
+                  />
+                  <span>Acak Opsi</span>
+                </label>
+                <label className="flex items-center gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 cursor-pointer text-[11px] text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={jadwalForm.lockBrowser}
+                    onChange={(e) => setJadwalForm({ ...jadwalForm, lockBrowser: e.target.checked })}
+                    className="rounded text-blue-600"
+                  />
+                  <span>Lock Browser</span>
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-slate-200 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowJadwalModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold cursor-pointer shadow-md shadow-blue-600/30"
+                >
+                  Buat & Distribusikan Jadwal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showSiswaModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 text-xs">
@@ -2407,25 +3382,27 @@ export default function ComprehensiveAdminDashboard() {
                     onChange={(e) => setNewBankForm({ ...newBankForm, tingkat: Number(e.target.value) })}
                     className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
                   >
-                    <option value={10}>Kelas 10 (Fase E)</option>
-                    <option value={11}>Kelas 11 (Fase F)</option>
-                    <option value={12}>Kelas 12 (Fase F)</option>
+                    <option value={10}>Kelas 10</option>
+                    <option value={11}>Kelas 11</option>
+                    <option value={12}>Kelas 12</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Jurusan</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Jurusan / Program</label>
                   <select
                     value={newBankForm.jurusan || 'UMUM'}
                     onChange={(e) => setNewBankForm({ ...newBankForm, jurusan: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-medium"
                   >
-                    <option value="MIPA">MIPA / IPA</option>
-                    <option value="IPS">IPS</option>
-                    <option value="UMUM">Umum (Semua Jurusan)</option>
+                    {DAFTAR_JURUSAN_MUHIPO.map((j) => (
+                      <option key={j.value} value={j.value}>
+                        {j.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Mata Pelajaran</label>
                   <select
@@ -2441,7 +3418,16 @@ export default function ComprehensiveAdminDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Durasi Standar (Menit)</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Jam Mulai Standar</label>
+                  <input
+                    type="time"
+                    value={newBankForm.jamMulai || '09:00'}
+                    onChange={(e) => setNewBankForm({ ...newBankForm, jamMulai: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Durasi (Menit)</label>
                   <input
                     type="number"
                     required
@@ -2454,6 +3440,18 @@ export default function ComprehensiveAdminDashboard() {
                   />
                 </div>
               </div>
+
+              {/* Info Sinkronisasi Real-Time */}
+              <div className="p-3 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 text-[11px] text-blue-800 dark:text-blue-300 flex items-start gap-2.5">
+                <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <div className="leading-tight">
+                  <b className="font-bold">Sinkronisasi Waktu Real-Time:</b>
+                  <p className="mt-0.5 text-[10.5px] text-blue-700 dark:text-blue-300/90">
+                    Jika ujian dimulai pukul <b>{newBankForm.jamMulai || '09:00'}</b> dengan durasi <b>{newBankForm.durasiMenit} menit</b>, siswa yang mulai mengerjakan di atas jam mulai otomatis durasinya terpotong mengikuti jam server real-time.
+                  </p>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-3">
                 <button
                   type="button"
@@ -2516,25 +3514,27 @@ export default function ComprehensiveAdminDashboard() {
                     onChange={(e) => setEditBankModal({ ...editBankModal, tingkat: Number(e.target.value) })}
                     className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
                   >
-                    <option value={10}>Kelas 10 (Fase E)</option>
-                    <option value={11}>Kelas 11 (Fase F)</option>
-                    <option value={12}>Kelas 12 (Fase F)</option>
+                    <option value={10}>Kelas 10</option>
+                    <option value={11}>Kelas 11</option>
+                    <option value={12}>Kelas 12</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Jurusan</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Jurusan / Program</label>
                   <select
                     value={editBankModal.jurusan || 'UMUM'}
                     onChange={(e) => setEditBankModal({ ...editBankModal, jurusan: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-medium"
                   >
-                    <option value="MIPA">MIPA / IPA</option>
-                    <option value="IPS">IPS</option>
-                    <option value="UMUM">Umum (Semua Jurusan)</option>
+                    {DAFTAR_JURUSAN_MUHIPO.map((j) => (
+                      <option key={j.value} value={j.value}>
+                        {j.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Mata Pelajaran</label>
                   <select
@@ -2550,6 +3550,15 @@ export default function ComprehensiveAdminDashboard() {
                   </select>
                 </div>
                 <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Jam Mulai Standar</label>
+                  <input
+                    type="time"
+                    value={editBankModal.jamMulai || '09:00'}
+                    onChange={(e) => setEditBankModal({ ...editBankModal, jamMulai: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono"
+                  />
+                </div>
+                <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Durasi (Menit)</label>
                   <input
                     type="number"
@@ -2561,6 +3570,18 @@ export default function ComprehensiveAdminDashboard() {
                   />
                 </div>
               </div>
+
+              {/* Info Sinkronisasi Real-Time */}
+              <div className="p-3 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 text-[11px] text-blue-800 dark:text-blue-300 flex items-start gap-2.5">
+                <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <div className="leading-tight">
+                  <b className="font-bold">Sinkronisasi Waktu Real-Time:</b>
+                  <p className="mt-0.5 text-[10.5px] text-blue-700 dark:text-blue-300/90">
+                    Siswa yang mulai di atas jam <b>{editBankModal.jamMulai || '09:00'}</b> akan mendapatkan durasi yang otomatis berkurang sesuai jam server.
+                  </p>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-3">
                 <button
                   type="button"
@@ -2723,10 +3744,37 @@ export default function ComprehensiveAdminDashboard() {
                   />
                 </div>
                 <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Judul Ujian</label>
+                  <input
+                    type="text"
+                    required
+                    value={distributeForm.judul}
+                    onChange={(e) => setDistributeForm({ ...distributeForm, judul: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                    Tanggal & Jam Mulai Ujian:
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={distributeForm.waktuMulai}
+                    onChange={(e) => setDistributeForm({ ...distributeForm, waktuMulai: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono"
+                  />
+                </div>
+                <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Durasi (Menit)</label>
                   <input
                     type="number"
                     required
+                    min={1}
+                    max={360}
                     value={distributeForm.durasiMenit}
                     onChange={(e) => setDistributeForm({ ...distributeForm, durasiMenit: Number(e.target.value) })}
                     className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono"
@@ -2734,15 +3782,15 @@ export default function ComprehensiveAdminDashboard() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Judul Ujian</label>
-                <input
-                  type="text"
-                  required
-                  value={distributeForm.judul}
-                  onChange={(e) => setDistributeForm({ ...distributeForm, judul: e.target.value })}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
-                />
+              {/* Info Sinkronisasi Real-Time */}
+              <div className="p-3 rounded-2xl bg-cyan-50/80 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/40 text-[11px] text-cyan-800 dark:text-cyan-300 flex items-start gap-2.5">
+                <Clock className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0 mt-0.5" />
+                <div className="leading-tight">
+                  <b className="font-bold">Sinkronisasi Waktu Real-Time:</b>
+                  <p className="mt-0.5 text-[10.5px] text-cyan-700 dark:text-cyan-300/90">
+                    Siswa yang mulai mengerjakan terlambat (di atas jam mulai) otomatis mendapatkan sisa durasi yang terpotong secara proporsional sesuai jam server real-time.
+                  </p>
+                </div>
               </div>
 
               {/* Pilihan Rombel Kelas Target */}
@@ -2831,6 +3879,18 @@ export default function ComprehensiveAdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Global In-App Notification & Confirmation Dialog Modal */}
+      <NotificationModal
+        isOpen={notifModal.isOpen}
+        type={notifModal.type}
+        title={notifModal.title}
+        message={notifModal.message}
+        confirmText={notifModal.confirmText}
+        cancelText={notifModal.cancelText}
+        onConfirm={notifModal.onConfirm}
+        onCancel={notifModal.onCancel}
+      />
     </div>
   )
 }

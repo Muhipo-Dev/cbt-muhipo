@@ -266,6 +266,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (action === 'DELETE_UJIAN') {
+      const { ujianId } = body;
+      const peserta = await prisma.pesertaUjian.findMany({ where: { ujianId }, select: { id: true } });
+      const pesertaIds = peserta.map((p) => p.id);
+
+      if (pesertaIds.length > 0) {
+        await prisma.jawabanPeserta.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
+        await prisma.logAktivitasUjian.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
+        await prisma.pesertaUjian.deleteMany({ where: { ujianId } });
+      }
+      await prisma.ujian.delete({ where: { id: ujianId } });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Jadwal Ujian berhasil dihapus',
+      });
+    }
+
     if (action === 'RESET_PASSWORD') {
       const { userId } = body;
       const defaultPassword = await bcrypt.hash('123456', 10);

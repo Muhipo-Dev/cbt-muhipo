@@ -25,7 +25,7 @@ interface AppNavbarProps {
 }
 
 export function AppNavbar({
-  subtitle = 'Computer Based Test System',
+  subtitle = 'Portal Ujian SMA Muhammadiyah 1 Ponorogo',
   hideSubtitleOnMobile = false,
   logoHref = '/',
   logoUrl = '/pic_logo.png',
@@ -57,23 +57,15 @@ export function AppNavbar({
         )}
 
         <Link href={logoHref} className="flex items-center gap-2 sm:gap-2.5 lg:gap-3 group min-w-0">
-          <div className="p-1 sm:p-1.5 rounded-2xl border shadow-2xs transition-transform group-hover:scale-105 shrink-0 bg-blue-50 dark:bg-white/10 border-blue-200/80 dark:border-white/15 backdrop-blur-md flex items-center justify-center">
-            {activeLogo.startsWith('http') || activeLogo.startsWith('data:') ? (
-              <img
-                src={activeLogo}
-                alt="Logo CBT"
-                className="h-6 sm:h-7 lg:h-9 w-auto object-contain rounded-lg max-w-[40px] sm:max-w-[48px]"
-              />
-            ) : (
-              <NextImage
-                src={activeLogo}
-                alt="Logo CBT"
-                width={36}
-                height={36}
-                className="h-6 sm:h-7 lg:h-9 w-auto object-contain"
-                priority
-              />
-            )}
+          <div className="p-1 sm:p-1.5 rounded-2xl border shadow-2xs transition-transform group-hover:scale-105 shrink-0 bg-blue-50 dark:bg-white/10 border-blue-200/80 dark:border-white/15 backdrop-blur-md flex items-center justify-center overflow-hidden">
+            <img
+              src={activeLogo}
+              alt="Logo CBT"
+              className="h-6 sm:h-7 lg:h-9 w-auto object-contain rounded-lg max-w-[40px] sm:max-w-[48px]"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = '/pic_logo.png';
+              }}
+            />
           </div>
           <div className="flex flex-col justify-center min-w-0">
             <div className="flex items-center gap-1.5">

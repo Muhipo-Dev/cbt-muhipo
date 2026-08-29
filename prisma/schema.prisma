@@ -108,6 +108,11 @@ model BankSoal {
   jurusan         String?
   durasiMenit     Int           @default(90) // Durasi standar pengerjaan (menit)
   
+  // Nilai Standar Bank Soal
+  kkm             Float         @default(75.0) // Kriteria Ketuntasan Minimal
+  nilaiMinimal    Float         @default(0.0)  // Nilai minimum (biasanya 0)
+  nilaiMaksimal   Float         @default(100.0) // Nilai maksimum (biasanya 100)
+  
   mataPelajaranId String
   mataPelajaran   MataPelajaran @relation(fields: [mataPelajaranId], references: [id])
   
@@ -131,7 +136,7 @@ model Soal {
   pertanyaan   String           @db.Text
   mediaAudio   String?          // URL atau path audio untuk listening
   mediaGambar  String?          // URL atau path gambar ilustrasi
-  bobot        Float            @default(1.0)
+  bobot        Float            @default(1.0) // Poin / bobot per butir soal
   
   // Opsi untuk PG & PG Kompleks / Pernyataan Benar Salah
   opsiJawaban  OpsiJawaban[]
