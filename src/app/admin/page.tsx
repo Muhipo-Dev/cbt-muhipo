@@ -55,6 +55,8 @@ import {
   Unlock,
   FileText,
   Ban,
+  Video,
+  Music,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { DAFTAR_JURUSAN_MUHIPO, DAFTAR_TIPE_UJIAN } from '@/lib/constants'
@@ -77,6 +79,8 @@ export default function ComprehensiveAdminDashboard() {
 
   // 1. Dashboard State
   const [dashboardData, setDashboardData] = useState<any>(null)
+  const [dashboardJadwalSearch, setDashboardJadwalSearch] = useState('')
+  const [dashboardJadwalSort, setDashboardJadwalSort] = useState<'terbaru' | 'terlama' | 'judul_asc' | 'judul_desc' | 'mapel_asc'>('terbaru')
 
   // 2. Proktor Live State & Live Polling (2 Detik Auto-Refresh)
   const [proktorData, setProktorData] = useState<any>(null)
@@ -1326,9 +1330,18 @@ export default function ComprehensiveAdminDashboard() {
                       <span>{syncing ? 'Menyinkronkan...' : 'Sinkronkan Semua Data'}</span>
                     </button>
                     <button
+                      onClick={() => handleRunSync('NILAI')}
+                      disabled={syncing || !syncData.simasmuh.connected}
+                      className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md cursor-pointer transition disabled:opacity-50"
+                      title="Kirim Nilai CBT ke Master Nilai (Grade) SIMASMUH"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Kirim Nilai ke SIMASMUH</span>
+                    </button>
+                    <button
                       onClick={() => handleRunSync('SISWA')}
                       disabled={syncing || !syncData.simasmuh.connected}
-                      className="py-2.5 px-4 rounded-xl bg-slate-100/80 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 border border-slate-200 dark:border-white/20 text-slate-800 dark:text-white font-bold text-xs cursor-pointer transition disabled:opacity-50"
+                      className="py-2.5 px-3 rounded-xl bg-slate-100/80 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 border border-slate-200 dark:border-white/20 text-slate-800 dark:text-white font-bold text-xs cursor-pointer transition disabled:opacity-50"
                     >
                       Sinkron Siswa Saja
                     </button>
@@ -1456,29 +1469,129 @@ export default function ComprehensiveAdminDashboard() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-7 bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-blue-500" />
-                    Jadwal Ujian Terdaftar
-                  </h3>
-                  <div className="space-y-2.5">
-                    {dashboardData.recentUjian.map((u: any) => (
-                      <div
-                        key={u.id}
-                        className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/60 dark:border-white/5 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-xs backdrop-blur-sm"
+                <div className="lg:col-span-7 bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-blue-500" />
+                      <span>Jadwal Ujian Terdaftar</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold">
+                        {(() => {
+                          const list = dashboardData?.recentUjian || [];
+                          const q = dashboardJadwalSearch.toLowerCase().trim();
+                          const filtered = list.filter((u: any) => {
+                            if (!q) return true;
+                            const judul = (u.judul || '').toLowerCase();
+                            const kode = (u.kodeUjian || '').toLowerCase();
+                            const mapel = (u.bankSoal?.mataPelajaran?.nama || '').toLowerCase();
+                            return judul.includes(q) || kode.includes(q) || mapel.includes(q);
+                          });
+                          return `${filtered.length} Jadwal`;
+                        })()}
+                      </span>
+                    </h3>
+
+                    {/* Filter Sort By */}
+                    <div className="flex items-center gap-2">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
+                      <select
+                        value={dashboardJadwalSort}
+                        onChange={(e: any) => setDashboardJadwalSort(e.target.value)}
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer focus:outline-none focus:border-blue-500"
+                        title="Urutkan Jadwal Ujian"
                       >
-                        <div>
-                          <span className="font-mono text-blue-600 dark:text-blue-400 font-bold block">{u.kodeUjian}</span>
-                          <h4 className="text-sm font-bold text-slate-900 dark:text-white">{u.judul}</h4>
-                          <p className="text-slate-500 dark:text-slate-400">
-                            Mapel: <b>{u.bankSoal.mataPelajaran.nama}</b> • Durasi: <b>{u.durasiMenit} Menit</b>
-                          </p>
+                        <option value="terbaru">Terbaru Dibuat</option>
+                        <option value="terlama">Terlama Dibuat</option>
+                        <option value="judul_asc">Judul Ujian (A-Z)</option>
+                        <option value="judul_desc">Judul Ujian (Z-A)</option>
+                        <option value="mapel_asc">Mata Pelajaran (A-Z)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Input Search Berdasarkan Judul / Kode / Mapel */}
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={dashboardJadwalSearch}
+                      onChange={(e) => setDashboardJadwalSearch(e.target.value)}
+                      placeholder="Cari berdasarkan judul ujian, kode ujian, atau mata pelajaran..."
+                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50/80 dark:bg-slate-950/80 border border-slate-200/80 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-500 backdrop-blur-sm"
+                    />
+                    {dashboardJadwalSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setDashboardJadwalSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* List Jadwal Ujian Terfilter & Tersorting */}
+                  <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                    {(() => {
+                      const list = dashboardData?.recentUjian || [];
+                      const q = dashboardJadwalSearch.toLowerCase().trim();
+
+                      let filtered = list.filter((u: any) => {
+                        if (!q) return true;
+                        const judul = (u.judul || '').toLowerCase();
+                        const kode = (u.kodeUjian || '').toLowerCase();
+                        const mapel = (u.bankSoal?.mataPelajaran?.nama || '').toLowerCase();
+                        return judul.includes(q) || kode.includes(q) || mapel.includes(q);
+                      });
+
+                      filtered = [...filtered].sort((a: any, b: any) => {
+                        if (dashboardJadwalSort === 'terbaru') {
+                          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+                        }
+                        if (dashboardJadwalSort === 'terlama') {
+                          return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+                        }
+                        if (dashboardJadwalSort === 'judul_asc') {
+                          return (a.judul || '').localeCompare(b.judul || '');
+                        }
+                        if (dashboardJadwalSort === 'judul_desc') {
+                          return (b.judul || '').localeCompare(a.judul || '');
+                        }
+                        if (dashboardJadwalSort === 'mapel_asc') {
+                          const mapelA = a.bankSoal?.mataPelajaran?.nama || '';
+                          const mapelB = b.bankSoal?.mataPelajaran?.nama || '';
+                          return mapelA.localeCompare(mapelB);
+                        }
+                        return 0;
+                      });
+
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="p-6 text-center text-slate-400 text-xs bg-slate-50/50 dark:bg-slate-950/40 rounded-2xl border border-slate-200/50 dark:border-white/5">
+                            {dashboardJadwalSearch
+                              ? `Tidak ditemukan jadwal ujian dengan kata kunci "${dashboardJadwalSearch}"`
+                              : 'Belum ada jadwal ujian terdaftar.'}
+                          </div>
+                        );
+                      }
+
+                      return filtered.map((u: any) => (
+                        <div
+                          key={u.id}
+                          className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/60 dark:border-white/5 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-xs backdrop-blur-sm hover:border-slate-300 dark:hover:border-white/20 transition"
+                        >
+                          <div>
+                            <span className="font-mono text-blue-600 dark:text-blue-400 font-bold block">{u.kodeUjian}</span>
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white">{u.judul}</h4>
+                            <p className="text-slate-500 dark:text-slate-400">
+                              Mapel: <b>{u.bankSoal?.mataPelajaran?.nama || '-'}</b> • Durasi: <b>{u.durasiMenit} Menit</b>
+                            </p>
+                          </div>
+                          <span className="self-start sm:self-center px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold">
+                            {u.status}
+                          </span>
                         </div>
-                        <span className="self-start sm:self-center px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold">
-                          {u.status}
-                        </span>
-                      </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 </div>
 
@@ -1982,9 +2095,88 @@ export default function ComprehensiveAdminDashboard() {
                         </div>
 
                         <div>
-                          <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
-                            Pertanyaan (Mendukung Formula KaTeX $...$ / $$...$$):
-                          </label>
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="block text-slate-700 dark:text-slate-300 font-semibold">
+                              Pertanyaan (Mendukung Formula KaTeX $...$ / $$...$$):
+                            </label>
+                            {/* Toolbar Sisipkan Media Gambar / Video / Audio pada Pertanyaan */}
+                            <div className="flex items-center gap-1.5">
+                              {/* Sisipkan Gambar */}
+                              <label className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-2xs">
+                                <ImageIcon className="w-3.5 h-3.5" />
+                                <span>+ Gambar</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0]
+                                    if (file) {
+                                      const reader = new FileReader()
+                                      reader.onload = () => {
+                                        const base64 = reader.result as string
+                                        setSoalForm((prev: any) => ({
+                                          ...prev,
+                                          pertanyaan: prev.pertanyaan
+                                            ? `${prev.pertanyaan}\n<img src="${base64}" alt="Ilustrasi Soal" class="my-2 rounded-xl max-h-60 mx-auto border" />`
+                                            : `<img src="${base64}" alt="Ilustrasi Soal" class="my-2 rounded-xl max-h-60 mx-auto border" />`,
+                                        }))
+                                      }
+                                      reader.readAsDataURL(file)
+                                    }
+                                  }}
+                                />
+                              </label>
+
+                              {/* Sisipkan Audio Suara */}
+                              <label className="px-2 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-2xs">
+                                <Music className="w-3.5 h-3.5" />
+                                <span>+ Suara</span>
+                                <input
+                                  type="file"
+                                  accept="audio/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0]
+                                    if (file) {
+                                      const reader = new FileReader()
+                                      reader.onload = () => {
+                                        const base64 = reader.result as string
+                                        setSoalForm((prev: any) => ({
+                                          ...prev,
+                                          pertanyaan: prev.pertanyaan
+                                            ? `${prev.pertanyaan}\n<audio controls src="${base64}" class="my-2 w-full"></audio>`
+                                            : `<audio controls src="${base64}" class="my-2 w-full"></audio>`,
+                                        }))
+                                      }
+                                      reader.readAsDataURL(file)
+                                    }
+                                  }}
+                                />
+                              </label>
+
+                              {/* Sisipkan Video / YouTube */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const url = prompt('Masukkan URL Video / Link YouTube (Contoh: https://www.youtube.com/watch?v=...):')
+                                  if (url) {
+                                    setSoalForm((prev: any) => ({
+                                      ...prev,
+                                      pertanyaan: prev.pertanyaan
+                                        ? `${prev.pertanyaan}\n${url}`
+                                        : url,
+                                    }))
+                                  }
+                                }}
+                                className="px-2 py-1 rounded-lg bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                              >
+                                <Video className="w-3.5 h-3.5" />
+                                <span>+ Video/YouTube</span>
+                              </button>
+                            </div>
+                          </div>
+
                           <textarea
                             rows={3}
                             required
@@ -1997,47 +2189,260 @@ export default function ComprehensiveAdminDashboard() {
 
                         {soalForm.pertanyaan && (
                           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10">
-                            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase block mb-1">Live Preview Rumus KaTeX:</span>
+                            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase block mb-1">Live Preview Rumus KaTeX & Media:</span>
                             <MathRenderer content={soalForm.pertanyaan} />
                           </div>
                         )}
 
+                        {/* Panduan Kunci Formula KaTeX Interaktif (Click to Insert) - Khusus Mapel Eksak & Sains/Komputasi */}
+                        {(() => {
+                          const targetText = [
+                            selectedBankSoal?.nama || '',
+                            selectedBankSoal?.kodeBank || '',
+                            selectedBankSoal?.mataPelajaran?.nama || '',
+                            selectedBankSoal?.mataPelajaran?.kode || '',
+                          ]
+                            .join(' ')
+                            .toLowerCase();
+
+                          const isStemBank = [
+                            'matematika',
+                            'mtk',
+                            'math',
+                            'fisika',
+                            'fis',
+                            'kimia',
+                            'kim',
+                            'tik',
+                            'informatika',
+                            'koding',
+                            'coding',
+                            'artificial',
+                            'ai',
+                            'komputer',
+                            'rekayasa',
+                            'robotik',
+                            'algoritma',
+                            'ipa',
+                            'sains',
+                          ].some((keyword) => targetText.includes(keyword));
+
+                          if (!isStemBank) return null;
+
+                          return (
+                            <div className="p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 space-y-2.5 text-xs">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-blue-800 dark:text-blue-300 font-bold">
+                                  <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                  <span>Panduan & Kunci Cepat Rumus KaTeX (Klik untuk Menyisipkan)</span>
+                                </div>
+                                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">
+                                  Gunakan tanda <b>$...$</b> untuk sebaris atau <b>$$...$$</b> untuk blok tengah
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-1.5 max-h-64 overflow-y-auto pr-1">
+                                {[
+                                  // 1. Aljabar & Aritmatika
+                                  { label: 'Pecahan (\\frac)', code: '$\\frac{a}{b}$' },
+                                  { label: 'Pangkat / Eksponen', code: '$x^{2} + y^{2} = r^{2}$' },
+                                  { label: 'Akar Kuadrat', code: '$\\sqrt{x^2 + 1}$' },
+                                  { label: 'Akar Derajat n', code: '$\\sqrt[n]{x}$' },
+                                  { label: 'Logaritma', code: '$\\log_a(b) = c$' },
+                                  { label: 'Nilai Mutlak', code: '$|x - 5| \\le 3$' },
+                                  { label: 'Persamaan Kuadrat (ABC)', code: '$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$' },
+                                  { label: 'Faktorial', code: '$n! = n \\times (n-1)!$' },
+
+                                  // 2. Kalkulus & Analisis
+                                  { label: 'Turunan (Derivatif)', code: '$\\frac{df}{dx} = \\lim_{h \\to 0} \\frac{f(x+h) - f(x)}{h}$' },
+                                  { label: 'Integral Tentu', code: '$\\int_{a}^{b} f(x) dx$' },
+                                  { label: 'Integral Tak Tentu', code: '$\\int (3x^2 + 2x - 5) dx$' },
+                                  { label: 'Limit Aljabar', code: '$\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1$' },
+                                  { label: 'Sigma / Deret', code: '$\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$' },
+                                  { label: 'Produk Notasi', code: '$\\prod_{i=1}^{n} x_i$' },
+
+                                  // 3. Matriks & Vektor
+                                  { label: 'Matriks 2x2', code: '$$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$' },
+                                  { label: 'Matriks 3x3', code: '$$\\begin{pmatrix} a & b & c \\\\ d & e & f \\\\ g & h & i \\end{pmatrix}$$' },
+                                  { label: 'Determinan Matriks', code: '$$\\det(A) = \\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}$$' },
+                                  { label: 'Vektor Notasi', code: '$\\vec{v} = a\\hat{i} + b\\hat{j} + c\\hat{k}$' },
+                                  { label: 'Dot Product', code: '$\\vec{a} \\cdot \\vec{b} = |\\vec{a}||\\vec{b}| \\cos\\theta$' },
+                                  { label: 'Cross Product', code: '$\\vec{a} \\times \\vec{b}$' },
+
+                                  // 4. Trigonometri & Geometri
+                                  { label: 'Identitas Pythagoras', code: '$\\sin^2\\theta + \\cos^2\\theta = 1$' },
+                                  { label: 'Sudut & Derajat', code: '$\\alpha = 45^\\circ, \\theta = 90^\\circ$' },
+                                  { label: 'Trigonometri Aturan Sinus', code: '$\\frac{a}{\\sin A} = \\frac{b}{\\sin B} = \\frac{c}{\\sin C}$' },
+
+                                  // 5. Fisika & Sains
+                                  { label: 'Hukum Newton II', code: '$\\sum \\vec{F} = m \\cdot \\vec{a}$' },
+                                  { label: 'Energi Kinetik', code: '$E_k = \\frac{1}{2} m v^2$' },
+                                  { label: 'Hukum Ohm & Daya', code: '$V = I \\cdot R, \\quad P = V \\cdot I$' },
+                                  { label: 'Gravitasi Newton', code: '$F = G \\frac{m_1 m_2}{r^2}$' },
+                                  { label: 'Efek Doppler', code: '$f_p = \\frac{v \\pm v_p}{v \\mp v_s} f_s$' },
+
+                                  // 6. Kimia & Reaksi
+                                  { label: 'Reaksi Pembakaran', code: '$CH_4 + 2O_2 \\rightarrow CO_2 + 2H_2O$' },
+                                  { label: 'Ion & Muatan Kimia', code: '$Ca^{2+} + 2Cl^- \\rightarrow CaCl_2$' },
+                                  { label: 'Termokimia Delta H', code: '$\\Delta H = -393.5 \\text{ kJ/mol}$' },
+
+                                  // 7. Informatika / Koding / Logika
+                                  { label: 'Logika AND / OR / NOT', code: '$P \\land Q, \\quad P \\lor Q, \\quad \\neg P$' },
+                                  { label: 'Implikasi & Biimplikasi', code: '$P \\implies Q, \\quad P \\iff Q$' },
+                                  { label: 'Kompleksitas Algoritma', code: '$\\mathcal{O}(n \\log n), \\quad \\Omega(n), \\quad \\Theta(1)$' },
+                                  { label: 'Himpunan & Irisan', code: '$A \\cap B, \\quad A \\cup B, \\quad x \\in A$' },
+                                  { label: 'Himpunan Kosong / Subset', code: '$A \\subset B, \\quad \\emptyset, \\quad A^c$' },
+
+                                  // 8. Simbol Yunani & Khusus
+                                  { label: 'Simbol $\\alpha, \\beta, \\gamma$', code: '$\\alpha, \\beta, \\gamma, \\delta$' },
+                                  { label: 'Simbol $\\pi, \\lambda, \\mu, \\sigma$', code: '$\\pi \\approx 3.14, \\quad \\lambda, \\mu, \\sigma$' },
+                                  { label: 'Simbol $\\Omega, \\Delta, \\infty$', code: '$\\Omega, \\quad \\Delta, \\quad \\infty$' },
+                                  { label: 'Simbol $\\approx, \\ne, \\pm$', code: '$a \\approx b, \\quad x \\ne 0, \\quad \\pm 5$' },
+                                  { label: 'Relasi $\\le, \\ge, \\ll$', code: '$x \\le 10, \\quad y \\ge 0, \\quad a \\ll b$' },
+                                ].map((item, i) => (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => {
+                                      setSoalForm((prev: any) => ({
+                                        ...prev,
+                                        pertanyaan: prev.pertanyaan ? `${prev.pertanyaan} ${item.code}` : item.code,
+                                      }))
+                                    }}
+                                    className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-left transition cursor-pointer shadow-2xs group"
+                                    title={`Klik untuk sisipkan formula: ${item.code}`}
+                                  >
+                                    <span className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-300 truncate">
+                                      + {item.label}
+                                    </span>
+                                    <span className="text-[9px] font-mono text-blue-600 dark:text-blue-400 truncate block mt-0.5 opacity-80">
+                                      {item.code}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {(soalForm.tipeSoal === 'PG' || soalForm.tipeSoal === 'PG_KOMPLEKS') && (
                           <div className="space-y-2 pt-2">
-                            <label className="block text-slate-700 dark:text-slate-300 font-semibold">Pilihan Jawaban & Kunci:</label>
-                            {soalForm.opsiJawaban.map((opsi, idx) => (
-                              <div key={opsi.label} className="flex items-center gap-2">
-                                <span className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-800 font-bold flex items-center justify-center text-slate-800 dark:text-slate-200 shrink-0">
-                                  {opsi.label}
-                                </span>
-                                <input
-                                  type="text"
-                                  value={opsi.konten}
-                                  onChange={(e) => {
-                                    const updated = [...soalForm.opsiJawaban]
-                                    updated[idx].konten = e.target.value
-                                    setSoalForm({ ...soalForm, opsiJawaban: updated })
-                                  }}
-                                  placeholder={`Pilihan ${opsi.label}...`}
-                                  className="flex-1 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updated = [...soalForm.opsiJawaban]
-                                    if (soalForm.tipeSoal === 'PG') {
-                                      updated.forEach((o, i) => (o.isBenar = i === idx))
-                                    } else {
-                                      updated[idx].isBenar = !updated[idx].isBenar
-                                    }
-                                    setSoalForm({ ...soalForm, opsiJawaban: updated })
-                                  }}
-                                  className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 cursor-pointer ${
-                                    opsi.isBenar ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                  }`}
-                                >
-                                  {opsi.isBenar ? '✓ Kunci Benar' : 'Set Kunci'}
-                                </button>
+                            <label className="block text-slate-700 dark:text-slate-300 font-semibold">Pilihan Jawaban & Sisip Media:</label>
+                            {soalForm.opsiJawaban.map((opsi: any, idx: number) => (
+                              <div key={opsi.label} className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-800 font-bold flex items-center justify-center text-slate-800 dark:text-slate-200 shrink-0">
+                                    {opsi.label}
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={opsi.konten}
+                                    onChange={(e) => {
+                                      const updated = [...soalForm.opsiJawaban]
+                                      updated[idx].konten = e.target.value
+                                      setSoalForm({ ...soalForm, opsiJawaban: updated })
+                                    }}
+                                    placeholder={`Pilihan ${opsi.label}...`}
+                                    className="flex-1 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs"
+                                  />
+
+                                  {/* Tombol Sisip Gambar Opsi */}
+                                  <label
+                                    className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold flex items-center justify-center cursor-pointer transition shrink-0"
+                                    title={`Sisipkan Gambar pada Pilihan ${opsi.label}`}
+                                  >
+                                    <ImageIcon className="w-3.5 h-3.5" />
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) {
+                                          const reader = new FileReader()
+                                          reader.onload = () => {
+                                            const base64 = reader.result as string
+                                            const updated = [...soalForm.opsiJawaban]
+                                            updated[idx].konten = updated[idx].konten
+                                              ? `${updated[idx].konten} <img src="${base64}" class="inline-block max-h-24 rounded border my-1" />`
+                                              : `<img src="${base64}" class="inline-block max-h-24 rounded border my-1" />`
+                                            setSoalForm({ ...soalForm, opsiJawaban: updated })
+                                          }
+                                          reader.readAsDataURL(file)
+                                        }
+                                      }}
+                                    />
+                                  </label>
+
+                                  {/* Tombol Sisip Audio Opsi */}
+                                  <label
+                                    className="p-2 rounded-xl bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-xs font-bold flex items-center justify-center cursor-pointer transition shrink-0"
+                                    title={`Sisipkan Suara pada Pilihan ${opsi.label}`}
+                                  >
+                                    <Music className="w-3.5 h-3.5" />
+                                    <input
+                                      type="file"
+                                      accept="audio/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) {
+                                          const reader = new FileReader()
+                                          reader.onload = () => {
+                                            const base64 = reader.result as string
+                                            const updated = [...soalForm.opsiJawaban]
+                                            updated[idx].konten = updated[idx].konten
+                                              ? `${updated[idx].konten} <audio controls src="${base64}" class="inline-block w-48 h-8 align-middle"></audio>`
+                                              : `<audio controls src="${base64}" class="inline-block w-48 h-8 align-middle"></audio>`
+                                            setSoalForm({ ...soalForm, opsiJawaban: updated })
+                                          }
+                                          reader.readAsDataURL(file)
+                                        }
+                                      }}
+                                    />
+                                  </label>
+
+                                  {/* Tombol Sisip Video Opsi */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const url = prompt(`Masukkan URL Video / YouTube untuk Pilihan ${opsi.label}:`)
+                                      if (url) {
+                                        const updated = [...soalForm.opsiJawaban]
+                                        updated[idx].konten = updated[idx].konten ? `${updated[idx].konten} ${url}` : url
+                                        setSoalForm({ ...soalForm, opsiJawaban: updated })
+                                      }
+                                    }}
+                                    className="p-2 rounded-xl bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-xs font-bold flex items-center justify-center cursor-pointer transition shrink-0"
+                                    title={`Sisipkan Link Video untuk Pilihan ${opsi.label}`}
+                                  >
+                                    <Video className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = [...soalForm.opsiJawaban]
+                                      if (soalForm.tipeSoal === 'PG') {
+                                        updated.forEach((o: any, i: number) => (o.isBenar = i === idx))
+                                      } else {
+                                        updated[idx].isBenar = !updated[idx].isBenar
+                                      }
+                                      setSoalForm({ ...soalForm, opsiJawaban: updated })
+                                    }}
+                                    className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 cursor-pointer ${
+                                      opsi.isBenar ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                    }`}
+                                  >
+                                    {opsi.isBenar ? '✓ Kunci Benar' : 'Set Kunci'}
+                                  </button>
+                                </div>
+
+                                {opsi.konten && (
+                                  <div className="pl-9 text-[11px] text-slate-600 dark:text-slate-300">
+                                    <MathRenderer content={opsi.konten} />
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -2135,34 +2540,36 @@ export default function ComprehensiveAdminDashboard() {
 
                               <div className="text-slate-900 dark:text-white font-medium pl-8">
                                 <MathRenderer content={s.pertanyaan} />
+                                {['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(s.tipeSoal) && s.opsiJawaban && s.opsiJawaban.length > 0 && (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-8 pt-1">
+                                    {s.opsiJawaban.map((op: any) => (
+                                      <div
+                                        key={op.id || op.label}
+                                        className={`p-2 rounded-xl border flex items-center gap-2 ${
+                                          op.isBenar
+                                            ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 font-bold'
+                                            : 'bg-slate-100/60 dark:bg-slate-900 border-slate-200/60 dark:border-white/5 text-slate-700 dark:text-slate-400'
+                                        }`}
+                                      >
+                                        <span className="w-5 h-5 rounded-md bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-[10px]">
+                                          {op.label}
+                                        </span>
+                                        <span className="truncate flex-1">{op.konten}</span>
+                                        {op.isBenar && <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">✓ Kunci</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {s.kunciJawabanTeks && (
+                                  <div className="pl-8 pt-1 text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                                    <span className="font-bold text-amber-600 dark:text-amber-400">
+                                      {s.tipeSoal === 'ISIAN' ? 'Kunci Jawaban Singkat:' : 'Rubrik / Pedoman Nilai Essay:'}
+                                    </span>
+                                    <span className="font-medium">{s.kunciJawabanTeks}</span>
+                                  </div>
+                                )}
                               </div>
-
-                              {s.opsiJawaban && s.opsiJawaban.length > 0 && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-8 pt-1">
-                                  {s.opsiJawaban.map((op: any) => (
-                                    <div
-                                      key={op.id || op.label}
-                                      className={`p-2 rounded-xl border flex items-center gap-2 ${
-                                        op.isBenar
-                                          ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 font-bold'
-                                          : 'bg-slate-100/60 dark:bg-slate-900 border-slate-200/60 dark:border-white/5 text-slate-700 dark:text-slate-400'
-                                      }`}
-                                    >
-                                      <span className="w-5 h-5 rounded-md bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-[10px]">
-                                        {op.label}
-                                      </span>
-                                      <span className="text-xs">{op.konten}</span>
-                                      {op.isBenar && <span className="ml-auto text-[10px] text-emerald-600 font-bold">✓ Kunci</span>}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              {s.kunciJawabanTeks && (
-                                <div className="pl-8 text-amber-600 dark:text-amber-400 text-xs font-semibold">
-                                  Kunci / Rubrik: {s.kunciJawabanTeks}
-                                </div>
-                              )}
                             </div>
                           ))
                         )}
@@ -2204,9 +2611,9 @@ export default function ComprehensiveAdminDashboard() {
                         <th className="py-3 px-4">NIS</th>
                         <th className="py-3 px-4">Nama Siswa</th>
                         <th className="py-3 px-4">Kelas</th>
-                        <th className="py-3 px-4">Nilai PG</th>
-                        <th className="py-3 px-4">Nilai Essay</th>
-                        <th className="py-3 px-4">Total Skor</th>
+                        <th className="py-3 px-4">Nilai PG/Pilihan</th>
+                        <th className="py-3 px-4">Nilai Tulisan/Essay</th>
+                        <th className="py-3 px-4">Total Nilai</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">

@@ -477,9 +477,9 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Hapus & recreate opsi jawaban jika ada
-        if (opsiJawaban && Array.isArray(opsiJawaban)) {
-          await prisma.opsiJawaban.deleteMany({ where: { soalId } });
+        // Hapus & recreate opsi jawaban jika tipe soal adalah PG / PG_KOMPLEKS / BENAR_SALAH
+        await prisma.opsiJawaban.deleteMany({ where: { soalId } });
+        if (['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal) && opsiJawaban && Array.isArray(opsiJawaban)) {
           for (const o of opsiJawaban) {
             await prisma.opsiJawaban.create({
               data: {
@@ -500,6 +500,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, message: 'Soal berhasil diupdate' });
       } else {
         // Create Soal Baru
+        const isChoiceType = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal);
         const count = await prisma.soal.count({ where: { bankSoalId } });
         const newSoal = await prisma.soal.create({
           data: {
@@ -509,13 +510,15 @@ export async function POST(request: NextRequest) {
             pertanyaan,
             bobot: bobot !== undefined && Number(bobot) > 0 ? Number(bobot) : 1.0,
             kunciJawabanTeks,
-            opsiJawaban: {
-              create: (opsiJawaban || []).map((o: any) => ({
-                label: o.label,
-                konten: o.konten,
-                isBenar: Boolean(o.isBenar),
-              })),
-            },
+            opsiJawaban: isChoiceType
+              ? {
+                  create: (opsiJawaban || []).map((o: any) => ({
+                    label: o.label,
+                    konten: o.konten,
+                    isBenar: Boolean(o.isBenar),
+                  })),
+                }
+              : undefined,
           },
         });
 

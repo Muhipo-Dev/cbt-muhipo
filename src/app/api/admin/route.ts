@@ -24,7 +24,14 @@ export async function GET(request: NextRequest) {
         countPesertaSelesai,
       ] = await Promise.all([
         prisma.user.count({ where: { role: 'SISWA' } }),
-        prisma.user.count({ where: { role: 'GURU' } }),
+        prisma.user.count({
+          where: {
+            OR: [
+              { role: 'GURU' },
+              { mataPelajaran: { some: {} } },
+            ],
+          },
+        }),
         prisma.kelas.count(),
         prisma.bankSoal.count(),
         prisma.ujian.count(),
@@ -77,7 +84,12 @@ export async function GET(request: NextRequest) {
 
     if (tab === 'guru') {
       const guruList = await prisma.user.findMany({
-        where: { role: 'GURU' },
+        where: {
+          OR: [
+            { role: 'GURU' },
+            { mataPelajaran: { some: {} } },
+          ],
+        },
         include: { mataPelajaran: { include: { mataPelajaran: true } } },
         orderBy: { name: 'asc' },
       });

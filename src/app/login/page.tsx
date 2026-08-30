@@ -1,15 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { SchoolBrandHeader } from '@/components/SchoolBrandHeader';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { useRealtimeServerClock } from '@/lib/time-sync';
 import {
   LogIn,
   KeyRound,
   User,
   GraduationCap,
   Shield,
+  Clock,
 } from 'lucide-react';
 
 export default function SingleSignInLoginPage() {
@@ -19,6 +21,30 @@ export default function SingleSignInLoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [settings, setSettings] = useState({
+    schoolName: 'SMA Muhammadiyah 1 Ponorogo',
+    appTitle: 'CBT MUHIPO',
+    backgroundUrl: '/muhipo-front.jpg',
+    logoUrl: '/pic_logo.png',
+  });
+
+  const clock = useRealtimeServerClock(60000);
+
+  useEffect(() => {
+    fetch('/api/pengaturan')
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success && json.data) {
+          setSettings({
+            schoolName: json.data.schoolName || 'SMA Muhammadiyah 1 Ponorogo',
+            appTitle: json.data.appTitle || 'CBT MUHIPO',
+            backgroundUrl: json.data.backgroundUrl || '/muhipo-front.jpg',
+            logoUrl: json.data.logoUrl || '/pic_logo.png',
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,33 +86,52 @@ export default function SingleSignInLoginPage() {
   };
 
   return (
-    <div className="min-h-screen relative flex flex-col justify-between text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white overflow-hidden bg-slate-100 dark:bg-slate-950 transition-colors duration-300">
-      {/* Background Wallpaper */}
+    <div className="min-h-screen relative flex flex-col justify-between text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white overflow-hidden bg-slate-900 transition-colors duration-300">
+      {/* Background Wallpaper Master dari Pengaturan Sistem */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0 transform scale-105 transition-transform duration-1000 opacity-20 dark:opacity-40 pointer-events-none"
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0 transform scale-100 transition-transform duration-1000 opacity-60 dark:opacity-40 pointer-events-none"
         style={{
-          backgroundImage: `url('/muhipo-front.jpg')`,
+          backgroundImage: `url('${settings.backgroundUrl || '/muhipo-front.jpg'}')`,
         }}
       />
-      <div className="absolute inset-0 bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-[2px] z-0 pointer-events-none" />
+      {/* Overlay Transparan Halus */}
+      <div className="absolute inset-0 bg-slate-950/20 dark:bg-slate-950/50 backdrop-blur-[1px] z-0 pointer-events-none" />
 
       {/* Top Header Navbar */}
-      <header className="w-full px-4 sm:px-6 lg:px-10 py-3.5 sm:py-4 border-b border-slate-200/80 dark:border-white/10 bg-white/85 dark:bg-slate-950/85 backdrop-blur-xl flex items-center justify-between z-10 shadow-xs">
-        <SchoolBrandHeader subtitle="Portal Ujian SMA Muhammadiyah 1 Ponorogo" />
-        <div className="flex items-center gap-2.5 sm:gap-3 text-xs font-medium">
+      <header className="w-full px-4 sm:px-6 lg:px-10 py-3 sm:py-3.5 border-b border-white/20 dark:border-white/10 bg-white/75 dark:bg-slate-950/75 backdrop-blur-md flex items-center justify-between z-10 shadow-sm">
+        <SchoolBrandHeader
+          subtitle={`Portal Ujian ${settings.schoolName || 'SMA Muhammadiyah 1 Ponorogo'}`}
+          logoUrl={settings.logoUrl}
+          appTitle={settings.appTitle}
+        />
+        <div className="flex items-center gap-2.5 sm:gap-4 text-xs font-medium">
           <ThemeToggle />
-          <span className="hidden sm:flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full text-emerald-700 dark:text-emerald-300 shadow-2xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Server CBT Aktif & Terhubung
-          </span>
+          {/* Format Waktu & Tanggal Persis Sidebar */}
+          <div className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 backdrop-blur-md shadow-xs">
+            <div className="p-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
+              <Clock className="w-4 h-4 animate-pulse" />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 font-mono font-bold text-slate-900 dark:text-white text-xs">
+                <span>{clock.timeString}</span>
+                <span className="text-[9px] font-sans font-semibold px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                  WIB
+                </span>
+              </div>
+              <span className="text-slate-300 dark:text-slate-700">•</span>
+              <span className="text-[11px] text-slate-600 dark:text-slate-300 font-medium">
+                {clock.dateString}
+              </span>
+            </div>
+          </div>
         </div>
       </header>
 
       {/* Main Login Card */}
       <main className="flex-1 flex items-center justify-center p-3.5 sm:p-6 z-10">
-        <div className="w-full max-w-md bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-xl dark:shadow-2xl backdrop-blur-2xl space-y-6">
+        <div className="w-full max-w-md bg-white/80 dark:bg-slate-900/75 border border-white/40 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6">
           {/* Toggle Tab Portal: Siswa vs Admin/Guru */}
-          <div className="grid grid-cols-2 gap-1.5 bg-slate-100 dark:bg-slate-950 p-1.5 rounded-2xl border border-slate-200 dark:border-white/5 text-xs font-bold">
+          <div className="grid grid-cols-2 gap-1.5 bg-slate-100/70 dark:bg-slate-950/60 p-1.5 rounded-2xl border border-slate-200/60 dark:border-white/5 text-xs font-bold backdrop-blur-sm">
             <button
               type="button"
               onClick={() => {

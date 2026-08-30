@@ -41,7 +41,18 @@ export async function GET() {
           client.query('SELECT count(*) FROM "Student"'),
           client.query('SELECT count(*) FROM "Class"'),
           client.query('SELECT count(*) FROM "Subject"'),
-          client.query('SELECT count(*) FROM "User" WHERE role = \'GURU\''),
+          client.query(`
+            SELECT count(DISTINCT u.id) as count
+            FROM "User" u
+            LEFT JOIN "TeacherProfile" tp ON tp."userId" = u.id
+            WHERE u.role = 'GURU'
+               OR (
+                 tp.id IS NOT NULL AND (
+                   EXISTS (SELECT 1 FROM "TeacherSubject" ts JOIN "Subject" sub ON ts."subjectId" = sub.id WHERE ts."teacherId" = tp.id)
+                   OR EXISTS (SELECT 1 FROM "Schedule" sc JOIN "Subject" sub ON sc."subjectId" = sub.id WHERE sc."teacherId" = tp.id)
+                 )
+               )
+          `),
           client.query(
             "SELECT count(*) FROM \"User\" WHERE role IN ('SUPERADMIN', 'ADMIN_IT', 'ADMIN_TU', 'ADMIN', 'PEGAWAI', 'KEPALA_SEKOLAH') OR role LIKE '%ADMIN%'"
           ),
@@ -76,7 +87,14 @@ export async function GET() {
       cbtUjianCount,
     ] = await Promise.all([
       prisma.user.count({ where: { role: 'ADMIN' } }),
-      prisma.user.count({ where: { role: 'GURU' } }),
+      prisma.user.count({
+        where: {
+          OR: [
+            { role: 'GURU' },
+            { mataPelajaran: { some: {} } },
+          ],
+        },
+      }),
       prisma.user.count({ where: { role: 'SISWA' } }),
       prisma.kelas.count(),
       prisma.mataPelajaran.count(),
@@ -214,7 +232,20 @@ export async function POST(request: NextRequest) {
             u.password as password_hash, 
             u.name, 
             u.role,
-            tp.nip
+            tp.id as teacher_profile_id,
+            tp.nip,
+            COALESCE((
+              SELECT count(*) 
+              FROM "TeacherSubject" ts 
+              JOIN "Subject" sub ON ts."subjectId" = sub.id 
+              WHERE ts."teacherId" = tp.id
+            ), 0)::int as mapel_count,
+            COALESCE((
+              SELECT count(*) 
+              FROM "Schedule" sc 
+              JOIN "Subject" sub ON sc."subjectId" = sub.id 
+              WHERE sc."teacherId" = tp.id
+            ), 0)::int as schedule_count
           FROM "User" u
           LEFT JOIN "TeacherProfile" tp ON tp."userId" = u.id
           WHERE u.role != 'SISWA'
@@ -245,7 +276,11 @@ export async function POST(request: NextRequest) {
 
           if (cbtRole === 'ADMIN') {
             stats.adminCount++;
-          } else if (cbtRole === 'GURU') {
+          }
+          
+          // Hitung guru pengampu (baik role utama GURU maupun role lain yang memiliki sub-role guru / terhubung ke mata pelajaran)
+          const isGuruPengampu = cbtRole === 'GURU' || (u.teacher_profile_id && (u.mapel_count > 0 || u.schedule_count > 0));
+          if (isGuruPengampu) {
             stats.guruCount++;
           }
         }
@@ -429,29 +464,112 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      let messageDetail = '';
-      if (target === 'GURU') {
-        messageDetail = `Sinkronisasi Guru Berhasil (${stats.guruCount} Guru)`;
-      } else if (target === 'KELAS') {
-        messageDetail = `Sinkronisasi Kelas Berhasil (${stats.kelasCount} Rombel Kelas)`;
-      } else if (target === 'MAPEL') {
-        messageDetail = `Sinkronisasi Mata Pelajaran Berhasil (${stats.mapelCount} Mapel)`;
-      } else if (target === 'KELAS_MAPEL') {
-        messageDetail = `Sinkronisasi Kelas & Mapel Berhasil (${stats.kelasCount} Kelas, ${stats.mapelCount} Mapel)`;
-      } else if (target === 'SISWA') {
-        messageDetail = `Sinkronisasi Siswa Berhasil (${stats.siswaCount} Siswa)`;
-      } else {
-        messageDetail = `Sinkronisasi SIMASMUH Berhasil! (${stats.adminCount} Admin, ${stats.guruCount} Guru, ${stats.siswaCount} Siswa, ${stats.kelasCount} Rombel Kelas, ${stats.mapelCount} Mapel)`;
-      }
+        // 5. SINKRONISASI NILAI UJIAN CBT KE MASTER SIMASMUH (PesertaUjian CBT -> Grade SIMASMUH)
+        if (target === 'ALL' || target === 'NILAI') {
+          // Ambil seluruh data peserta ujian yang sudah menyelesaikan ujian (atau sudah dikoreksi)
+          const pesertaSelesai = await prisma.pesertaUjian.findMany({
+            where: {
+              status: 'SELESAI',
+            },
+            include: {
+              siswa: true,
+              ujian: {
+                include: {
+                  bankSoal: {
+                    include: {
+                      mataPelajaran: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
 
-      return NextResponse.json({
-        success: true,
-        message: messageDetail,
-        stats,
-      });
-    } finally {
-      await client.end();
-    }
+          // Ambil peta data Siswa & Subject dari SIMASMUH untuk matching yang akurat
+          const [simasmuhStudents, simasmuhSubjects] = await Promise.all([
+            client.query('SELECT id, nis, nisn FROM "Student"'),
+            client.query('SELECT id, code, name FROM "Subject"'),
+          ]);
+
+          const studentMapByNis = new Map<string, string>();
+          for (const s of simasmuhStudents.rows) {
+            if (s.nis) studentMapByNis.set(String(s.nis).trim(), s.id);
+            if (s.nisn) studentMapByNis.set(String(s.nisn).trim(), s.id);
+          }
+
+          const subjectMapByCode = new Map<string, string>();
+          for (const sb of simasmuhSubjects.rows) {
+            if (sb.code) subjectMapByCode.set(String(sb.code).trim().toUpperCase(), sb.id);
+          }
+
+          let syncedGradeCount = 0;
+
+          for (const p of pesertaSelesai) {
+            const studentNis = p.siswa.nis || p.siswa.username;
+            const subjectCode = p.ujian.bankSoal.mataPelajaran.kode.toUpperCase();
+
+            const simasmuhStudentId = studentMapByNis.get(studentNis);
+            const simasmuhSubjectId = subjectMapByCode.get(subjectCode);
+
+            if (!simasmuhStudentId || !simasmuhSubjectId) continue;
+
+            // Tentukan tipe ujian (PAS, PTS, STS, SAS, UH, CBT)
+            const examCodeUpper = p.ujian.kodeUjian.toUpperCase();
+            let gradeType = 'CBT';
+            if (examCodeUpper.includes('PAS') || examCodeUpper.includes('SAS')) {
+              gradeType = 'PAS';
+            } else if (examCodeUpper.includes('PTS') || examCodeUpper.includes('STS') || examCodeUpper.includes('UTS')) {
+              gradeType = 'PTS';
+            } else if (examCodeUpper.includes('UH') || examCodeUpper.includes('HARIAN')) {
+              gradeType = 'UH';
+            }
+
+            const semesterNum = 1; // Semester default
+            const finalScore = Number(p.nilaiTotal) || 0;
+            const gradeId = `cbt-grade-${p.id}`;
+
+            // Upsert ke tabel "Grade" di database SIMASMUH
+            await client.query(
+              `
+              INSERT INTO "Grade" (id, "studentId", "subjectId", type, semester, score)
+              VALUES ($1, $2, $3, $4, $5, $6)
+              ON CONFLICT ("studentId", "subjectId", type, semester)
+              DO UPDATE SET score = EXCLUDED.score
+              `,
+              [gradeId, simasmuhStudentId, simasmuhSubjectId, gradeType, semesterNum, finalScore]
+            );
+
+            syncedGradeCount++;
+          }
+
+          (stats as any).gradeCount = syncedGradeCount;
+        }
+
+        let messageDetail = '';
+        if (target === 'GURU') {
+          messageDetail = `Sinkronisasi Guru Berhasil (${stats.guruCount} Guru)`;
+        } else if (target === 'KELAS') {
+          messageDetail = `Sinkronisasi Kelas Berhasil (${stats.kelasCount} Rombel Kelas)`;
+        } else if (target === 'MAPEL') {
+          messageDetail = `Sinkronisasi Mata Pelajaran Berhasil (${stats.mapelCount} Mapel)`;
+        } else if (target === 'KELAS_MAPEL') {
+          messageDetail = `Sinkronisasi Kelas & Mapel Berhasil (${stats.kelasCount} Kelas, ${stats.mapelCount} Mapel)`;
+        } else if (target === 'SISWA') {
+          messageDetail = `Sinkronisasi Siswa Berhasil (${stats.siswaCount} Siswa)`;
+        } else if (target === 'NILAI') {
+          messageDetail = `Sinkronisasi Nilai Berhasil (${(stats as any).gradeCount || 0} Nilai Ujian Terkirim ke SIMASMUH)`;
+        } else {
+          messageDetail = `Sinkronisasi Penuh SIMASMUH Berhasil! (${stats.adminCount} Admin, ${stats.guruCount} Guru, ${stats.siswaCount} Siswa, ${stats.kelasCount} Rombel Kelas, ${stats.mapelCount} Mapel, ${(stats as any).gradeCount || 0} Nilai Ujian)`;
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: messageDetail,
+          stats,
+        });
+      } finally {
+        await client.end();
+      }
   } catch (error: any) {
     console.error('Sinkronisasi POST error:', error);
     return NextResponse.json({

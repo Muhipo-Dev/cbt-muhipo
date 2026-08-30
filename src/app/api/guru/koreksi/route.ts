@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
             include: {
               mataPelajaran: true,
               soalList: {
-                where: { tipeSoal: 'ESAI' },
+                where: { tipeSoal: { in: ['ESAI', 'ISIAN'] } },
               },
             },
           },
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Simpan nilai koreksi Essay manual oleh guru
+// POST: Simpan nilai koreksi Tulisan (Essay / Isian Singkat) manual oleh guru
 export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser();
@@ -127,11 +127,11 @@ export async function POST(request: NextRequest) {
       });
 
       let totalPG = 0;
-      let totalEsai = 0;
+      let totalTulisan = 0;
 
       for (const j of allJawaban) {
-        if (j.soal.tipeSoal === 'ESAI') {
-          totalEsai += j.skor;
+        if (j.soal.tipeSoal === 'ESAI' || j.soal.tipeSoal === 'ISIAN') {
+          totalTulisan += j.skor;
         } else {
           totalPG += j.skor;
         }
@@ -141,14 +141,14 @@ export async function POST(request: NextRequest) {
         where: { id: pesertaUjianId },
         data: {
           nilaiPG: totalPG,
-          nilaiEsai: totalEsai,
-          nilaiTotal: totalPG + totalEsai,
+          nilaiEsai: totalTulisan,
+          nilaiTotal: totalPG + totalTulisan,
           isKoreksiSelesai: true,
         },
       });
     }
 
-    return NextResponse.json({ success: true, message: 'Nilai essay berhasil disimpan' });
+    return NextResponse.json({ success: true, message: 'Nilai koreksi tulisan berhasil disimpan' });
   } catch (error: any) {
     console.error('Save koreksi error:', error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });

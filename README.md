@@ -140,6 +140,14 @@ npx tsx clean-sync-simasmuh.ts
 
 ## 📝 Changelog & Riwayat Pembaruan
 
+### [v1.5.0] — 30 Agustus 2026
+- **Sinkronisasi Universal & Penghitungan Guru Pengampu (Multi-Role / Sub-Role Support)**:
+  - **Dukungan Penuh Guru Lintas Role Utama**: Memastikan seluruh akun (Pegawai TU, Admin, Staf) yang memiliki penugasan atau sub-role guru di SIMASMUH tetap tersinkronisasi dan dihitung sebagai Guru Pengampu di CBT.
+  - **Verifikasi Keterhubungan Mata Pelajaran SIMASMUH**: Sistem memeriksa keterhubungan pengguna ke mata pelajaran terdaftar (`TeacherSubject` / `Schedule` SIMASMUH $\rightarrow$ `GuruMataPelajaran` CBT) tanpa membatasi hanya pada role utama `GURU`.
+  - **Statistik & Manajemen Data Guru Akurat**: Panel Admin Dashboard dan status sinkronisasi kini secara tepat menampilkan seluruh guru pengampu terverifikasi (termasuk Pegawai yang mengampu mata pelajaran).
+- **Optimalisasi Performa Sinkronisasi Real-Time**:
+  - Penambahan query relasi spesifik yang memetakan guru pengampu, mata pelajaran, dan kepemilikan bank soal secara otomatis.
+
 ### [v1.4.0] — 30 Agustus 2026
 - **Akses Lintas Jaringan, IP Lokal & Multi-Domain Tunnel Adaptif**:
   - Perbaikan mekanisme cookie autentikasi (`cbt_token`) dinamis: Cookie kini mendeteksi protokol (`https://` vs `http://` / `x-forwarded-proto`), sehingga tidak mental kembali ke halaman login saat diakses dari HP / Laptop melalui IP Lokal LAN (`http://192.168.x.x:3010`) maupun domain Tunnel eksternal (`https://cbt-muhipo.razagopo.my.id`).
