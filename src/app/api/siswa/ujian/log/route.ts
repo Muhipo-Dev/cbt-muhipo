@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { pesertaUjianId, aktivitas, detail } = body;
 
-    await prisma.logAktivitasUjian.create({
+    const logEntry = await prisma.logAktivitasUjian.create({
       data: {
         userId: user.userId,
         pesertaUjianId: pesertaUjianId || null,
@@ -21,7 +21,45 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true });
+    // Jika pesertaUjianId tersedia, hitung akumulasi pelanggaran
+    let totalPelanggaran = 0;
+    let isLocked = false;
+
+    if (pesertaUjianId) {
+      totalPelanggaran = await prisma.logAktivitasUjian.count({
+        where: {
+          pesertaUjianId,
+          aktivitas: {
+            in: [
+              'TAB_SWITCH_ALERT',
+              'WINDOW_BLUR',
+              'FULLSCREEN_EXIT',
+              'SCREEN_SHARE_STOPPED',
+              'KEYBOARD_SHORTCUT_VIOLATION',
+              'SECURITY_ALERT',
+            ],
+          },
+        },
+      });
+
+      // Jika pelanggaran fatal (misal lebih dari 5 kali), kunci ujian otomatis
+      if (totalPelanggaran >= 5) {
+        await prisma.pesertaUjian.update({
+          where: { id: pesertaUjianId },
+          data: { status: 'TERKUNCI' },
+        });
+        isLocked = true;
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        logId: logEntry.id,
+        totalPelanggaran,
+        isLocked,
+      },
+    });
   } catch (error) {
     return NextResponse.json({ success: false }, { status: 500 });
   }

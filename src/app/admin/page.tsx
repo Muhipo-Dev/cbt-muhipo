@@ -43,7 +43,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import { DAFTAR_JURUSAN_MUHIPO } from '@/lib/constants'
+import { DAFTAR_JURUSAN_MUHIPO, DAFTAR_TIPE_UJIAN } from '@/lib/constants'
 import { NotificationModal, NotificationType } from '@/components/NotificationModal'
 
 const formatLocalDatetime = (date: Date = new Date()) => {
@@ -230,6 +230,7 @@ export default function ComprehensiveAdminDashboard() {
 
   const [showJadwalModal, setShowJadwalModal] = useState(false)
   const [jadwalForm, setJadwalForm] = useState({
+    tipeUjian: 'PAS',
     kodeUjian: '',
     judul: '',
     bankSoalId: '',
@@ -250,6 +251,7 @@ export default function ComprehensiveAdminDashboard() {
   const [importLoading, setImportLoading] = useState(false)
   const [distributeModal, setDistributeModal] = useState<any>(null)
   const [distributeForm, setDistributeForm] = useState({
+    tipeUjian: 'PAS',
     kodeUjian: '',
     judul: '',
     durasiMenit: 90,
@@ -663,6 +665,7 @@ export default function ComprehensiveAdminDashboard() {
         showNotification('Jadwal Berhasil Dibuat', json.message || 'Jadwal Ujian berhasil dibuat dan didistribusikan ke peserta!', 'success')
         setShowJadwalModal(false)
         setJadwalForm({
+          tipeUjian: 'PAS',
           kodeUjian: '',
           judul: '',
           bankSoalId: '',
@@ -1575,7 +1578,7 @@ export default function ComprehensiveAdminDashboard() {
                             </span>
                             <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate">{bs.nama}</h4>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                              {bs.mataPelajaran?.nama} • Guru: <b className="text-slate-800 dark:text-slate-200">{bs.pembuat?.name || 'Admin'}</b> • {bs.durasiMenit || 90} Mnt
+                              {bs.mataPelajaran?.nama} • Pengampu: <b className="text-slate-800 dark:text-slate-200">{bs.mataPelajaran?.gurus?.[0]?.guru?.name || (bs.pembuat?.role === 'GURU' ? bs.pembuat?.name : 'Guru Mata Pelajaran')}</b> • {bs.durasiMenit || 90} Mnt
                             </p>
                           </div>
                           <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0 font-mono">
@@ -1597,10 +1600,12 @@ export default function ComprehensiveAdminDashboard() {
                           </button>
                           <button
                             onClick={() => {
+                              const defaultTipe = 'PAS'
                               setDistributeModal(bs)
                               setDistributeForm({
-                                kodeUjian: `PAS-${bs.kodeBank}-${new Date().getFullYear()}`,
-                                judul: `Ujian ${bs.nama}`,
+                                tipeUjian: defaultTipe,
+                                kodeUjian: `${defaultTipe}-${bs.kodeBank}-${new Date().getFullYear()}`,
+                                judul: `${defaultTipe} ${bs.nama}`,
                                 durasiMenit: bs.durasiMenit || 90,
                                 kelasIds: [],
                                 waktuMulai: formatLocalDatetime(),
@@ -1648,7 +1653,7 @@ export default function ComprehensiveAdminDashboard() {
                             {selectedBankSoal.kodeBank}
                           </span>
                           <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                            {selectedBankSoal.mataPelajaran?.nama} • Guru: <b>{selectedBankSoal.pembuat?.name || 'Admin'}</b>
+                            {selectedBankSoal.mataPelajaran?.nama} • Pengampu: <b>{selectedBankSoal.mataPelajaran?.gurus?.[0]?.guru?.name || (selectedBankSoal.pembuat?.role === 'GURU' ? selectedBankSoal.pembuat?.name : 'Guru Mata Pelajaran')}</b>
                           </span>
                         </div>
                         <h3 className="font-black text-lg text-slate-900 dark:text-white mt-1">
@@ -1668,10 +1673,12 @@ export default function ComprehensiveAdminDashboard() {
                         </button>
                         <button
                           onClick={() => {
+                            const defaultTipe = 'PAS'
                             setDistributeModal(selectedBankSoal)
                             setDistributeForm({
-                              kodeUjian: `PAS-${selectedBankSoal.kodeBank}-${new Date().getFullYear()}`,
-                              judul: `Ujian ${selectedBankSoal.nama}`,
+                              tipeUjian: defaultTipe,
+                              kodeUjian: `${defaultTipe}-${selectedBankSoal.kodeBank}-${new Date().getFullYear()}`,
+                              judul: `${defaultTipe} ${selectedBankSoal.nama}`,
                               durasiMenit: selectedBankSoal.durasiMenit || 90,
                               kelasIds: [],
                               waktuMulai: formatLocalDatetime(),
@@ -2008,11 +2015,14 @@ export default function ComprehensiveAdminDashboard() {
                 </div>
                 <button
                   onClick={() => {
+                    const firstBs = bankSoalList[0]
+                    const defaultTipe = 'PAS'
                     setJadwalForm({
-                      kodeUjian: `PAS-${new Date().getFullYear()}`,
-                      judul: '',
-                      bankSoalId: bankSoalList[0]?.id || '',
-                      durasiMenit: bankSoalList[0]?.durasiMenit || 90,
+                      tipeUjian: defaultTipe,
+                      kodeUjian: firstBs ? `${defaultTipe}-${firstBs.kodeBank}-${new Date().getFullYear()}` : `${defaultTipe}-${new Date().getFullYear()}`,
+                      judul: firstBs ? `${defaultTipe} ${firstBs.nama}` : '',
+                      bankSoalId: firstBs?.id || '',
+                      durasiMenit: firstBs?.durasiMenit || 90,
                       waktuMulai: formatLocalDatetime(),
                       waktuSelesai: formatLocalDatetime(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
                       lockBrowser: true,
@@ -3051,34 +3061,62 @@ export default function ComprehensiveAdminDashboard() {
             </div>
 
             <form onSubmit={handleCreateJadwal} className="space-y-3.5">
-              {/* 1. Pilih Bank Soal */}
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
-                  Pilih Sumber Bank Soal:
-                </label>
-                <select
-                  required
-                  value={jadwalForm.bankSoalId}
-                  onChange={(e) => {
-                    const selectedId = e.target.value;
-                    const bs = bankSoalList.find((b) => b.id === selectedId);
-                    setJadwalForm({
-                      ...jadwalForm,
-                      bankSoalId: selectedId,
-                      kodeUjian: bs ? `PAS-${bs.kodeBank}-${new Date().getFullYear()}` : jadwalForm.kodeUjian,
-                      judul: bs ? `Ujian ${bs.nama}` : jadwalForm.judul,
-                      durasiMenit: bs?.durasiMenit || 90,
-                    });
-                  }}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-medium"
-                >
-                  <option value="">-- Pilih Bank Soal --</option>
-                  {bankSoalList.map((bs) => (
-                    <option key={bs.id} value={bs.id}>
-                      [{bs.kodeBank}] {bs.nama} ({bs.mataPelajaran?.nama} • Tingkat {bs.tingkat})
-                    </option>
-                  ))}
-                </select>
+              {/* 1. Pilih Bank Soal & Tipe Ujian */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                    Pilih Sumber Bank Soal:
+                  </label>
+                  <select
+                    required
+                    value={jadwalForm.bankSoalId}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      const bs = bankSoalList.find((b) => b.id === selectedId);
+                      const currentTipe = jadwalForm.tipeUjian || 'PAS';
+                      setJadwalForm({
+                        ...jadwalForm,
+                        bankSoalId: selectedId,
+                        kodeUjian: bs ? `${currentTipe}-${bs.kodeBank}-${new Date().getFullYear()}` : jadwalForm.kodeUjian,
+                        judul: bs ? `${currentTipe} ${bs.nama}` : jadwalForm.judul,
+                        durasiMenit: bs?.durasiMenit || 90,
+                      });
+                    }}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-medium"
+                  >
+                    <option value="">-- Pilih Bank Soal --</option>
+                    {bankSoalList.map((bs) => (
+                      <option key={bs.id} value={bs.id}>
+                        [{bs.kodeBank}] {bs.nama} ({bs.mataPelajaran?.nama} • Tingkat {bs.tingkat})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                    Tipe Ujian:
+                  </label>
+                  <select
+                    value={jadwalForm.tipeUjian || 'PAS'}
+                    onChange={(e) => {
+                      const newTipe = e.target.value;
+                      const bs = bankSoalList.find((b) => b.id === jadwalForm.bankSoalId);
+                      setJadwalForm({
+                        ...jadwalForm,
+                        tipeUjian: newTipe,
+                        kodeUjian: bs ? `${newTipe}-${bs.kodeBank}-${new Date().getFullYear()}` : `${newTipe}-${new Date().getFullYear()}`,
+                        judul: bs ? `${newTipe} ${bs.nama}` : jadwalForm.judul,
+                      });
+                    }}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-bold"
+                  >
+                    {DAFTAR_TIPE_UJIAN.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* 2. Kode & Judul Ujian */}
@@ -3732,7 +3770,29 @@ export default function ComprehensiveAdminDashboard() {
             </div>
 
             <form onSubmit={handleExecuteKirimKeKelas} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Tipe Ujian</label>
+                  <select
+                    value={distributeForm.tipeUjian || 'PAS'}
+                    onChange={(e) => {
+                      const newTipe = e.target.value;
+                      setDistributeForm({
+                        ...distributeForm,
+                        tipeUjian: newTipe,
+                        kodeUjian: `${newTipe}-${distributeModal.kodeBank}-${new Date().getFullYear()}`,
+                        judul: `${newTipe} ${distributeModal.nama}`,
+                      });
+                    }}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-bold"
+                  >
+                    {DAFTAR_TIPE_UJIAN.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Kode Ujian</label>
                   <input

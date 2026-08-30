@@ -30,23 +30,42 @@ export async function GET(request: NextRequest) {
         include: {
           siswa: { include: { kelas: true } },
           _count: { select: { jawabanPeserta: true } },
+          logs: {
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+          },
         },
         orderBy: { siswa: { name: 'asc' } },
       });
 
-      pesertaList = peserta.map((p) => ({
-        pesertaUjianId: p.id,
-        siswaId: p.siswa.id,
-        nis: p.siswa.nis || p.siswa.username,
-        nomorPeserta: p.siswa.nomorPeserta || '-',
-        username: p.siswa.username,
-        name: p.siswa.name,
-        kelas: p.siswa.kelas?.nama || '-',
-        status: p.status,
-        jumlahJawaban: p._count.jawabanPeserta,
-        sisaDetik: p.sisaDetik,
-        ipAddress: p.ipAddress || '-',
-      }));
+      pesertaList = peserta.map((p) => {
+        const violationLogs = p.logs.filter((l) =>
+          [
+            'TAB_SWITCH_ALERT',
+            'WINDOW_BLUR',
+            'FULLSCREEN_EXIT',
+            'SCREEN_SHARE_STOPPED',
+            'KEYBOARD_SHORTCUT_VIOLATION',
+            'SECURITY_ALERT',
+          ].includes(l.aktivitas)
+        );
+
+        return {
+          pesertaUjianId: p.id,
+          siswaId: p.siswa.id,
+          nis: p.siswa.nis || p.siswa.username,
+          nomorPeserta: p.siswa.nomorPeserta || '-',
+          username: p.siswa.username,
+          name: p.siswa.name,
+          kelas: p.siswa.kelas?.nama || '-',
+          status: p.status,
+          jumlahJawaban: p._count.jawabanPeserta,
+          sisaDetik: p.sisaDetik,
+          ipAddress: p.ipAddress || '-',
+          logsTerakhir: p.logs,
+          jumlahPelanggaran: violationLogs.length,
+        };
+      });
     }
 
     return NextResponse.json({

@@ -12,10 +12,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const ujianId = searchParams.get('ujianId');
 
-    // Filter ujian: GURU hanya melihat ujian dari bank soal miliknya
+    // Filter ujian: GURU melihat ujian dari bank soal miliknya ATAU mapel yang diampunya
     const ujianWhereClause: any = {};
     if (user.role === 'GURU') {
-      ujianWhereClause.bankSoal = { pembuatId: user.userId };
+      ujianWhereClause.bankSoal = {
+        OR: [
+          { pembuatId: user.userId },
+          { mataPelajaran: { gurus: { some: { guruId: user.userId } } } },
+        ],
+      };
     }
 
     const ujianList = await prisma.ujian.findMany({
@@ -36,7 +41,12 @@ export async function GET(request: NextRequest) {
       // Pastikan guru berhak mengakses ujian ini
       const singleUjianWhere: any = { id: activeUjianId };
       if (user.role === 'GURU') {
-        singleUjianWhere.bankSoal = { pembuatId: user.userId };
+        singleUjianWhere.bankSoal = {
+          OR: [
+            { pembuatId: user.userId },
+            { mataPelajaran: { gurus: { some: { guruId: user.userId } } } },
+          ],
+        };
       }
 
       activeUjian = await prisma.ujian.findFirst({

@@ -140,6 +140,21 @@ npx tsx clean-sync-simasmuh.ts
 
 ## 📝 Changelog & Riwayat Pembaruan
 
+### [v1.3.0] — 30 Agustus 2026
+- **Peningkatan Logika Audio & Anti-Cheat Selesai Ujian**:
+  - Penambahan notifikasi suara Web Speech API ramah **`"Ujian selesai, terimakasih telah mengerjakan"`** saat siswa mengumpulkan ujian.
+  - Perbaikan exit fullscreen otomatis tanpa memicu alarm pelanggaran anti-cheat (false positive bypass).
+- **Tampilan Skor & Hasil Akhir di Portal Siswa**:
+  - Penambahan banner nilai instan untuk ujian 100% Pilihan Ganda / Objektif di Kartu Ujian Siswa.
+  - Indikator status koreksi esai ("Menunggu Esai" / "Nilai Akhir Terkoreksi") yang otomatis terbarui setelah guru mengoreksi esai.
+- **Penyederhanaan UI Dashboard Guru**:
+  - Sidebar di Dashboard Guru disembunyikan secara otomatis untuk memberikan ruang kerja fokus & memanfaatkan Tombol Aksi Cepat.
+  - Sidebar muncul secara dinamis saat guru membuka menu teknis **Bank Soal & KaTeX** atau **Koreksi & Rekap Nilai** lengkap dengan tombol navigasi kembali `← Dashboard`.
+- **Otomatisasi Guru Pengampu SIMASMUH pada Bank Soal**:
+  - Ketika Admin membuat/mengedit bank soal untuk suatu mata pelajaran, sistem secara otomatis menautkan guru pengampu resmi dari data SIMASMUH (`GuruMataPelajaran`), sehingga informasi pengampu di lembar ujian & kartu ujian siswa selalu akurat merefleksikan Guru Pengampu, bukan Admin.
+- **Sistem Waiting Room & Manajemen Beban Server**:
+  - Penambahan antrean virtual adaptif (Waiting Room) untuk mengamankan server saat ribuan siswa login dan memulai ujian serentak.
+
 ### [v1.2.0] — 29 Agustus 2026
 - **Sinkronisasi SIMASMUH Granular**:
   - Penambahan tombol **Tarik Data SIMASMUH** langsung pada area Data Guru, Daftar Kelas (Rombel), dan Daftar Mata Pelajaran di Admin Dashboard.

@@ -46,16 +46,28 @@ export async function GET(request: NextRequest) {
     const bankSoalId = searchParams.get('bankSoalId');
 
     if (bankSoalId) {
-      // Filter kepemilikan jika role adalah GURU
+      // Filter kepemilikan jika role adalah GURU:
+      // Guru berhak mengakses jika ia adalah pembuat langsung ATAU guru pengampu mapel tersebut
       const whereClause: any = { id: bankSoalId };
       if (user.role === 'GURU') {
-        whereClause.pembuatId = user.userId;
+        whereClause.OR = [
+          { pembuatId: user.userId },
+          { mataPelajaran: { gurus: { some: { guruId: user.userId } } } },
+        ];
       }
 
       const bankSoal = await prisma.bankSoal.findFirst({
         where: whereClause,
         include: {
-          mataPelajaran: true,
+          mataPelajaran: {
+            include: {
+              gurus: {
+                include: {
+                  guru: { select: { id: true, name: true, username: true } },
+                },
+              },
+            },
+          },
           pembuat: { select: { id: true, name: true, username: true } },
           soalList: {
             include: {
@@ -76,14 +88,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: bankSoal });
     }
 
-    // Filter list bank soal: Guru hanya melihat bank buatannya, Admin melihat semua
-    const bankWhereClause = user.role === 'GURU' ? { pembuatId: user.userId } : {};
+    // Filter list bank soal:
+    // Guru melihat bank buatannya ATAU bank soal pada mapel yang diampunya, Admin melihat semua
+    const bankWhereClause =
+      user.role === 'GURU'
+        ? {
+            OR: [
+              { pembuatId: user.userId },
+              { mataPelajaran: { gurus: { some: { guruId: user.userId } } } },
+            ],
+          }
+        : {};
 
     const list = await prisma.bankSoal.findMany({
       where: bankWhereClause,
       include: {
-        mataPelajaran: true,
-        pembuat: { select: { id: true, name: true, username: true } },
+        mataPelajaran: {
+          include: {
+            gurus: {
+              include: {
+                guru: { select: { id: true, name: true, username: true } },
+              },
+            },
+          },
+        },
+        pembuat: { select: { id: true, name: true, username: true, role: true } },
         _count: {
           select: { soalList: true },
         },
@@ -107,7 +136,16 @@ export async function GET(request: NextRequest) {
         mapelList = await prisma.mataPelajaran.findMany({ orderBy: { nama: 'asc' } });
       }
     } else {
-      mapelList = await prisma.mataPelajaran.findMany({ orderBy: { nama: 'asc' } });
+      mapelList = await prisma.mataPelajaran.findMany({
+        include: {
+          gurus: {
+            include: {
+              guru: { select: { id: true, name: true, username: true } },
+            },
+          },
+        },
+        orderBy: { nama: 'asc' },
+      });
     }
 
     const kelasList = await prisma.kelas.findMany({ orderBy: { nama: 'asc' } });
@@ -139,7 +177,30 @@ export async function POST(request: NextRequest) {
 
     // 1. Buat Bank Soal Baru
     if (action === 'CREATE_BANK_SOAL') {
-      const { kodeBank, nama, tingkat, jurusan, mataPelajaranId, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal } = body;
+      const { kodeBank, nama, tingkat, jurusan, mataPelajaranId, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal, guruPengampuId } = body;
+      
+      let finalPembuatId = user.userId;
+
+      // Cari guru pengampu dari relasi GuruMataPelajaran (Tersinkron SIMASMUH)
+      let mapelPengampuGuruId: string | null = null;
+      if (mataPelajaranId) {
+        const firstPengampu = await prisma.guruMataPelajaran.findFirst({
+          where: { mataPelajaranId },
+          include: { guru: true },
+        });
+        if (firstPengampu?.guruId) {
+          mapelPengampuGuruId = firstPengampu.guruId;
+        }
+      }
+
+      // Jika yang membuat adalah ADMIN / GURU:
+      // Prioritaskan guruPengampuId spesifik, atau otomatis guru pengampu mapel SIMASMUH
+      if (guruPengampuId) {
+        finalPembuatId = guruPengampuId;
+      } else if (mapelPengampuGuruId) {
+        finalPembuatId = mapelPengampuGuruId;
+      }
+
       const bankSoal = await prisma.bankSoal.create({
         data: {
           kodeBank,
@@ -151,7 +212,7 @@ export async function POST(request: NextRequest) {
           nilaiMinimal: nilaiMinimal !== undefined ? Number(nilaiMinimal) : 0.0,
           nilaiMaksimal: nilaiMaksimal !== undefined ? Number(nilaiMaksimal) : 100.0,
           mataPelajaranId,
-          pembuatId: user.userId,
+          pembuatId: finalPembuatId,
         } as any,
       });
 
@@ -160,14 +221,34 @@ export async function POST(request: NextRequest) {
 
     // 1b. Update Bank Soal
     if (action === 'UPDATE_BANK_SOAL') {
-      const { bankSoalId, kodeBank, nama, tingkat, jurusan, mataPelajaranId, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal } = body;
+      const { bankSoalId, kodeBank, nama, tingkat, jurusan, mataPelajaranId, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal, guruPengampuId } = body;
       
-      const existingBank = await prisma.bankSoal.findUnique({ where: { id: bankSoalId } });
+      const existingBank = await prisma.bankSoal.findUnique({
+        where: { id: bankSoalId },
+        include: { mataPelajaran: { include: { gurus: true } } },
+      });
       if (!existingBank) {
         return NextResponse.json({ success: false, message: 'Bank Soal tidak ditemukan' }, { status: 404 });
       }
-      if (user.role === 'GURU' && existingBank.pembuatId !== user.userId) {
-        return NextResponse.json({ success: false, message: 'Akses ditolak. Anda bukan pemilik bank soal ini.' }, { status: 403 });
+
+      const isTeacherOfMapel = existingBank.mataPelajaran?.gurus?.some((g) => g.guruId === user.userId);
+      if (user.role === 'GURU' && existingBank.pembuatId !== user.userId && !isTeacherOfMapel) {
+        return NextResponse.json({ success: false, message: 'Akses ditolak. Anda bukan guru pengampu / pemilik bank soal ini.' }, { status: 403 });
+      }
+
+      // Tentukan pembuatId jika diubah / mapel berganti / admin mengedit bank soal
+      let targetPembuatId: string | undefined = undefined;
+      const targetMapelId = mataPelajaranId || existingBank.mataPelajaranId;
+
+      if (guruPengampuId) {
+        targetPembuatId = guruPengampuId;
+      } else if (targetMapelId) {
+        const mapelPengampu = await prisma.guruMataPelajaran.findFirst({
+          where: { mataPelajaranId: targetMapelId },
+        });
+        if (mapelPengampu?.guruId) {
+          targetPembuatId = mapelPengampu.guruId;
+        }
       }
 
       const bankSoal = await prisma.bankSoal.update({
@@ -182,6 +263,7 @@ export async function POST(request: NextRequest) {
           nilaiMinimal: nilaiMinimal !== undefined ? Number(nilaiMinimal) : undefined,
           nilaiMaksimal: nilaiMaksimal !== undefined ? Number(nilaiMaksimal) : undefined,
           mataPelajaranId,
+          pembuatId: targetPembuatId,
         } as any,
       });
 
@@ -195,12 +277,17 @@ export async function POST(request: NextRequest) {
     if (action === 'DELETE_BANK_SOAL') {
       const { bankSoalId } = body;
 
-      const existingBank = await prisma.bankSoal.findUnique({ where: { id: bankSoalId } });
+      const existingBank = await prisma.bankSoal.findUnique({
+        where: { id: bankSoalId },
+        include: { mataPelajaran: { include: { gurus: true } } },
+      });
       if (!existingBank) {
         return NextResponse.json({ success: false, message: 'Bank Soal tidak ditemukan' }, { status: 404 });
       }
-      if (user.role === 'GURU' && existingBank.pembuatId !== user.userId) {
-        return NextResponse.json({ success: false, message: 'Akses ditolak. Anda bukan pemilik bank soal ini.' }, { status: 403 });
+
+      const isTeacherOfMapel = existingBank.mataPelajaran?.gurus?.some((g) => g.guruId === user.userId);
+      if (user.role === 'GURU' && existingBank.pembuatId !== user.userId && !isTeacherOfMapel) {
+        return NextResponse.json({ success: false, message: 'Akses ditolak. Anda bukan guru pengampu / pemilik bank soal ini.' }, { status: 403 });
       }
       
       // 1. Hapus semua jawaban peserta dan log dari ujian yang terhubung ke bank soal ini

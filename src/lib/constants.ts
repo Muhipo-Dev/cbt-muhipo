@@ -58,5 +58,24 @@ export function normalizeJurusan(input?: string | null): string {
   if (str.includes('UMUM')) {
     return 'UMUM';
   }
-  return input.trim();
+  return input.toUpperCase().trim();
 }
+
+export interface TipeUjianOption {
+  value: string;
+  label: string;
+  singkatan: string;
+}
+
+export const DAFTAR_TIPE_UJIAN: TipeUjianOption[] = [
+  { value: 'PAS', label: 'PAS (Penilaian Akhir Semester)', singkatan: 'PAS' },
+  { value: 'PAT', label: 'PAT (Penilaian Akhir Tahun)', singkatan: 'PAT' },
+  { value: 'UTS', label: 'UTS / PTS (Penilaian Tengah Semester)', singkatan: 'PTS' },
+  { value: 'UAS', label: 'UAS (Ujian Akhir Sekolah / Sumatif)', singkatan: 'UAS' },
+  { value: 'UH', label: 'UH / Formatif (Ulangan Harian)', singkatan: 'UH' },
+  { value: 'TRYOUT', label: 'Try Out / Simulasi Ujian', singkatan: 'TO' },
+  { value: 'USP', label: 'USP (Ujian Satuan Pendidikan)', singkatan: 'USP' },
+  { value: 'ASAS', label: 'ASAS (Asesmen Sumatif Akhir Semester)', singkatan: 'ASAS' },
+  { value: 'ASTS', label: 'ASTS (Asesmen Sumatif Tengah Semester)', singkatan: 'ASTS' },
+  { value: 'REMEDIAL', label: 'Remedial / Perbaikan Nilai', singkatan: 'REMED' },
+];

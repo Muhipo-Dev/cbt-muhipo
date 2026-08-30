@@ -24,7 +24,16 @@ export async function POST(
             soalList: {
               include: { opsiJawaban: true },
             },
-            mataPelajaran: true,
+            mataPelajaran: {
+              include: {
+                gurus: {
+                  include: {
+                    guru: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            },
+            pembuat: { select: { id: true, name: true, role: true } },
           },
         },
       },
@@ -202,6 +211,10 @@ export async function POST(
       })),
     }));
 
+    const guruPengampuNama =
+      ujian.bankSoal.mataPelajaran?.gurus?.[0]?.guru?.name ||
+      (ujian.bankSoal.pembuat?.role === 'GURU' ? ujian.bankSoal.pembuat?.name : 'Guru Pengampu');
+
     return NextResponse.json({
       success: true,
       message: 'Ujian berhasil dimuat.',
@@ -215,6 +228,7 @@ export async function POST(
           sisaWaktuDetik: currentSisaDetik,
           lockBrowser: ujian.lockBrowser,
           mapel: ujian.bankSoal.mataPelajaran.nama,
+          guruPengampu: guruPengampuNama,
         },
         soalList: formattedSoalList,
         jawabanTersimpan,

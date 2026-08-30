@@ -26,9 +26,11 @@ import {
   CalendarDays,
   Sparkles,
   Layers,
+  ArrowLeft,
+  ChevronLeft,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { DAFTAR_JURUSAN_MUHIPO } from '@/lib/constants';
+import { DAFTAR_JURUSAN_MUHIPO, DAFTAR_TIPE_UJIAN } from '@/lib/constants';
 import { NotificationModal, NotificationType } from '@/components/NotificationModal';
 
 const formatLocalDatetime = (date: Date = new Date()) => {
@@ -67,18 +69,18 @@ export default function GuruDashboardPage() {
   const [newBankForm, setNewBankForm] = useState({
     kodeBank: '',
     nama: '',
-    tingkat: 12,
-    jurusan: 'MIPA',
-    jamMulai: '09:00',
+    tingkat: 10,
+    jurusan: 'SAINS',
+    mataPelajaranId: '',
+    jamMulai: '07:30',
     durasiMenit: 90,
     kkm: 75,
     nilaiMinimal: 0,
     nilaiMaksimal: 100,
-    mataPelajaranId: '',
   });
 
   // Soal Form State
-  const [soalForm, setSoalForm] = useState({
+  const [soalForm, setSoalForm] = useState<any>({
     soalId: '',
     tipeSoal: 'PG',
     pertanyaan: '',
@@ -102,6 +104,7 @@ export default function GuruDashboardPage() {
   const [importLoading, setImportLoading] = useState(false);
   const [distributeModal, setDistributeModal] = useState<any>(null);
   const [distributeForm, setDistributeForm] = useState({
+    tipeUjian: 'PAS',
     kodeUjian: '',
     judul: '',
     durasiMenit: 90,
@@ -765,26 +768,32 @@ export default function GuruDashboardPage() {
       {/* 2. Glassmorphism Backdrop Overlay Dinamis */}
       <div className="fixed inset-0 bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-[2px] -z-20 pointer-events-none transition-colors duration-300" />
 
-      {/* 3. Kerangka Sidebar Induk Terpadu (Fixed Left) */}
-      <AppSidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        items={sidebarNavItems}
-        activeId={activeTab}
-        onSelect={(id) => {
-          setActiveTab(id);
-          setSearchQuery('');
-        }}
-      />
+      {/* 3. Kerangka Sidebar Induk Terpadu (Hanya muncul ketika masuk di menu Bank Soal atau Koreksi Rekap) */}
+      {activeTab !== 'dashboard' && (
+        <AppSidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          items={sidebarNavItems}
+          activeId={activeTab}
+          onSelect={(id) => {
+            setActiveTab(id);
+            setSearchQuery('');
+          }}
+        />
+      )}
 
-      {/* 4. Area Konten Utama (Bergeser ke Kanan pada Desktop lg:ml-72 persis Admin) */}
-      <div className="flex-1 lg:ml-72 flex flex-col justify-between min-w-0 transition-all duration-300 relative z-10">
+      {/* 4. Area Konten Utama (Bergeser ke Kanan pada Desktop lg:ml-72 hanya jika sidebar aktif) */}
+      <div
+        className={`flex-1 flex flex-col justify-between min-w-0 transition-all duration-300 relative z-10 ${
+          activeTab !== 'dashboard' ? 'lg:ml-72' : 'w-full'
+        }`}
+      >
         {/* Navbar Induk Terpadu */}
         <AppNavbar
           appTitle={settingsForm.appTitle || 'CBT MUHIPO'}
           subtitle="Portal Guru Pengampu & Pembuat Soal"
           logoUrl={settingsForm.logoUrl}
-          onToggleSidebar={() => setSidebarOpen(true)}
+          onToggleSidebar={activeTab !== 'dashboard' ? () => setSidebarOpen(true) : undefined}
           userProfile={{
             name: currentUser?.name || 'Bapak/Ibu Guru',
             role: currentUser?.role || 'GURU',
@@ -803,13 +812,26 @@ export default function GuruDashboardPage() {
         <main className="p-3.5 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto flex-1">
           {/* Quick Page Title & Status Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 dark:bg-slate-900/75 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl shadow-sm dark:shadow-xl">
-            <div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block mb-1">
-                Panel Guru & Penyusun Soal
-              </span>
-              <h1 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white capitalize">
-                {sidebarNavItems.find((i) => i.id === activeTab)?.name || 'Dashboard'}
-              </h1>
+            <div className="flex items-center gap-3">
+              {activeTab !== 'dashboard' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('dashboard')}
+                  className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 border border-slate-200 dark:border-white/10 cursor-pointer transition flex items-center gap-1.5 text-xs font-bold shrink-0"
+                  title="Kembali ke Dashboard Guru"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">Dashboard</span>
+                </button>
+              )}
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block mb-1">
+                  Panel Guru & Penyusun Soal
+                </span>
+                <h1 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white capitalize">
+                  {sidebarNavItems.find((i) => i.id === activeTab)?.name || 'Dashboard'}
+                </h1>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-600 dark:text-slate-300 bg-slate-100/90 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-3 py-1.5 rounded-xl font-medium backdrop-blur-sm">
@@ -1006,7 +1028,7 @@ export default function GuruDashboardPage() {
                             </span>
                             <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate">{bs.nama}</h4>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                              {bs.mataPelajaran?.nama} • Tingkat {bs.tingkat} ({bs.jurusan || 'UMUM'}) • {bs.durasiMenit || 90} Mnt
+                              {bs.mataPelajaran?.nama} • Pengampu: <b className="text-slate-800 dark:text-slate-200">{bs.mataPelajaran?.gurus?.[0]?.guru?.name || (bs.pembuat?.role === 'GURU' ? bs.pembuat?.name : 'Guru Pengampu Mapel')}</b> • {bs.durasiMenit || 90} Mnt
                             </p>
                             <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[10.5px]">
                               <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-700 dark:text-blue-300 font-semibold border border-blue-500/20">
@@ -1041,10 +1063,12 @@ export default function GuruDashboardPage() {
                           </button>
                           <button
                             onClick={() => {
+                              const defaultTipe = 'PAS';
                               setDistributeModal(bs);
                               setDistributeForm({
-                                kodeUjian: `PAS-${bs.kodeBank}-${new Date().getFullYear()}`,
-                                judul: `Ujian ${bs.nama}`,
+                                tipeUjian: defaultTipe,
+                                kodeUjian: `${defaultTipe}-${bs.kodeBank}-${new Date().getFullYear()}`,
+                                judul: `${defaultTipe} ${bs.nama}`,
                                 durasiMenit: bs.durasiMenit || 90,
                                 kelasIds: [],
                                 waktuMulai: formatLocalDatetime(),
@@ -1092,7 +1116,7 @@ export default function GuruDashboardPage() {
                             {selectedBankSoal.kodeBank}
                           </span>
                           <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                            {selectedBankSoal.mataPelajaran?.nama} • Durasi: <b>{selectedBankSoal.durasiMenit || 90} Menit</b>
+                            {selectedBankSoal.mataPelajaran?.nama} • Pengampu: <b>{selectedBankSoal.mataPelajaran?.gurus?.[0]?.guru?.name || (selectedBankSoal.pembuat?.role === 'GURU' ? selectedBankSoal.pembuat?.name : 'Guru Pengampu Mapel')}</b> • Durasi: <b>{selectedBankSoal.durasiMenit || 90} Menit</b>
                           </span>
                         </div>
                         <h3 className="font-black text-lg text-slate-900 dark:text-white mt-1">
@@ -1123,10 +1147,12 @@ export default function GuruDashboardPage() {
                         </button>
                         <button
                           onClick={() => {
+                            const defaultTipe = 'PAS';
                             setDistributeModal(selectedBankSoal);
                             setDistributeForm({
-                              kodeUjian: `PAS-${selectedBankSoal.kodeBank}-${new Date().getFullYear()}`,
-                              judul: `Ujian ${selectedBankSoal.nama}`,
+                              tipeUjian: defaultTipe,
+                              kodeUjian: `${defaultTipe}-${selectedBankSoal.kodeBank}-${new Date().getFullYear()}`,
+                              judul: `${defaultTipe} ${selectedBankSoal.nama}`,
                               durasiMenit: selectedBankSoal.durasiMenit || 90,
                               kelasIds: [],
                               waktuMulai: formatLocalDatetime(),
@@ -1229,7 +1255,7 @@ export default function GuruDashboardPage() {
                         {(soalForm.tipeSoal === 'PG' || soalForm.tipeSoal === 'PG_KOMPLEKS') && (
                           <div className="space-y-2 pt-1">
                             <label className="block text-slate-700 dark:text-slate-300 font-semibold">Pilihan Jawaban:</label>
-                            {soalForm.opsiJawaban.map((op, idx) => (
+                            {soalForm.opsiJawaban.map((op: any, idx: number) => (
                               <div key={op.label} className="flex items-center gap-2">
                                 <span className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-slate-700 dark:text-slate-300 shrink-0 text-xs">
                                   {op.label}
@@ -2062,7 +2088,29 @@ export default function GuruDashboardPage() {
             </div>
 
             <form onSubmit={handleExecuteKirimKeKelas} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Tipe Ujian</label>
+                  <select
+                    value={distributeForm.tipeUjian || 'PAS'}
+                    onChange={(e) => {
+                      const newTipe = e.target.value;
+                      setDistributeForm({
+                        ...distributeForm,
+                        tipeUjian: newTipe,
+                        kodeUjian: `${newTipe}-${distributeModal.kodeBank}-${new Date().getFullYear()}`,
+                        judul: `${newTipe} ${distributeModal.nama}`,
+                      });
+                    }}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-bold"
+                  >
+                    {DAFTAR_TIPE_UJIAN.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Kode Ujian</label>
                   <input

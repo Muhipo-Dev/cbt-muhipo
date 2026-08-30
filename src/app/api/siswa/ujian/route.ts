@@ -20,7 +20,17 @@ export async function GET(request: NextRequest) {
               include: {
                 bankSoal: {
                   include: {
-                    mataPelajaran: true,
+                    mataPelajaran: {
+                      include: {
+                        gurus: {
+                          include: { guru: { select: { id: true, name: true } } },
+                        },
+                      },
+                    },
+                    pembuat: { select: { id: true, name: true, role: true } },
+                    soalList: {
+                      select: { id: true, tipeSoal: true, bobot: true },
+                    },
                     _count: {
                       select: { soalList: true },
                     },
@@ -57,6 +67,16 @@ export async function GET(request: NextRequest) {
         realSisaDetik = Math.max(0, Math.min(totalMaxDetik, diffSec));
       }
 
+      const guruPengampuNama =
+        p.ujian.bankSoal.mataPelajaran?.gurus?.[0]?.guru?.name ||
+        (p.ujian.bankSoal.pembuat?.role === 'GURU' ? p.ujian.bankSoal.pembuat?.name : 'Guru Pengampu');
+
+      const allSoal = p.ujian.bankSoal.soalList || [];
+      const totalSoal = allSoal.length;
+      const soalEsaiCount = allSoal.filter((s) => s.tipeSoal === 'ESAI').length;
+      const soalPgObjektifCount = totalSoal - soalEsaiCount;
+      const isHanyaPG = totalSoal > 0 && soalEsaiCount === 0;
+
       return {
         pesertaUjianId: p.id,
         ujianId: p.ujian.id,
@@ -64,13 +84,20 @@ export async function GET(request: NextRequest) {
         judul: p.ujian.judul,
         deskripsi: p.ujian.deskripsi,
         mataPelajaran: p.ujian.bankSoal.mataPelajaran.nama,
+        guruPengampu: guruPengampuNama,
         durasiMenit: p.ujian.durasiMenit,
-        jumlahSoal: p.ujian.bankSoal._count.soalList,
+        jumlahSoal: totalSoal,
+        jumlahSoalPG: soalPgObjektifCount,
+        jumlahSoalEsai: soalEsaiCount,
+        isHanyaPG,
         waktuMulai: p.ujian.waktuMulai,
         waktuSelesai: p.ujian.waktuSelesai,
         statusUjian: p.ujian.status,
         statusPeserta: p.status,
+        nilaiPG: p.nilaiPG,
+        nilaiEsai: p.nilaiEsai,
         nilaiTotal: p.nilaiTotal,
+        isKoreksiSelesai: p.isKoreksiSelesai,
         tampilkanHasil: p.ujian.tampilkanHasil,
         sisaDetik: realSisaDetik,
       };

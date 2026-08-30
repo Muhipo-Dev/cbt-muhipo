@@ -104,13 +104,33 @@ export async function GET(request: NextRequest) {
     if (tab === 'jadwal') {
       const jadwalList = await prisma.ujian.findMany({
         include: {
-          bankSoal: { include: { mataPelajaran: true } },
+          bankSoal: {
+            include: {
+              mataPelajaran: {
+                include: {
+                  gurus: {
+                    include: { guru: { select: { id: true, name: true } } },
+                  },
+                },
+              },
+              pembuat: { select: { id: true, name: true, role: true } },
+            },
+          },
           _count: { select: { pesertaUjian: true } },
         },
         orderBy: { createdAt: 'desc' },
       });
       const bankSoalList = await prisma.bankSoal.findMany({
-        include: { mataPelajaran: true },
+        include: {
+          mataPelajaran: {
+            include: {
+              gurus: {
+                include: { guru: { select: { id: true, name: true } } },
+              },
+            },
+          },
+          pembuat: { select: { id: true, name: true, role: true } },
+        },
       });
       const kelasList = await prisma.kelas.findMany({ orderBy: { nama: 'asc' } });
       return NextResponse.json({ success: true, data: { jadwalList, bankSoalList, kelasList } });

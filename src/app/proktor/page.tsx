@@ -34,6 +34,7 @@ export default function ProktorPage() {
   const [extraTimeModal, setExtraTimeModal] = useState<any>(null);
   const [extraMinutes, setExtraMinutes] = useState(15);
   const [actionLoading, setActionLoading] = useState(false);
+  const [securityModalData, setSecurityModalData] = useState<any>(null);
 
   // In-App Notification / Dialog Modal State
   const [notifModal, setNotifModal] = useState<{
@@ -595,12 +596,25 @@ export default function ProktorPage() {
                           {peserta.jumlahJawaban} Soal
                         </td>
                         <td className="py-3 px-4 max-w-xs">
-                          {peserta.logsTerakhir && peserta.logsTerakhir.length > 0 ? (
-                            <div className="text-[11px] text-rose-400 line-clamp-2">
-                              ⚠️ {peserta.logsTerakhir[0].aktivitas}: {peserta.logsTerakhir[0].detail}
-                            </div>
+                          {peserta.jumlahPelanggaran > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => setSecurityModalData(peserta)}
+                              className="text-left group cursor-pointer"
+                            >
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 group-hover:bg-rose-500/25 transition mb-1">
+                                <AlertCircle className="w-3 h-3" /> {peserta.jumlahPelanggaran} Pelanggaran
+                              </span>
+                              {peserta.logsTerakhir && peserta.logsTerakhir.length > 0 && (
+                                <p className="text-[11px] text-rose-300/80 line-clamp-1 group-hover:text-rose-200">
+                                  {peserta.logsTerakhir[0].detail}
+                                </p>
+                              )}
+                            </button>
                           ) : (
-                            <span className="text-[11px] text-slate-500">Normal (Stabil)</span>
+                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400">
+                              <ShieldCheck className="w-3.5 h-3.5" /> Aman / Terkunci Baik
+                            </span>
                           )}
                         </td>
                         <td className="py-3 px-4 text-right space-x-1.5">
@@ -740,6 +754,89 @@ export default function ProktorPage() {
                 className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white shadow-lg shadow-cyan-700/30"
               >
                 {actionLoading ? 'Memproses...' : `+${extraMinutes} Menit`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Security Audit Modal */}
+      {securityModalData && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-rose-400" />
+                <h3 className="text-base font-bold text-white">
+                  Audit Keamanan & Log Pelanggaran
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSecurityModalData(null)}
+                className="text-xs bg-slate-800 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white"
+              >
+                Tutup
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Nama Siswa:</span>
+                <b className="text-white">{securityModalData.name}</b>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">NIS / Username:</span>
+                <span className="font-mono text-cyan-400">{securityModalData.nis}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Kelas:</span>
+                <span className="text-slate-200">{securityModalData.kelas}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Total Pelanggaran:</span>
+                <span className="font-bold text-rose-400">{securityModalData.jumlahPelanggaran} Kali</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              <span className="text-xs font-semibold text-slate-400 block">Riwayat Aktivitas Terakhir:</span>
+              {securityModalData.logsTerakhir?.map((log: any) => (
+                <div
+                  key={log.id}
+                  className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 text-xs space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-rose-300">{log.aktivitas}</span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {new Date(log.createdAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">{log.detail}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  handleLockExam(securityModalData.pesertaUjianId, securityModalData.name);
+                  setSecurityModalData(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-200 text-xs font-bold transition"
+              >
+                Kunci Ujian Siswa Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleResetLogin(securityModalData.pesertaUjianId, securityModalData.name);
+                  setSecurityModalData(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition"
+              >
+                Reset Sesi Login
               </button>
             </div>
           </div>

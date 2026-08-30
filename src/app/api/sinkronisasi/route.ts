@@ -88,8 +88,16 @@ export async function GET() {
     // Daftar Bank Soal & Status Kesiapan Ujian
     const bankSoalKesiapan = await prisma.bankSoal.findMany({
       include: {
-        mataPelajaran: true,
-        pembuat: true,
+        mataPelajaran: {
+          include: {
+            gurus: {
+              include: {
+                guru: { select: { id: true, name: true, username: true } },
+              },
+            },
+          },
+        },
+        pembuat: { select: { id: true, name: true, username: true, role: true } },
         _count: { select: { soalList: true, ujianList: true } },
       },
       orderBy: { updatedAt: 'desc' },
@@ -240,6 +248,93 @@ export async function POST(request: NextRequest) {
           } else if (cbtRole === 'GURU') {
             stats.guruCount++;
           }
+        }
+
+        // Sinkronisasi Relasi Guru & Mata Pelajaran dari TeacherSubject & Schedule SIMASMUH
+        try {
+          // 1. Dari tabel TeacherSubject SIMASMUH (Penugasan Guru Mapel Resmi)
+          const teacherSubjectRes = await client.query(`
+            SELECT sub.code as subject_code, u.username as teacher_username
+            FROM "TeacherSubject" ts
+            JOIN "Subject" sub ON ts."subjectId" = sub.id
+            JOIN "TeacherProfile" tp ON ts."teacherId" = tp.id
+            JOIN "User" u ON tp."userId" = u.id
+          `);
+
+          for (const ts of teacherSubjectRes.rows) {
+            const mapel = await prisma.mataPelajaran.findUnique({ where: { kode: ts.subject_code } });
+            const teacher = await prisma.user.findUnique({ where: { username: ts.teacher_username } });
+            if (mapel && teacher) {
+              await prisma.guruMataPelajaran.upsert({
+                where: {
+                  guruId_mataPelajaranId: {
+                    guruId: teacher.id,
+                    mataPelajaranId: mapel.id,
+                  },
+                },
+                update: {},
+                create: {
+                  guruId: teacher.id,
+                  mataPelajaranId: mapel.id,
+                },
+              });
+            }
+          }
+
+          // 2. Dari tabel Schedule SIMASMUH (Jadwal Mengajar)
+          const scheduleRes = await client.query(`
+            SELECT sub.code as subject_code, u.username as teacher_username
+            FROM "Schedule" s
+            JOIN "Subject" sub ON s."subjectId" = sub.id
+            JOIN "TeacherProfile" tp ON s."teacherId" = tp.id
+            JOIN "User" u ON tp."userId" = u.id
+          `);
+
+          for (const sched of scheduleRes.rows) {
+            const mapel = await prisma.mataPelajaran.findUnique({ where: { kode: sched.subject_code } });
+            const teacher = await prisma.user.findUnique({ where: { username: sched.teacher_username } });
+            if (mapel && teacher) {
+              await prisma.guruMataPelajaran.upsert({
+                where: {
+                  guruId_mataPelajaranId: {
+                    guruId: teacher.id,
+                    mataPelajaranId: mapel.id,
+                  },
+                },
+                update: {},
+                create: {
+                  guruId: teacher.id,
+                  mataPelajaranId: mapel.id,
+                },
+              });
+            }
+          }
+
+          // 3. Sinkronisasi kepemilikan Bank Soal agar selalu mencerminkan Guru Pengampu dari SIMASMUH
+          const allBankSoal = await prisma.bankSoal.findMany({
+            include: {
+              mataPelajaran: {
+                include: {
+                  gurus: {
+                    include: { guru: true },
+                  },
+                },
+              },
+              pembuat: true,
+            },
+          });
+
+          for (const bank of allBankSoal) {
+            const pengampu = bank.mataPelajaran?.gurus?.[0]?.guru;
+            if (pengampu && bank.pembuatId !== pengampu.id && bank.pembuat?.role === 'ADMIN') {
+              await prisma.bankSoal.update({
+                where: { id: bank.id },
+                data: { pembuatId: pengampu.id },
+              });
+            }
+          }
+        } catch (schedErr: any) {
+          console.warn('Gagal sinkronisasi relasi guru-mapel dari SIMASMUH:', schedErr.message);
         }
       }
 

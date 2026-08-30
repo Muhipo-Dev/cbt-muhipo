@@ -21,6 +21,16 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
+import {
+  cbtSecurityAudio,
+  setupExamKeyboardLockdown,
+  requestUniversalFullscreen,
+  exitUniversalFullscreen,
+  isCurrentlyFullscreen,
+  detectDeviceSecurityInfo,
+} from '@/lib/cbt-security';
+import { SecurityLockModal } from '@/components/SecurityLockModal';
+
 interface OpsiJawaban {
   id: string;
   label: string;
@@ -56,10 +66,16 @@ export default function LembarUjianPage({
 
   const [loading, setLoading] = useState(true);
   const [ujianInfo, setUjianInfo] = useState<any>(null);
+  const [pesertaUjianId, setPesertaUjianId] = useState<string | null>(null);
   const [soalList, setSoalList] = useState<SoalItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [jawabanMap, setJawabanMap] = useState<Record<string, JawabanState>>({});
   const [sisaDetik, setSisaDetik] = useState(0);
+
+  // Security Lock & Screen Sharing State
+  const [isSecurityUnlocked, setIsSecurityUnlocked] = useState(false);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [violationCount, setViolationCount] = useState(0);
 
   // UI state
   const [showNavGrid, setShowNavGrid] = useState(false);
@@ -71,12 +87,16 @@ export default function LembarUjianPage({
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const isSubmittedRef = useRef<boolean>(false);
 
   // 1. Fetch Soal & Status Ujian
   useEffect(() => {
     fetchUjianData();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (screenStream) {
+        screenStream.getTracks().forEach((t) => t.stop());
+      }
     };
   }, [ujianId]);
 
@@ -97,6 +117,7 @@ export default function LembarUjianPage({
       }
 
       setUjianInfo(data.data.ujian);
+      setPesertaUjianId(data.data.pesertaUjianId);
       setSoalList(data.data.soalList);
       setSisaDetik(data.data.ujian.sisaWaktuDetik || 0);
 
@@ -117,6 +138,66 @@ export default function LembarUjianPage({
       router.push('/siswa');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Aktivasi Protokol Keamanan & Entire Screen Sharing Universal (Safari/Chrome/Firefox/Brave/iOS/Android)
+  // Urutan: 1. Perekam/Screen Share Layar Dahulu -> 2. Fullscreen -> 3. Buka Lembar Ujian
+  const handleActivateSecurity = async (): Promise<boolean> => {
+    try {
+      // 0. Unlock Web Audio & Speech synthesis (Krusial untuk iOS Safari / Mobile browser)
+      cbtSecurityAudio.unlockAudio();
+
+      const devInfo = detectDeviceSecurityInfo();
+
+      // 1. Minta Perekaman / Screen Share Seluruh Layar DAHULU (Laptop/Desktop/MacBook)
+      if (
+        devInfo.hasDisplayMedia &&
+        !devInfo.isMobile &&
+        navigator.mediaDevices &&
+        navigator.mediaDevices.getDisplayMedia
+      ) {
+        try {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              displaySurface: 'monitor', // Prioritaskan entire monitor di browser yang support
+            } as any,
+            audio: false,
+          });
+
+          // Listener jika siswa mematikan screen sharing
+          const videoTrack = stream.getVideoTracks()[0];
+          if (videoTrack) {
+            videoTrack.onended = () => {
+              triggerCheatLog(
+                'SCREEN_SHARE_STOPPED',
+                'Siswa mematikan perekaman / sharing layar'
+              );
+              cbtSecurityAudio.triggerFullWarning(
+                'Peringatan! Berbagi layar telah dihentikan. Segera aktifkan kembali!'
+              );
+              setCheatWarning(
+                'Peringatan: Berbagi layar dihentikan! Pengawas mencatat aktivitas ini.'
+              );
+            };
+          }
+
+          setScreenStream(stream);
+        } catch (mediaErr) {
+          console.warn('Izin screen share ditolak atau dilewati:', mediaErr);
+        }
+      }
+
+      // 2. Minta Fullscreen Universal SETELAH screen recording dipilih
+      await requestUniversalFullscreen();
+      setIsFullscreen(isCurrentlyFullscreen());
+
+      // 3. Buka lembar ujian
+      setIsSecurityUnlocked(true);
+      return true;
+    } catch (e) {
+      console.error('Gagal aktivasi keamanan:', e);
+      return false;
     }
   };
 
@@ -144,49 +225,97 @@ export default function LembarUjianPage({
     };
   }, [sisaDetik, loading]);
 
-  // 3. Anti-Cheat Engine (Tab switch & Window blur detection)
+  // 3. Anti-Cheat Engine Lintas Platform (Tab switch, Window blur, Keyboard Lockdown, Audio alarms)
   useEffect(() => {
+    if (!isSecurityUnlocked) return;
+
+    // Keyboard lockdown (Command di macOS & Ctrl di Windows/Linux)
+    const cleanupKeyboard = setupExamKeyboardLockdown((reason) => {
+      triggerCheatLog('KEYBOARD_SHORTCUT_VIOLATION', reason);
+      cbtSecurityAudio.playWarningBuzzer();
+      setCheatWarning(`Peringatan: ${reason}!`);
+    });
+
     const handleVisibilityChange = () => {
+      if (isSubmittedRef.current) return;
       if (document.hidden) {
+        setViolationCount((prev) => prev + 1);
         triggerCheatLog('TAB_SWITCH_ALERT', 'Siswa berpindah tab / aplikasi browser');
-        setCheatWarning('Peringatan: Anda terdeteksi meninggalkan halaman ujian! Aktivitas ini dicatat oleh sistem.');
+        cbtSecurityAudio.triggerFullWarning(
+          'Peringatan! Anda terdeteksi meninggalkan halaman ujian!'
+        );
+        setCheatWarning(
+          'Peringatan: Anda terdeteksi meninggalkan halaman ujian! Aktivitas ini dicatat oleh pengawas.'
+        );
       }
     };
 
     const handleWindowBlur = () => {
+      if (isSubmittedRef.current) return;
       triggerCheatLog('WINDOW_BLUR', 'Fokus layar ujian hilang');
+      cbtSecurityAudio.playWarningBuzzer();
     };
 
-    // Mencegah Klik Kanan (Inspect element)
+    const handleFullscreenChange = () => {
+      const inFullscreen = isCurrentlyFullscreen();
+      setIsFullscreen(inFullscreen);
+      if (isSubmittedRef.current) return;
+      const devInfo = detectDeviceSecurityInfo();
+      // Pada iPhone Safari fullscreen API tidak didukung native sehingga tidak memicu false-positive
+      if (!inFullscreen && devInfo.hasFullscreen) {
+        triggerCheatLog('FULLSCREEN_EXIT', 'Siswa keluar dari mode layar penuh (Lock Browser)');
+        cbtSecurityAudio.triggerFullWarning(
+          'Peringatan! Anda keluar dari mode layar penuh. Klik Fullscreen untuk melanjutkan!'
+        );
+        setCheatWarning('Peringatan: Harap tetap berada di mode layar penuh selama ujian!');
+      }
+    };
+
+    // Mencegah Klik Kanan / Long-press Context Menu di Mobile & Desktop
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
+      cbtSecurityAudio.playWarningBuzzer();
     };
 
-    // Mencegah Copy / Paste Soal
+    // Mencegah Copy Soal
     const handleCopy = (e: ClipboardEvent) => {
       e.preventDefault();
     };
 
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
     window.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('copy', handleCopy);
 
     return () => {
+      cleanupKeyboard();
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
       window.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('copy', handleCopy);
     };
-  }, []);
+  }, [isSecurityUnlocked, pesertaUjianId]);
 
   const triggerCheatLog = async (aktivitas: string, detail: string) => {
     try {
-      await fetch('/api/siswa/ujian/log', {
+      const res = await fetch('/api/siswa/ujian/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ aktivitas, detail }),
+        body: JSON.stringify({ pesertaUjianId, aktivitas, detail }),
       });
+      const resJson = await res.json();
+      if (resJson.data?.isLocked) {
+        alert('Akun ujian Anda telah otomatis terkunci karena melebihi batas pelanggaran keamanan.');
+        router.push('/siswa');
+      }
     } catch (e) {
       // silent
     }
@@ -263,11 +392,24 @@ export default function LembarUjianPage({
   // Submit / Selesai Ujian
   const handleSelesaiUjian = async (isAuto = false) => {
     setSubmitting(true);
+    isSubmittedRef.current = true; // Tandai ujian sudah diselesaikan agar tidak trigger false-positive anti cheat
     try {
       const res = await fetch(`/api/siswa/ujian/${ujianId}/selesai`, {
         method: 'POST',
       });
       const data = await res.json();
+
+      // Hentikan screen stream jika aktif
+      if (screenStream) {
+        screenStream.getTracks().forEach((track) => track.stop());
+      }
+
+      // Keluar dari layar penuh secara otomatis
+      await exitUniversalFullscreen();
+      setIsFullscreen(false);
+
+      // Mainkan suara ucapan selesai ujian yang ramah
+      cbtSecurityAudio.speakSuccess('Ujian selesai, terimakasih telah mengerjakan');
 
       confetti({
         particleCount: 100,
@@ -278,6 +420,7 @@ export default function LembarUjianPage({
       alert(isAuto ? 'Waktu habis! Jawaban Anda telah otomatis dikumpulkan.' : 'Ujian berhasil diselesaikan!');
       router.push('/siswa');
     } catch (e) {
+      isSubmittedRef.current = false;
       alert('Terjadi kesalahan saat mengumpulkan ujian.');
     } finally {
       setSubmitting(false);
@@ -305,9 +448,10 @@ export default function LembarUjianPage({
 
   if (loading || !soalList.length) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
-        <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-sm font-medium text-slate-400">Menyiapkan Lembar Ujian CBT Muhipo...</p>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-800">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4 shadow-sm" />
+        <p className="text-sm font-semibold text-slate-600">Menyiapkan Lembar Ujian CBT Muhipo...</p>
+        <p className="text-xs text-slate-400 mt-1">Memuat soal dan preferensi ujian</p>
       </div>
     );
   }
@@ -320,30 +464,44 @@ export default function LembarUjianPage({
   const totalRagu = Object.values(jawabanMap).filter((j) => j.raguRagu).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-emerald-500 selection:text-white select-none">
-      {/* Sticky Header CBT (ZyaCBT / Candy CBT Modern Style) */}
-      <header className="sticky top-0 z-30 px-4 sm:px-6 py-3 bg-slate-900/95 border-b border-slate-800 backdrop-blur-md flex items-center justify-between shadow-lg">
+    <div className="min-h-screen bg-slate-100/80 text-slate-800 flex flex-col justify-between selection:bg-emerald-500 selection:text-white select-none font-sans">
+      {/* Modal Aktivasi Keamanan & Screen Recording */}
+      {ujianInfo?.lockBrowser && (
+        <SecurityLockModal
+          isOpen={!isSecurityUnlocked}
+          onActivateSecurity={handleActivateSecurity}
+          requireScreenShare={true}
+        />
+      )}
+
+      {/* Sticky Header CBT (Light Modern Style) */}
+      <header className="sticky top-0 z-30 px-4 sm:px-8 py-3 bg-white/95 border-b border-slate-200/90 backdrop-blur-md flex items-center justify-between shadow-xs">
         {/* Left: Info Ujian & Nomor Soal */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-600 font-black text-white text-sm shadow-md shadow-emerald-700/30">
+        <div className="flex items-center gap-3.5">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-600 font-extrabold text-white text-base shadow-sm shadow-emerald-600/30">
             {currentIndex + 1}
           </div>
           <div>
-            <h1 className="text-xs sm:text-sm font-extrabold text-white line-clamp-1">
-              {ujianInfo?.judul}
+            <h1 className="text-sm sm:text-base font-extrabold text-slate-900 line-clamp-1">
+              {ujianInfo?.judul || 'Lembar Ujian CBT'}
             </h1>
-            <span className="text-[11px] text-emerald-400 font-mono">
-              Soal {currentIndex + 1} dari {soalList.length} • ({currentSoal.tipeSoal.replace('_', ' ')})
-            </span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 font-mono">
+                Soal {currentIndex + 1} / {soalList.length}
+              </span>
+              <span className="text-[11px] font-medium text-slate-500 hidden sm:inline">
+                • {currentSoal.tipeSoal.replace('_', ' ')}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Center: Sticky Realtime Countdown Timer */}
-        <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 px-3.5 py-1.5 rounded-2xl shadow-inner">
-          <Clock className={`w-4 h-4 ${sisaDetik < 300 ? 'text-rose-500 animate-pulse' : 'text-emerald-400'}`} />
+        {/* Center: Realtime Countdown Timer */}
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-1.5 rounded-2xl shadow-2xs">
+          <Clock className={`w-4 h-4 ${sisaDetik < 300 ? 'text-rose-600 animate-pulse' : 'text-emerald-600'}`} />
           <span
             className={`font-mono text-sm sm:text-base font-extrabold tracking-wider ${
-              sisaDetik < 300 ? 'text-rose-400' : 'text-emerald-300'
+              sisaDetik < 300 ? 'text-rose-600 font-black' : 'text-slate-800'
             }`}
           >
             {formatTime(sisaDetik)}
@@ -353,22 +511,34 @@ export default function LembarUjianPage({
         {/* Right: Quick Tools (Font size, Grid Modal, Fullscreen) */}
         <div className="flex items-center gap-2">
           {/* Font Resizer */}
-          <div className="hidden md:flex items-center bg-slate-800 rounded-xl p-1 border border-slate-700 text-xs">
+          <div className="hidden md:flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200 text-xs">
             <button
               onClick={() => setFontSize('normal')}
-              className={`px-2 py-1 rounded-lg ${fontSize === 'normal' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400'}`}
+              className={`px-2.5 py-1 rounded-lg transition font-bold ${
+                fontSize === 'normal'
+                  ? 'bg-white text-emerald-700 shadow-2xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
             >
               A
             </button>
             <button
               onClick={() => setFontSize('large')}
-              className={`px-2 py-1 rounded-lg text-sm ${fontSize === 'large' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400'}`}
+              className={`px-2.5 py-1 rounded-lg transition font-bold text-sm ${
+                fontSize === 'large'
+                  ? 'bg-white text-emerald-700 shadow-2xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
             >
               A+
             </button>
             <button
               onClick={() => setFontSize('xlarge')}
-              className={`px-2 py-1 rounded-lg text-base ${fontSize === 'xlarge' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400'}`}
+              className={`px-2.5 py-1 rounded-lg transition font-bold text-base ${
+                fontSize === 'xlarge'
+                  ? 'bg-white text-emerald-700 shadow-2xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
             >
               A++
             </button>
@@ -376,7 +546,7 @@ export default function LembarUjianPage({
 
           <button
             onClick={toggleFullscreen}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs hidden sm:flex items-center gap-1 cursor-pointer"
+            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-600 hover:text-slate-900 text-xs hidden sm:flex items-center gap-1 transition cursor-pointer"
             title="Fullscreen Mode"
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -385,9 +555,9 @@ export default function LembarUjianPage({
           {/* Grid Nomor Soal Button */}
           <button
             onClick={() => setShowNavGrid(!showNavGrid)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold transition cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold transition shadow-2xs cursor-pointer"
           >
-            <Grid className="w-4 h-4" />
+            <Grid className="w-4 h-4 text-emerald-600" />
             <span className="hidden sm:inline">Daftar Soal ({totalTerjawab}/{soalList.length})</span>
           </button>
         </div>
@@ -395,14 +565,14 @@ export default function LembarUjianPage({
 
       {/* Warning Alert Anti-Cheat */}
       {cheatWarning && (
-        <div className="bg-rose-950/80 border-b border-rose-800 px-4 py-2 text-rose-200 text-xs flex items-center justify-between gap-2 z-20">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-rose-400 animate-bounce" />
+        <div className="bg-rose-50 border-b border-rose-200 px-4 sm:px-8 py-2.5 text-rose-800 text-xs font-medium flex items-center justify-between gap-3 z-20 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <ShieldAlert className="w-4 h-4 text-rose-600 animate-bounce shrink-0" />
             <span>{cheatWarning}</span>
           </div>
           <button
             onClick={() => setCheatWarning(null)}
-            className="text-[10px] bg-rose-900 px-2 py-0.5 rounded text-white font-bold"
+            className="text-[11px] bg-rose-600 hover:bg-rose-700 px-2.5 py-1 rounded-lg text-white font-bold transition shrink-0 cursor-pointer"
           >
             Tutup
           </button>
@@ -411,21 +581,36 @@ export default function LembarUjianPage({
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-between">
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6">
+        <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm space-y-6">
           {/* Question Audio Player (Jika tipe listening) */}
           {currentSoal.mediaAudio && (
-            <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+            <div className="p-3.5 rounded-2xl bg-emerald-50/50 border border-emerald-200 flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
                 <Volume2 className="w-5 h-5" />
               </div>
               <audio ref={audioRef} controls src={currentSoal.mediaAudio} className="w-full h-8" />
             </div>
           )}
 
+          {/* Question Media Gambar (Jika ada) */}
+          {currentSoal.mediaGambar && (
+            <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 p-2 max-w-lg mx-auto">
+              <img
+                src={currentSoal.mediaGambar}
+                alt="Gambar Soal"
+                className="w-full h-auto object-contain rounded-xl"
+              />
+            </div>
+          )}
+
           {/* Question Text with KaTeX Math Rendering */}
           <div
-            className={`${
-              fontSize === 'large' ? 'text-lg leading-loose' : fontSize === 'xlarge' ? 'text-xl leading-loose' : 'text-base leading-relaxed'
+            className={`text-slate-900 ${
+              fontSize === 'large'
+                ? 'text-lg leading-loose'
+                : fontSize === 'xlarge'
+                ? 'text-xl leading-loose'
+                : 'text-base sm:text-[17px] leading-relaxed'
             }`}
           >
             <MathRenderer content={currentSoal.pertanyaan} />
@@ -433,7 +618,7 @@ export default function LembarUjianPage({
 
           {/* Opsi Jawaban: Pilihan Ganda & Benar Salah */}
           {(currentSoal.tipeSoal === 'PG' || currentSoal.tipeSoal === 'BENAR_SALAH') && (
-            <div className="space-y-3 pt-4 border-t border-slate-800">
+            <div className="space-y-3 pt-6 border-t border-slate-100">
               {currentSoal.opsiJawaban.map((opsi) => {
                 const isSelected = currentJawaban.jawabanDipilih === opsi.id;
 
@@ -442,22 +627,22 @@ export default function LembarUjianPage({
                     key={opsi.id}
                     type="button"
                     onClick={() => handleSelectOpsi(currentSoal.id, opsi.id)}
-                    className={`w-full text-left p-4 rounded-2xl border transition-all flex items-start gap-4 cursor-pointer ${
+                    className={`w-full text-left p-4 sm:p-4.5 rounded-2xl border transition-all flex items-start gap-4 cursor-pointer ${
                       isSelected
-                        ? 'bg-emerald-600/20 border-emerald-500 text-white shadow-lg shadow-emerald-950'
-                        : 'bg-slate-950/60 hover:bg-slate-800/60 border-slate-800 text-slate-300'
+                        ? 'bg-emerald-50/90 border-emerald-500 text-emerald-950 shadow-sm ring-1 ring-emerald-400/50'
+                        : 'bg-white hover:bg-slate-50/80 border-slate-200 text-slate-800 hover:border-slate-300'
                     }`}
                   >
                     <div
-                      className={`flex-shrink-0 w-8 h-8 rounded-xl font-bold flex items-center justify-center text-xs transition ${
+                      className={`flex-shrink-0 w-8 h-8 rounded-xl font-extrabold flex items-center justify-center text-xs transition ${
                         isSelected
-                          ? 'bg-emerald-500 text-slate-950 font-black'
-                          : 'bg-slate-800 border border-slate-700 text-slate-300'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-slate-100 border border-slate-200 text-slate-700'
                       }`}
                     >
                       {opsi.label}
                     </div>
-                    <div className="flex-1 pt-0.5">
+                    <div className={`flex-1 pt-0.5 ${isSelected ? 'font-medium text-emerald-950' : 'text-slate-800'}`}>
                       <MathRenderer content={opsi.konten} />
                     </div>
                   </button>
@@ -468,10 +653,11 @@ export default function LembarUjianPage({
 
           {/* Opsi Jawaban: Pilihan Ganda Kompleks (Multiple Select) */}
           {currentSoal.tipeSoal === 'PG_KOMPLEKS' && (
-            <div className="space-y-3 pt-4 border-t border-slate-800">
-              <span className="text-xs text-amber-400 font-semibold block mb-1">
-                * Pilihan Ganda Kompleks (Bisa mencentang lebih dari 1 pilihan jawaban yang benar):
-              </span>
+            <div className="space-y-3 pt-6 border-t border-slate-100">
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2">
+                <span>💡</span>
+                <span>Pilihan Ganda Kompleks: Anda dapat memilih lebih dari satu jawaban yang benar.</span>
+              </div>
               {currentSoal.opsiJawaban.map((opsi) => {
                 let chosenIds: string[] = [];
                 try {
@@ -488,20 +674,20 @@ export default function LembarUjianPage({
                     onClick={() => handleSelectOpsiKompleks(currentSoal.id, opsi.id)}
                     className={`w-full text-left p-4 rounded-2xl border transition-all flex items-start gap-4 cursor-pointer ${
                       isSelected
-                        ? 'bg-cyan-600/20 border-cyan-500 text-white shadow-lg shadow-cyan-950'
-                        : 'bg-slate-950/60 hover:bg-slate-800/60 border-slate-800 text-slate-300'
+                        ? 'bg-teal-50/90 border-teal-500 text-teal-950 shadow-sm ring-1 ring-teal-400/50'
+                        : 'bg-white hover:bg-slate-50/80 border-slate-200 text-slate-800 hover:border-slate-300'
                     }`}
                   >
                     <div
                       className={`flex-shrink-0 w-8 h-8 rounded-lg font-bold flex items-center justify-center text-xs transition ${
                         isSelected
-                          ? 'bg-cyan-500 text-slate-950 font-black'
-                          : 'bg-slate-800 border border-slate-700 text-slate-300'
+                          ? 'bg-teal-600 text-white shadow-xs'
+                          : 'bg-slate-100 border border-slate-200 text-slate-700'
                       }`}
                     >
                       {isSelected ? '✓' : opsi.label}
                     </div>
-                    <div className="flex-1 pt-0.5">
+                    <div className={`flex-1 pt-0.5 ${isSelected ? 'font-medium text-teal-950' : 'text-slate-800'}`}>
                       <MathRenderer content={opsi.konten} />
                     </div>
                   </button>
@@ -512,8 +698,8 @@ export default function LembarUjianPage({
 
           {/* Input Jawaban: Isian Singkat */}
           {currentSoal.tipeSoal === 'ISIAN' && (
-            <div className="pt-4 border-t border-slate-800 space-y-2">
-              <label className="block text-xs font-semibold text-slate-300">
+            <div className="pt-6 border-t border-slate-100 space-y-2.5">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Ketik Jawaban Singkat Anda:
               </label>
               <input
@@ -521,15 +707,15 @@ export default function LembarUjianPage({
                 value={currentJawaban.jawabanDipilih || ''}
                 onChange={(e) => handleInputTeks(currentSoal.id, e.target.value)}
                 placeholder="Ketikkan jawaban di sini..."
-                className="w-full p-4 rounded-2xl bg-slate-950 border border-slate-700 text-white text-base focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-300 text-slate-900 text-base focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
               />
             </div>
           )}
 
           {/* Input Jawaban: Esai / Uraian */}
           {currentSoal.tipeSoal === 'ESAI' && (
-            <div className="pt-4 border-t border-slate-800 space-y-2">
-              <label className="block text-xs font-semibold text-slate-300">
+            <div className="pt-6 border-t border-slate-100 space-y-2.5">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Tuliskan Uraian Lengkap Jawaban Anda:
               </label>
               <textarea
@@ -537,20 +723,20 @@ export default function LembarUjianPage({
                 value={currentJawaban.jawabanDipilih || ''}
                 onChange={(e) => handleInputTeks(currentSoal.id, e.target.value)}
                 placeholder="Tuliskan langkah pengerjaan atau uraian jawaban secara jelas dan terstruktur..."
-                className="w-full p-4 rounded-2xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-300 text-slate-900 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition leading-relaxed"
               />
             </div>
           )}
         </div>
 
         {/* Bottom Navigation Toolbar (ZyaCBT / Candy CBT Layout) */}
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-4 rounded-3xl backdrop-blur-xl">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200/90 p-4 rounded-3xl shadow-xs">
           {/* Tombol Sebelumnya */}
           <button
             type="button"
             disabled={currentIndex === 0}
             onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-xs font-bold text-slate-200 transition cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-xs font-bold text-slate-700 transition cursor-pointer border border-slate-200"
           >
             <ChevronLeft className="w-4 h-4" />
             <span>Sebelumnya</span>
@@ -562,8 +748,8 @@ export default function LembarUjianPage({
             onClick={handleToggleRagu}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-extrabold transition cursor-pointer border ${
               currentJawaban.raguRagu
-                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-600/30'
-                : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/40'
+                ? 'bg-amber-500 text-white border-amber-600 shadow-sm shadow-amber-500/20'
+                : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
             }`}
           >
             <BookmarkCheck className="w-4 h-4" />
@@ -575,7 +761,7 @@ export default function LembarUjianPage({
             <button
               type="button"
               onClick={() => setShowSubmitModal(true)}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-xs font-extrabold text-white shadow-lg shadow-emerald-700/30 transition cursor-pointer"
+              className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-xs font-extrabold text-white shadow-md shadow-emerald-600/20 transition cursor-pointer"
             >
               <Send className="w-4 h-4" />
               <span>Selesai Ujian</span>
@@ -584,7 +770,7 @@ export default function LembarUjianPage({
             <button
               type="button"
               onClick={() => setCurrentIndex((prev) => Math.min(soalList.length - 1, prev + 1))}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white shadow-md shadow-emerald-700/20 transition cursor-pointer"
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-sm shadow-emerald-600/20 transition cursor-pointer"
             >
               <span>Selanjutnya</span>
               <ChevronRight className="w-4 h-4" />
@@ -595,34 +781,34 @@ export default function LembarUjianPage({
 
       {/* Grid Nomor Soal Drawer / Modal */}
       {showNavGrid && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Grid className="w-5 h-5 text-emerald-400" />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Grid className="w-5 h-5 text-emerald-600" />
                 Navigasi Nomor Soal Ujian
               </h3>
               <button
                 onClick={() => setShowNavGrid(false)}
-                className="text-xs bg-slate-800 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white"
+                className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 font-semibold cursor-pointer transition"
               >
                 Tutup [X]
               </button>
             </div>
 
             {/* Grid Soal */}
-            <div className="grid grid-cols-5 sm:grid-cols-6 gap-2.5 max-h-72 overflow-y-auto p-1">
+            <div className="grid grid-cols-5 sm:grid-cols-6 gap-2.5 max-h-72 overflow-y-auto p-1 custom-scrollbar">
               {soalList.map((s, idx) => {
                 const j = jawabanMap[s.id];
                 const isAnswered = Boolean(j?.jawabanDipilih);
                 const isRagu = Boolean(j?.raguRagu);
                 const isCurrent = idx === currentIndex;
 
-                let btnBg = 'bg-slate-800 text-slate-400 border-slate-700'; // Belum dijawab
+                let btnBg = 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'; // Belum dijawab
                 if (isRagu) {
-                  btnBg = 'bg-amber-500 text-slate-950 font-black border-amber-400';
+                  btnBg = 'bg-amber-500 text-white font-black border-amber-600 shadow-2xs';
                 } else if (isAnswered) {
-                  btnBg = 'bg-emerald-600 text-white font-bold border-emerald-500';
+                  btnBg = 'bg-emerald-600 text-white font-bold border-emerald-600 shadow-2xs';
                 }
 
                 return (
@@ -632,30 +818,30 @@ export default function LembarUjianPage({
                       setCurrentIndex(idx);
                       setShowNavGrid(false);
                     }}
-                    className={`h-11 rounded-xl flex flex-col items-center justify-center border text-xs transition cursor-pointer ${btnBg} ${
-                      isCurrent ? 'ring-2 ring-cyan-400 ring-offset-2 ring-offset-slate-900' : ''
+                    className={`h-11 rounded-xl flex flex-col items-center justify-center border text-xs transition cursor-pointer font-bold ${btnBg} ${
+                      isCurrent ? 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-white' : ''
                     }`}
                   >
                     <span>{idx + 1}</span>
-                    {isRagu && <span className="text-[9px]">Ragu</span>}
+                    {isRagu && <span className="text-[9px] font-normal">Ragu</span>}
                   </button>
                 );
               })}
             </div>
 
             {/* Legend */}
-            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-emerald-600" />
-                <span>Sudah Dijawab</span>
+            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 text-[11px] text-slate-600">
+              <div className="flex items-center gap-2">
+                <div className="w-3.5 h-3.5 rounded bg-emerald-600" />
+                <span className="font-medium">Sudah Dijawab</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-amber-500" />
-                <span>Ragu-Ragu</span>
+              <div className="flex items-center gap-2">
+                <div className="w-3.5 h-3.5 rounded bg-amber-500" />
+                <span className="font-medium">Ragu-Ragu</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-slate-800 border border-slate-700" />
-                <span>Belum Dijawab</span>
+              <div className="flex items-center gap-2">
+                <div className="w-3.5 h-3.5 rounded bg-slate-100 border border-slate-300" />
+                <span className="font-medium">Belum Dijawab</span>
               </div>
             </div>
           </div>
@@ -664,36 +850,36 @@ export default function LembarUjianPage({
 
       {/* Confirmation Submit Modal */}
       {showSubmitModal && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl space-y-5 text-center animate-in fade-in zoom-in duration-200">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto shadow-2xs">
               <CheckCircle2 className="w-8 h-8" />
             </div>
 
             <div>
-              <h3 className="text-xl font-bold text-white">Konfirmasi Pengumpulan Ujian</h3>
-              <p className="text-xs text-slate-400 mt-1">
+              <h3 className="text-xl font-bold text-slate-900">Konfirmasi Pengumpulan Ujian</h3>
+              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
                 Apakah Anda yakin ingin mengakhiri dan mengumpulkan lembar jawaban ujian ini?
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs">
+            <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
               <div className="text-left">
-                <span className="text-slate-500 block">Sudah Dijawab:</span>
-                <span className="text-base font-extrabold text-emerald-400">
+                <span className="text-slate-500 block text-[11px]">Sudah Dijawab:</span>
+                <span className="text-base font-extrabold text-emerald-600">
                   {totalTerjawab} / {soalList.length} Soal
                 </span>
               </div>
               <div className="text-left">
-                <span className="text-slate-500 block">Masih Ragu-Ragu:</span>
-                <span className="text-base font-extrabold text-amber-400">
+                <span className="text-slate-500 block text-[11px]">Masih Ragu-Ragu:</span>
+                <span className="text-base font-extrabold text-amber-600">
                   {totalRagu} Soal
                 </span>
               </div>
             </div>
 
             {totalRagu > 0 && (
-              <p className="text-xs text-amber-400 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/30">
+              <p className="text-xs text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200 text-left font-medium">
                 ⚠️ Anda masih memiliki <b>{totalRagu}</b> soal berstatus Ragu-ragu.
               </p>
             )}
@@ -702,7 +888,7 @@ export default function LembarUjianPage({
               <button
                 type="button"
                 onClick={() => setShowSubmitModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-xs font-bold text-slate-700 transition cursor-pointer"
               >
                 Kembali Periksa
               </button>
@@ -710,7 +896,7 @@ export default function LembarUjianPage({
                 type="button"
                 disabled={submitting}
                 onClick={() => handleSelesaiUjian(false)}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white shadow-lg shadow-emerald-700/30 transition cursor-pointer flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center justify-center gap-1.5"
               >
                 {submitting ? 'Mengumpulkan...' : 'Ya, Kumpulkan Jawaban'}
               </button>
