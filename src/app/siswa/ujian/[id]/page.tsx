@@ -150,17 +150,15 @@ export default function LembarUjianPage({
 
       const devInfo = detectDeviceSecurityInfo();
 
-      // 1. Minta Perekaman / Screen Share Seluruh Layar DAHULU (Laptop/Desktop/MacBook)
-      if (
-        devInfo.hasDisplayMedia &&
-        !devInfo.isMobile &&
-        navigator.mediaDevices &&
-        navigator.mediaDevices.getDisplayMedia
-      ) {
+      // 1. Minta Perekaman / Screen Share Seluruh Layar (Desktop, Laptop, Android & iOS Mobile)
+      const nav = typeof navigator !== 'undefined' ? navigator : null;
+      const mediaDev = nav?.mediaDevices || (nav as any)?.webkitMediaDevices;
+
+      if (mediaDev && typeof mediaDev.getDisplayMedia === 'function') {
         try {
-          const stream = await navigator.mediaDevices.getDisplayMedia({
+          const stream = await mediaDev.getDisplayMedia({
             video: {
-              displaySurface: 'monitor', // Prioritaskan entire monitor di browser yang support
+              displaySurface: 'monitor', // Paksa monitor / entire screen
             } as any,
             audio: false,
           });
@@ -183,9 +181,17 @@ export default function LembarUjianPage({
           }
 
           setScreenStream(stream);
-        } catch (mediaErr) {
-          console.warn('Izin screen share ditolak atau dilewati:', mediaErr);
+        } catch (mediaErr: any) {
+          console.warn('Izin screen share ditolak atau tidak didukung oleh browser ini:', mediaErr);
+          // Jika ditolak atau dibatasi browser mobile, catat log peringatan
+          triggerCheatLog(
+            'SECURITY_ALERT',
+            `Perekaman layar ditolak/gagal diinisiasi pada perangkat: ${devInfo.deviceName} (${mediaErr?.message || 'Akses Ditolak'})`
+          );
         }
+      } else {
+        // Fallback untuk browser mobile yang tidak menyediakan getDisplayMedia di HTTP/iOS
+        console.warn('getDisplayMedia tidak tersedia pada browser/protokol ini.');
       }
 
       // 2. Minta Fullscreen Universal SETELAH screen recording dipilih
@@ -302,14 +308,139 @@ export default function LembarUjianPage({
       window.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('copy', handleCopy);
     };
-  }, [isSecurityUnlocked, pesertaUjianId]);
+  }, [isSecurityUnlocked, pesertaUjianId, screenStream, ujianInfo]);
+
+  // Helper untuk mengambil screenshot frame saat terjadi pelanggaran (Dual-Mode: Stream & Canvas Fallback)
+  const captureScreenSnapshot = async (aktivitasText?: string, detailText?: string): Promise<string | null> => {
+    try {
+      // 1. Coba ambil dari Media Stream (Desktop / Laptop / Browser dengan Screen Share aktif)
+      if (screenStream && screenStream.getVideoTracks().length > 0) {
+        const track = screenStream.getVideoTracks()[0];
+        if (track.readyState === 'live') {
+          const video = document.createElement('video');
+          video.srcObject = screenStream;
+          video.muted = true;
+          await video.play();
+
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 360;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // Tambahkan timestamp watermark bukti
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(10, canvas.height - 38, canvas.width - 20, 28);
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 12px monospace';
+            ctx.fillText(
+              `[PELANGGARAN CBT] ${new Date().toLocaleString('id-ID')} | NIS: ${ujianInfo?.nomorPeserta || 'Siswa'}`,
+              20,
+              canvas.height - 20
+            );
+            return canvas.toDataURL('image/jpeg', 0.6);
+          }
+        }
+      }
+
+      // 2. Fallback Universal untuk Android & iOS: Render Bukti Visual Snapshot Pelanggaran
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 360;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Background Gelap Exam Card
+        const grad = ctx.createLinearGradient(0, 0, 640, 360);
+        grad.addColorStop(0, '#0f172a');
+        grad.addColorStop(1, '#020617');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 640, 360);
+
+        // Header Merah Peringatan
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(0, 0, 640, 45);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText('BUKTI TANGKAPAN SISTEM CBT: DETEKSI PELANGGARAN', 20, 28);
+
+        // Border Frame
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(4, 4, 632, 352);
+
+        // Informasi Peserta
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '13px sans-serif';
+        ctx.fillText('Nama Peserta:', 25, 80);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(`${ujianInfo?.namaSiswa || 'Peserta Ujian'} (${ujianInfo?.nomorPeserta || '-'})`, 150, 80);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '13px sans-serif';
+        ctx.fillText('Mata Pelajaran:', 25, 110);
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(`${ujianInfo?.judul || 'Ujian CBT'} - ${ujianInfo?.mataPelajaran || ''}`, 150, 110);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '13px sans-serif';
+        ctx.fillText('Jenis Aktivitas:', 25, 140);
+        ctx.fillStyle = '#f87171';
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText(`${aktivitasText || 'PELANGGARAN_KEAMANAN'}`, 150, 140);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '13px sans-serif';
+        ctx.fillText('Keterangan Log:', 25, 170);
+        ctx.fillStyle = '#fca5a5';
+        ctx.font = '13px sans-serif';
+        ctx.fillText(`${detailText || 'Siswa meninggalkan layar ujian atau berpindah aplikasi'}`, 150, 170);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '13px sans-serif';
+        ctx.fillText('Waktu Kejadian:', 25, 200);
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = 'bold 13px monospace';
+        ctx.fillText(`${new Date().toLocaleString('id-ID')} WIB`, 150, 200);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '13px sans-serif';
+        ctx.fillText('Perangkat Klien:', 25, 230);
+        ctx.fillStyle = '#a7f3d0';
+        ctx.font = '13px monospace';
+        ctx.fillText(`${navigator.userAgent.substring(0, 50)}...`, 150, 230);
+
+        // Watermark Box
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+        ctx.fillRect(25, 260, 590, 70);
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(25, 260, 590, 70);
+
+        ctx.fillStyle = '#f87171';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('STATUS: TERDETEKSI KELUAR DARI HALAMAN UJIAN (SCREEN / TAB SWITCH / BLUR)', 40, 290);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('Terekam otomatis oleh Anti-Cheat Engine CBT SMA Muhammadiyah 1 Ponorogo.', 40, 312);
+
+        return canvas.toDataURL('image/jpeg', 0.6);
+      }
+    } catch (err) {
+      console.warn('Gagal capture screen frame:', err);
+    }
+    return null;
+  };
 
   const triggerCheatLog = async (aktivitas: string, detail: string) => {
     try {
+      const fotoBukti = await captureScreenSnapshot(aktivitas, detail);
       const res = await fetch('/api/siswa/ujian/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pesertaUjianId, aktivitas, detail }),
+        body: JSON.stringify({ pesertaUjianId, aktivitas, detail, fotoBukti }),
       });
       const resJson = await res.json();
       if (resJson.data?.isLocked) {

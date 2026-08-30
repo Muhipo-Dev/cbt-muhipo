@@ -41,6 +41,20 @@ import {
   Send,
   Edit,
   Trash2,
+  Eye,
+  ShieldAlert,
+  Monitor,
+  Maximize2,
+  LogIn,
+  Play,
+  AlertOctagon,
+  Activity,
+  Radio,
+  Check,
+  Lock,
+  Unlock,
+  FileText,
+  Ban,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { DAFTAR_JURUSAN_MUHIPO, DAFTAR_TIPE_UJIAN } from '@/lib/constants'
@@ -64,11 +78,14 @@ export default function ComprehensiveAdminDashboard() {
   // 1. Dashboard State
   const [dashboardData, setDashboardData] = useState<any>(null)
 
-  // 2. Proktor Live State
+  // 2. Proktor Live State & Live Polling (2 Detik Auto-Refresh)
   const [proktorData, setProktorData] = useState<any>(null)
   const [selectedProktorUjianId, setSelectedProktorUjianId] = useState('')
   const [extraTimeModal, setExtraTimeModal] = useState<any>(null)
   const [extraMinutes, setExtraMinutes] = useState(15)
+  const [violationScreenModal, setViolationScreenModal] = useState<any>(null)
+  const [isLiveActive, setIsLiveActive] = useState(true)
+  const [lastLiveUpdated, setLastLiveUpdated] = useState<Date>(new Date())
 
   // 3. Bank Soal State
   const [bankSoalList, setBankSoalList] = useState<any[]>([])
@@ -281,6 +298,38 @@ export default function ComprehensiveAdminDashboard() {
     fetchSessionAndAdminData()
   }, [activeTab, selectedProktorUjianId, selectedKoreksiUjianId])
 
+  // Live Auto-Refresh Polling Setiap 2 Detik untuk Live Monitoring Ujian & Dashboard
+  useEffect(() => {
+    if (!isLiveActive) return
+
+    const interval = setInterval(async () => {
+      try {
+        if (activeTab === 'proktor_live') {
+          const url = selectedProktorUjianId
+            ? `/api/proktor?ujianId=${selectedProktorUjianId}`
+            : '/api/proktor'
+          const res = await fetch(url)
+          const json = await res.json()
+          if (json.success) {
+            setProktorData(json.data)
+            setLastLiveUpdated(new Date())
+          }
+        } else if (activeTab === 'dashboard') {
+          const res = await fetch('/api/admin?tab=dashboard')
+          const json = await res.json()
+          if (json.success) {
+            setDashboardData(json.data)
+            setLastLiveUpdated(new Date())
+          }
+        }
+      } catch (err) {
+        // Silent polling error
+      }
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [activeTab, selectedProktorUjianId, isLiveActive])
+
   const fetchSessionAndAdminData = async () => {
     try {
       setLoading(true)
@@ -347,7 +396,11 @@ export default function ComprehensiveAdminDashboard() {
       } else if (activeTab === 'jadwal') {
         const res = await fetch('/api/admin?tab=jadwal')
         const json = await res.json()
-        if (json.success) setJadwalData(json.data)
+        if (json.success) {
+          setJadwalData(json.data)
+          if (json.data?.kelasList) setKelasList(json.data.kelasList)
+          if (json.data?.bankSoalList) setBankSoalList(json.data.bankSoalList)
+        }
       } else if (activeTab === 'siswa') {
         const res = await fetch('/api/admin?tab=siswa')
         const json = await res.json()
@@ -1429,23 +1482,128 @@ export default function ComprehensiveAdminDashboard() {
                   </div>
                 </div>
 
-                <div className="lg:col-span-5 bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-cyan-500" />
-                    Audit Trail / Aktivitas Siswa
-                  </h3>
-                  <div className="space-y-2">
-                    {dashboardData.recentLogs?.map((l: any) => (
-                      <div key={l.id} className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-950/70 border border-slate-200/60 dark:border-white/5 text-xs backdrop-blur-sm">
-                        <div className="flex justify-between font-bold text-slate-700 dark:text-slate-300">
-                          <span>{l.user.name}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">
-                            {new Date(l.createdAt).toLocaleTimeString()}
-                          </span>
-                        </div>
-                        <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">{l.detail}</p>
+                <div className="lg:col-span-5 bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-cyan-500" />
+                        Audit Trail & Log Pelanggaran
+                      </h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Aktivitas login, pengerjaan, dan pelanggaran realtime
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                      <span>Live 2s</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                    {dashboardData.recentLogs?.length === 0 ? (
+                      <div className="p-6 text-center text-slate-400 text-xs">
+                        Belum ada riwayat aktivitas terbaru.
                       </div>
-                    ))}
+                    ) : (
+                      dashboardData.recentLogs?.map((l: any) => {
+                        const act = (l.aktivitas || '').toUpperCase()
+                        const isViolation = [
+                          'TAB_SWITCH_ALERT',
+                          'WINDOW_BLUR',
+                          'FULLSCREEN_EXIT',
+                          'SCREEN_SHARE_STOPPED',
+                          'KEYBOARD_SHORTCUT_VIOLATION',
+                          'SECURITY_ALERT',
+                        ].includes(act)
+                        const isLogin = act === 'LOGIN'
+                        const isStart = act === 'MULAI_UJIAN' || act.includes('START')
+                        const isFinish = act === 'SELESAI_UJIAN' || act.includes('SELESAI')
+                        const isReset = act.includes('RESET') || act.includes('UNLOCK')
+
+                        // Color theme config
+                        let containerStyle = 'bg-slate-50/80 dark:bg-slate-950/70 border-slate-200/60 dark:border-white/5 text-slate-700 dark:text-slate-300'
+                        let badgeStyle = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                        let IconComponent = ShieldCheck
+                        let iconColor = 'text-slate-500'
+
+                        if (isViolation) {
+                          containerStyle = 'bg-rose-50/70 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/60 text-rose-900 dark:text-rose-200'
+                          badgeStyle = 'bg-rose-500 text-white font-black'
+                          IconComponent = AlertOctagon
+                          iconColor = 'text-rose-500'
+                        } else if (isLogin) {
+                          containerStyle = 'bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200'
+                          badgeStyle = 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                          IconComponent = LogIn
+                          iconColor = 'text-emerald-600 dark:text-emerald-400'
+                        } else if (isStart) {
+                          containerStyle = 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800/60 text-blue-900 dark:text-blue-200'
+                          badgeStyle = 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30'
+                          IconComponent = Play
+                          iconColor = 'text-blue-600 dark:text-blue-400'
+                        } else if (isFinish) {
+                          containerStyle = 'bg-purple-50/70 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800/60 text-purple-900 dark:text-purple-200'
+                          badgeStyle = 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30'
+                          IconComponent = CheckCircle2
+                          iconColor = 'text-purple-600 dark:text-purple-400'
+                        } else if (isReset) {
+                          containerStyle = 'bg-amber-50/70 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200'
+                          badgeStyle = 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                          IconComponent = Unlock
+                          iconColor = 'text-amber-600 dark:text-amber-400'
+                        }
+
+                        return (
+                          <div
+                            key={l.id}
+                            className={`p-3 rounded-2xl border text-xs backdrop-blur-sm space-y-1.5 transition ${containerStyle}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <IconComponent className={`w-4 h-4 shrink-0 ${iconColor}`} />
+                                <span className="font-bold truncate">{l.user?.name || 'Siswa'}</span>
+                                {l.user?.nis && (
+                                  <span className="font-mono text-[10px] text-slate-400">({l.user.nis})</span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                {new Date(l.createdAt).toLocaleTimeString('id-ID')}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[11px] opacity-90 line-clamp-2">{l.detail}</p>
+                              <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold shrink-0 border ${badgeStyle}`}>
+                                {act}
+                              </span>
+                            </div>
+
+                            {/* Tombol Lihat Bukti Snapshot jika ada foto bukti */}
+                            {l.fotoBukti && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setViolationScreenModal({
+                                    name: l.user?.name || 'Siswa',
+                                    nis: l.user?.nis || l.user?.username,
+                                    kelas: l.user?.kelas?.nama || '-',
+                                    status: 'SEDANG_MENGERJAKAN',
+                                    jumlahPelanggaran: 1,
+                                    latestScreenshot: l.fotoBukti,
+                                    latestScreenshotTime: l.createdAt,
+                                    latestViolationDetail: l.detail,
+                                  })
+                                }
+                                className="w-full mt-1 py-1 px-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-[10px] flex items-center justify-center gap-1 shadow-xs cursor-pointer transition"
+                              >
+                                <Monitor className="w-3 h-3" />
+                                <span>Lihat Bukti Snapshot Layar</span>
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })
+                    )}
                   </div>
                 </div>
               </div>
@@ -1457,22 +1615,51 @@ export default function ComprehensiveAdminDashboard() {
             <div className="space-y-6">
               <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-3">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                  <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Monitoring Ruang Ujian</h3>
-                  <select
-                    value={selectedProktorUjianId}
-                    onChange={(e) => setSelectedProktorUjianId(e.target.value)}
-                    className="px-3 py-2 rounded-xl bg-slate-50/90 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white backdrop-blur-sm"
-                  >
-                    {proktorData?.ujianList?.map((u: any) => (
-                      <option key={u.id} value={u.id}>
-                        {u.kodeUjian} - {u.judul}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-bold">
+                      <Radio className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
+                        <span>Live Monitoring Ruang Ujian</span>
+                        <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[10.5px] font-black tracking-wide">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                          LIVE (2s Auto-Refresh)
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Ujian Aktif: <b>{proktorData?.activeUjian?.judul || 'Pilih Ujian'}</b> ({proktorData?.activeUjian?.durasiMenit || 0} Menit) • Update: <span className="font-mono text-cyan-600 dark:text-cyan-400">{lastLiveUpdated.toLocaleTimeString('id-ID')}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsLiveActive(!isLiveActive)}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                        isLiveActive
+                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                          : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isLiveActive ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
+                      <span>{isLiveActive ? 'Live Aktif (2s)' : 'Live Dijeda'}</span>
+                    </button>
+
+                    <select
+                      value={selectedProktorUjianId}
+                      onChange={(e) => setSelectedProktorUjianId(e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-slate-50/90 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white backdrop-blur-sm focus:outline-none focus:border-cyan-500"
+                    >
+                      {proktorData?.ujianList?.map((u: any) => (
+                        <option key={u.id} value={u.id}>
+                          {u.kodeUjian} - {u.judul}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Ujian Aktif: <b>{proktorData?.activeUjian?.judul}</b> ({proktorData?.activeUjian?.durasiMenit} Menit)
-                </p>
               </div>
 
               <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
@@ -1484,38 +1671,76 @@ export default function ComprehensiveAdminDashboard() {
                         <th className="py-3 px-4">NIS</th>
                         <th className="py-3 px-4">Nama Siswa</th>
                         <th className="py-3 px-4">Kelas</th>
-                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Status & Keamanan</th>
                         <th className="py-3 px-4 text-center">Jawaban</th>
                         <th className="py-3 px-4 text-right">Aksi Proktor</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
                       {proktorData?.pesertaList?.map((p: any) => (
-                        <tr key={p.pesertaUjianId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                        <tr key={p.pesertaUjianId} className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition ${p.jumlahPelanggaran > 0 ? 'bg-rose-50/30 dark:bg-rose-950/20' : ''}`}>
                           <td className="py-3 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">{p.nis || p.nomorPeserta || p.username}</td>
-                          <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{p.name}</td>
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <span>{p.name}</span>
+                              {p.jumlahPelanggaran > 0 && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500 text-white shadow-xs animate-pulse">
+                                  <ShieldAlert className="w-3 h-3" />
+                                  {p.jumlahPelanggaran} Pelanggaran
+                                </span>
+                              )}
+                            </div>
+                            {p.latestViolationDetail && (
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-0.5 truncate max-w-xs">
+                                ⚠ {p.latestViolationDetail}
+                              </p>
+                            )}
+                          </td>
                           <td className="py-3 px-4">{p.kelas}</td>
                           <td className="py-3 px-4">
-                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                              p.status === 'TERKUNCI'
+                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                                : p.status === 'SEDANG_MENGERJAKAN'
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                            }`}>
                               {p.status}
                             </span>
                           </td>
                           <td className="py-3 px-4 text-center">{p.jumlahJawaban} Soal</td>
-                          <td className="py-3 px-4 text-right space-x-2">
-                            <button
-                              onClick={() => handleResetLogin(p.pesertaUjianId, p.name)}
-                              className="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-[11px] font-bold cursor-pointer"
-                            >
-                              Reset Login
-                            </button>
-                            {p.status === 'SEDANG_MENGERJAKAN' && (
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              {/* Tombol Lihat Layar Siswa (Snapshot Bukti Pelanggaran) */}
                               <button
-                                onClick={() => setExtraTimeModal(p)}
-                                className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-600/20 border border-blue-200 dark:border-blue-500/40 text-blue-600 dark:text-blue-300 text-[11px] font-bold cursor-pointer"
+                                onClick={() => setViolationScreenModal(p)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-xs ${
+                                  p.latestScreenshot || p.jumlahPelanggaran > 0
+                                    ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                }`}
+                                title="Lihat Rekaman Layar & Log Pelanggaran Siswa"
                               >
-                                +Waktu
+                                <Monitor className="w-3.5 h-3.5" />
+                                <span>Lihat Layar</span>
                               </button>
-                            )}
+
+                              <button
+                                onClick={() => handleResetLogin(p.pesertaUjianId, p.name)}
+                                className="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-[11px] font-bold cursor-pointer hover:bg-rose-100"
+                              >
+                                Reset Login
+                              </button>
+
+                              {p.status === 'SEDANG_MENGERJAKAN' && (
+                                <button
+                                  onClick={() => setExtraTimeModal(p)}
+                                  className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-600/20 border border-blue-200 dark:border-blue-500/40 text-blue-600 dark:text-blue-300 text-[11px] font-bold cursor-pointer hover:bg-blue-100"
+                                >
+                                  +Waktu
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -3039,6 +3264,154 @@ export default function ComprehensiveAdminDashboard() {
       </div>
 
       {/* Modals */}
+      {/* Modal Inspeksi Layar Pelanggaran Siswa */}
+      {violationScreenModal && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 text-xs max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <Monitor className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Inspeksi Layar Siswa: {violationScreenModal.name}</span>
+                    {violationScreenModal.jumlahPelanggaran > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white">
+                        {violationScreenModal.jumlahPelanggaran} Pelanggaran
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    NIS: <b>{violationScreenModal.nis || violationScreenModal.username}</b> • Kelas: <b>{violationScreenModal.kelas}</b> • Status: <b>{violationScreenModal.status}</b>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setViolationScreenModal(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Tampilan Screenshot Layar Snapshot */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-rose-500" />
+                  <span>Bukti Tangkapan Layar Pelanggaran (Snapshot):</span>
+                </span>
+                {violationScreenModal.latestScreenshotTime && (
+                  <span className="text-[10.5px] text-slate-400 font-mono">
+                    Waktu: {new Date(violationScreenModal.latestScreenshotTime).toLocaleTimeString('id-ID')} WIB
+                  </span>
+                )}
+              </div>
+
+              {violationScreenModal.latestScreenshot ? (
+                <div className="relative rounded-2xl overflow-hidden border-2 border-rose-500/40 shadow-lg bg-black group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={violationScreenModal.latestScreenshot}
+                    alt={`Layar Pelanggaran ${violationScreenModal.name}`}
+                    className="w-full h-auto max-h-80 object-contain bg-slate-950"
+                  />
+                  <div className="absolute bottom-2 left-2 right-2 p-2 rounded-xl bg-black/75 backdrop-blur-sm text-white text-[11px] flex justify-between items-center">
+                    <span className="font-mono truncate">
+                      ⚠ {violationScreenModal.latestViolationDetail || 'Terdeteksi meninggalkan layar ujian'}
+                    </span>
+                    <a
+                      href={violationScreenModal.latestScreenshot}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-[10px] font-bold shrink-0 ml-2"
+                    >
+                      Buka Resolusi Penuh
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 space-y-2">
+                  <Monitor className="w-10 h-10 text-slate-400 opacity-50 mx-auto" />
+                  <p className="font-semibold text-xs text-slate-700 dark:text-slate-300">
+                    Belum ada snapshot layar pelanggaran tersimpan.
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                    Screenshot otomatis diambil saat siswa berpindah tab browser, keluar dari mode layar penuh (fullscreen exit), atau melakukan aktivitas mencurigakan.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Riwayat Log Pelanggaran Siswa */}
+            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-white/10">
+              <span className="font-bold text-slate-800 dark:text-slate-200 block">
+                Riwayat Log Aktivitas & Peringatan:
+              </span>
+              <div className="max-h-44 overflow-y-auto space-y-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10">
+                {(!violationScreenModal.logsTerakhir || violationScreenModal.logsTerakhir.length === 0) ? (
+                  <p className="text-center text-[11px] text-slate-400 py-3">Tidak ada catatan aktivitas mencurigakan.</p>
+                ) : (
+                  violationScreenModal.logsTerakhir.map((log: any, idx: number) => {
+                    const isViolation = [
+                      'TAB_SWITCH_ALERT',
+                      'WINDOW_BLUR',
+                      'FULLSCREEN_EXIT',
+                      'SCREEN_SHARE_STOPPED',
+                      'KEYBOARD_SHORTCUT_VIOLATION',
+                      'SECURITY_ALERT',
+                    ].includes(log.aktivitas);
+
+                    return (
+                      <div
+                        key={log.id || idx}
+                        className={`p-2 rounded-lg text-[11px] flex justify-between items-start gap-2 ${
+                          isViolation
+                            ? 'bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/50 text-rose-800 dark:text-rose-200'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="font-bold font-mono uppercase text-[10px] block">
+                            {log.aktivitas}
+                          </span>
+                          <p className="text-[10.5px] mt-0.5 truncate">{log.detail || '-'}</p>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                          {new Date(log.createdAt).toLocaleTimeString('id-ID')}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Aksi Proktor Cepat */}
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setViolationScreenModal(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold cursor-pointer hover:bg-slate-200"
+              >
+                Tutup
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleResetLogin(violationScreenModal.pesertaUjianId, violationScreenModal.name);
+                  setViolationScreenModal(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold cursor-pointer shadow-md shadow-rose-600/20"
+              >
+                Reset Login Siswa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showJadwalModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4 text-xs max-h-[90vh] overflow-y-auto">
@@ -3085,11 +3458,14 @@ export default function ComprehensiveAdminDashboard() {
                     className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-medium"
                   >
                     <option value="">-- Pilih Bank Soal --</option>
-                    {bankSoalList.map((bs) => (
-                      <option key={bs.id} value={bs.id}>
-                        [{bs.kodeBank}] {bs.nama} ({bs.mataPelajaran?.nama} • Tingkat {bs.tingkat})
-                      </option>
-                    ))}
+                    {bankSoalList.map((bs) => {
+                      const pengampu = bs.mataPelajaran?.gurus?.[0]?.guru?.name || (bs.pembuat?.role === 'GURU' ? bs.pembuat?.name : 'Guru Pengampu');
+                      return (
+                        <option key={bs.id} value={bs.id}>
+                          [{bs.kodeBank}] {bs.nama} ({bs.mataPelajaran?.nama} • Tingkat {bs.tingkat} • Pengampu: {pengampu})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -3186,44 +3562,87 @@ export default function ComprehensiveAdminDashboard() {
 
               {/* 4. Pilihan Rombel Kelas Target */}
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1.5">
-                  Pilih Kelas Peserta Ujian (Centang Kelas):
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10">
-                  {kelasList.map((k) => {
-                    const isChecked = jadwalForm.kelasIds.includes(k.id);
-                    return (
-                      <label
-                        key={k.id}
-                        className={`p-2 rounded-lg border flex items-center gap-2 cursor-pointer transition ${
-                          isChecked
-                            ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-800 dark:text-blue-200 font-bold'
-                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300'
-                        }`}
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold">
+                    Pilih Kelas Peserta Ujian (Centang Kelas):
+                  </label>
+                  {kelasList.length > 0 && (
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setJadwalForm({
+                            ...jadwalForm,
+                            kelasIds: kelasList.map((k) => k.id),
+                          })
+                        }
+                        className="text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer"
                       >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setJadwalForm({
-                                ...jadwalForm,
-                                kelasIds: [...jadwalForm.kelasIds, k.id],
-                              });
-                            } else {
-                              setJadwalForm({
-                                ...jadwalForm,
-                                kelasIds: jadwalForm.kelasIds.filter((id) => id !== k.id),
-                              });
-                            }
-                          }}
-                          className="rounded text-blue-600"
-                        />
-                        <span className="truncate">Kelas {k.nama}</span>
-                      </label>
-                    );
-                  })}
+                        Pilih Semua ({kelasList.length})
+                      </button>
+                      <span className="text-slate-400">•</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setJadwalForm({
+                            ...jadwalForm,
+                            kelasIds: [],
+                          })
+                        }
+                        className="text-rose-600 dark:text-rose-400 font-semibold hover:underline cursor-pointer"
+                      >
+                        Kosongkan
+                      </button>
+                    </div>
+                  )}
                 </div>
+                {kelasList.length === 0 ? (
+                  <div className="p-4 text-center rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-500 dark:text-slate-400">
+                    <p className="font-semibold">Belum ada data kelas.</p>
+                    <p className="text-[10px] mt-0.5">Silakan lakukan Sinkronisasi SIMASMUH terlebih dahulu.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10">
+                    {kelasList.map((k) => {
+                      const isChecked = jadwalForm.kelasIds.includes(k.id);
+                      return (
+                        <label
+                          key={k.id}
+                          className={`p-2 rounded-lg border flex items-center gap-2 cursor-pointer transition ${
+                            isChecked
+                              ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-800 dark:text-blue-200 font-bold'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setJadwalForm({
+                                  ...jadwalForm,
+                                  kelasIds: [...jadwalForm.kelasIds, k.id],
+                                });
+                              } else {
+                                setJadwalForm({
+                                  ...jadwalForm,
+                                  kelasIds: jadwalForm.kelasIds.filter((id) => id !== k.id),
+                                });
+                              }
+                            }}
+                            className="rounded text-blue-600"
+                          />
+                          <span className="truncate">Kelas {k.nama}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {jadwalForm.kelasIds.length > 0 && (
+                  <p className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold mt-1">
+                    ✓ {jadwalForm.kelasIds.length} rombel kelas dipilih
+                  </p>
+                )}
               </div>
 
               {/* 5. Fitur Keamanan & Anti-Cheat */}
@@ -3448,11 +3867,14 @@ export default function ComprehensiveAdminDashboard() {
                     onChange={(e) => setNewBankForm({ ...newBankForm, mataPelajaranId: e.target.value })}
                     className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
                   >
-                    {mapelList.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.nama} ({m.kode})
-                      </option>
-                    ))}
+                    {mapelList.map((m) => {
+                      const pengampuName = m.gurus?.[0]?.guru?.name;
+                      return (
+                        <option key={m.id} value={m.id}>
+                          {m.nama} ({m.kode}){pengampuName ? ` • Pengampu: ${pengampuName}` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -3580,11 +4002,14 @@ export default function ComprehensiveAdminDashboard() {
                     onChange={(e) => setEditBankModal({ ...editBankModal, mataPelajaranId: e.target.value })}
                     className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
                   >
-                    {mapelList.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.nama} ({m.kode})
-                      </option>
-                    ))}
+                    {mapelList.map((m) => {
+                      const pengampuName = m.gurus?.[0]?.guru?.name;
+                      return (
+                        <option key={m.id} value={m.id}>
+                          {m.nama} ({m.kode}){pengampuName ? ` • Pengampu: ${pengampuName}` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -3691,11 +4116,14 @@ export default function ComprehensiveAdminDashboard() {
                     className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-medium"
                   >
                     <option value="">-- Pilih Bank Soal --</option>
-                    {bankSoalList.map((bs) => (
-                      <option key={bs.id} value={bs.id}>
-                        {bs.nama} ({bs.kodeBank}) - {bs.mataPelajaran?.nama}
-                      </option>
-                    ))}
+                    {bankSoalList.map((bs) => {
+                      const pengampu = bs.mataPelajaran?.gurus?.[0]?.guru?.name || (bs.pembuat?.role === 'GURU' ? bs.pembuat?.name : 'Guru Pengampu');
+                      return (
+                        <option key={bs.id} value={bs.id}>
+                          [{bs.kodeBank}] {bs.nama} - {bs.mataPelajaran?.nama} (Pengampu: {pengampu})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -3855,41 +4283,84 @@ export default function ComprehensiveAdminDashboard() {
 
               {/* Pilihan Rombel Kelas Target */}
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1.5">
-                  Pilih Kelas Tujuan Ujian (Centang Kelas):
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10">
-                  {kelasList.map((k) => {
-                    const isChecked = distributeForm.kelasIds.includes(k.id)
-                    return (
-                      <label
-                        key={k.id}
-                        className={`p-2 rounded-lg border flex items-center gap-2 cursor-pointer transition ${
-                          isChecked
-                            ? 'bg-cyan-50 dark:bg-cyan-950/60 border-cyan-500 text-cyan-800 dark:text-cyan-200 font-bold'
-                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300'
-                        }`}
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold">
+                    Pilih Kelas Tujuan Ujian (Centang Kelas):
+                  </label>
+                  {kelasList.length > 0 && (
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDistributeForm({
+                            ...distributeForm,
+                            kelasIds: kelasList.map((k) => k.id),
+                          })
+                        }
+                        className="text-cyan-600 dark:text-cyan-400 font-bold hover:underline cursor-pointer"
                       >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setDistributeForm({ ...distributeForm, kelasIds: [...distributeForm.kelasIds, k.id] })
-                            } else {
-                              setDistributeForm({
-                                ...distributeForm,
-                                kelasIds: distributeForm.kelasIds.filter((id) => id !== k.id),
-                              })
-                            }
-                          }}
-                          className="rounded text-cyan-600"
-                        />
-                        <span className="truncate">{k.nama}</span>
-                      </label>
-                    )
-                  })}
+                        Pilih Semua ({kelasList.length})
+                      </button>
+                      <span className="text-slate-400">•</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDistributeForm({
+                            ...distributeForm,
+                            kelasIds: [],
+                          })
+                        }
+                        className="text-rose-600 dark:text-rose-400 font-semibold hover:underline cursor-pointer"
+                      >
+                        Kosongkan
+                      </button>
+                    </div>
+                  )}
                 </div>
+                {kelasList.length === 0 ? (
+                  <div className="p-4 text-center rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-500 dark:text-slate-400">
+                    <p className="font-semibold">Belum ada data kelas.</p>
+                    <p className="text-[10px] mt-0.5">Silakan lakukan Sinkronisasi SIMASMUH terlebih dahulu.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10">
+                    {kelasList.map((k) => {
+                      const isChecked = distributeForm.kelasIds.includes(k.id)
+                      return (
+                        <label
+                          key={k.id}
+                          className={`p-2 rounded-lg border flex items-center gap-2 cursor-pointer transition ${
+                            isChecked
+                              ? 'bg-cyan-50 dark:bg-cyan-950/60 border-cyan-500 text-cyan-800 dark:text-cyan-200 font-bold'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setDistributeForm({ ...distributeForm, kelasIds: [...distributeForm.kelasIds, k.id] })
+                              } else {
+                                setDistributeForm({
+                                 ...distributeForm,
+                                 kelasIds: distributeForm.kelasIds.filter((id) => id !== k.id),
+                                })
+                              }
+                            }}
+                            className="rounded text-cyan-600"
+                          />
+                          <span className="truncate">Kelas {k.nama}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+                {distributeForm.kelasIds.length > 0 && (
+                  <p className="text-[11px] text-cyan-600 dark:text-cyan-400 font-semibold mt-1">
+                    ✓ {distributeForm.kelasIds.length} rombel kelas dipilih
+                  </p>
+                )}
               </div>
 
               {/* Opsi Anti-Cheat & Acak */}

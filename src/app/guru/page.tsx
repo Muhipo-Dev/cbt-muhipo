@@ -2173,41 +2173,83 @@ export default function GuruDashboardPage() {
 
               {/* Pilihan Rombel Kelas Target */}
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1.5">
-                  Pilih Kelas Tujuan Ujian (Centang Kelas):
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10">
-                  {kelasList.map((k) => {
-                    const isChecked = distributeForm.kelasIds.includes(k.id);
-                    return (
-                      <label
-                        key={k.id}
-                        className={`p-2 rounded-lg border flex items-center gap-2 cursor-pointer transition ${
-                          isChecked
-                            ? 'bg-cyan-50 dark:bg-cyan-950/60 border-cyan-500 text-cyan-700 dark:text-cyan-200 font-bold'
-                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
-                        }`}
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold">
+                    Pilih Kelas Tujuan Ujian (Centang Kelas):
+                  </label>
+                  {kelasList.length > 0 && (
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDistributeForm({
+                            ...distributeForm,
+                            kelasIds: kelasList.map((k) => k.id),
+                          })
+                        }
+                        className="text-cyan-600 dark:text-cyan-400 font-bold hover:underline cursor-pointer"
                       >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setDistributeForm({ ...distributeForm, kelasIds: [...distributeForm.kelasIds, k.id] });
-                            } else {
-                              setDistributeForm({
-                                ...distributeForm,
-                                kelasIds: distributeForm.kelasIds.filter((id) => id !== k.id),
-                              });
-                            }
-                          }}
-                          className="rounded text-cyan-600"
-                        />
-                        <span className="truncate">{k.nama}</span>
-                      </label>
-                    );
-                  })}
+                        Pilih Semua ({kelasList.length})
+                      </button>
+                      <span className="text-slate-400">•</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDistributeForm({
+                            ...distributeForm,
+                            kelasIds: [],
+                          })
+                        }
+                        className="text-rose-600 dark:text-rose-400 font-semibold hover:underline cursor-pointer"
+                      >
+                        Kosongkan
+                      </button>
+                    </div>
+                  )}
                 </div>
+                {kelasList.length === 0 ? (
+                  <div className="p-4 text-center rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400">
+                    <p className="font-semibold">Belum ada data kelas.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10">
+                    {kelasList.map((k) => {
+                      const isChecked = distributeForm.kelasIds.includes(k.id);
+                      return (
+                        <label
+                          key={k.id}
+                          className={`p-2 rounded-lg border flex items-center gap-2 cursor-pointer transition ${
+                            isChecked
+                              ? 'bg-cyan-50 dark:bg-cyan-950/60 border-cyan-500 text-cyan-700 dark:text-cyan-200 font-bold'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setDistributeForm({ ...distributeForm, kelasIds: [...distributeForm.kelasIds, k.id] });
+                              } else {
+                                setDistributeForm({
+                                  ...distributeForm,
+                                  kelasIds: distributeForm.kelasIds.filter((id) => id !== k.id),
+                                });
+                              }
+                            }}
+                            className="rounded text-cyan-600"
+                          />
+                          <span className="truncate">Kelas {k.nama}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {distributeForm.kelasIds.length > 0 && (
+                  <p className="text-[11px] text-cyan-600 dark:text-cyan-400 font-semibold mt-1">
+                    ✓ {distributeForm.kelasIds.length} rombel kelas dipilih
+                  </p>
+                )}
               </div>
 
               {/* Opsi Anti-Cheat & Acak */}

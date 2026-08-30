@@ -258,6 +258,7 @@ model LogAktivitasUjian {
   
   aktivitas       String         // Contoh: "LOGIN", "MULAI_UJIAN", "TAB_SWITCH_ALERT", "FULLSCREEN_EXIT", "SELESAI_UJIAN"
   detail          String?        @db.Text
+  fotoBukti       String?        @db.Text // Base64 screenshot snapshot saat pelanggaran terjadi
   
   createdAt       DateTime       @default(now())
 }

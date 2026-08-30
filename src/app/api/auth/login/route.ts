@@ -192,12 +192,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Deteksi protokol apakah HTTPS (termasuk di balik reverse proxy / cloudflare tunnel)
+    const forwardedProto = request.headers.get('x-forwarded-proto');
+    const isHttps = forwardedProto ? forwardedProto === 'https' : request.url.startsWith('https://');
+
     // Set cookie HTTP-only
     response.cookies.set({
       name: 'cbt_token',
       value: token,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttps,
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 12, // 12 Jam

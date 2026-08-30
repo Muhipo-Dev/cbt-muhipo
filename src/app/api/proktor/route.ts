@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
           siswa: { include: { kelas: true } },
           _count: { select: { jawabanPeserta: true } },
           logs: {
-            take: 5,
+            take: 20,
             orderBy: { createdAt: 'desc' },
           },
         },
@@ -50,6 +50,9 @@ export async function GET(request: NextRequest) {
           ].includes(l.aktivitas)
         );
 
+        // Cari screenshot / foto bukti layar terakhir dari log pelanggaran
+        const latestScreenshotLog = p.logs.find((l: any) => l.fotoBukti);
+
         return {
           pesertaUjianId: p.id,
           siswaId: p.siswa.id,
@@ -63,7 +66,13 @@ export async function GET(request: NextRequest) {
           sisaDetik: p.sisaDetik,
           ipAddress: p.ipAddress || '-',
           logsTerakhir: p.logs,
+          violationLogs,
           jumlahPelanggaran: violationLogs.length,
+          hasViolations: violationLogs.length > 0,
+          latestScreenshot: (latestScreenshotLog as any)?.fotoBukti || null,
+          latestScreenshotTime: latestScreenshotLog?.createdAt || null,
+          latestViolationActivity: violationLogs[0]?.aktivitas || null,
+          latestViolationDetail: violationLogs[0]?.detail || null,
         };
       });
     }

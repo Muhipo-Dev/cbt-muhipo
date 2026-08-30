@@ -140,6 +140,23 @@ npx tsx clean-sync-simasmuh.ts
 
 ## 📝 Changelog & Riwayat Pembaruan
 
+### [v1.4.0] — 30 Agustus 2026
+- **Akses Lintas Jaringan, IP Lokal & Multi-Domain Tunnel Adaptif**:
+  - Perbaikan mekanisme cookie autentikasi (`cbt_token`) dinamis: Cookie kini mendeteksi protokol (`https://` vs `http://` / `x-forwarded-proto`), sehingga tidak mental kembali ke halaman login saat diakses dari HP / Laptop melalui IP Lokal LAN (`http://192.168.x.x:3010`) maupun domain Tunnel eksternal (`https://cbt-muhipo.razagopo.my.id`).
+  - Penambahan wildcard origin dan header CORS adaptif pada `next.config.ts`.
+- **Live Monitoring Ruang Ujian Real-Time (Auto-Refresh 2 Detik)**:
+  - Implementasi live auto-refresh polling setiap 2 detik pada panel **Live Monitoring Ujian** dan **Dashboard Utama**.
+  - Dilengkapi indikator denyut status live (`LIVE 2s Auto-Refresh`) dan switch jeda/lanjutkan pemantauan.
+- **Audit Trail & Log Pelanggaran Siswa Bertema Warna & Ikon Tailwind**:
+  - Penyempurnaan tampilan log aktivitas dengan kartu warna terpadu:
+    - 🔴 **Pelanggaran Keamanan** (`TAB_SWITCH_ALERT`, `WINDOW_BLUR`, `FULLSCREEN_EXIT`): Merah Rose dengan tombol inspeksi snapshot layar.
+    - 🟢 **Login Siswa**: Hijau Emerald.
+    - 🔵 **Mulai Ujian**: Biru Sky/Blue.
+    - 🟣 **Selesai Ujian**: Ungu Purple.
+    - 🟡 **Reset Login**: Kuning Amber.
+- **Universal Snapshot Fallback Engine Lintas Platform (Android, iOS & Desktop)**:
+  - Dukungan tangkapan bukti visual otomatis saat siswa melakukan pelanggaran. Jika browser mobile Android / iOS membatasi video stream screen sharing, sistem seketika merender bukti visual canvas beresolusi tinggi lengkap dengan watermark waktu, nama, NIS, dan jenis pelanggaran ke panel admin.
+
 ### [v1.3.0] — 30 Agustus 2026
 - **Peningkatan Logika Audio & Anti-Cheat Selesai Ujian**:
   - Penambahan notifikasi suara Web Speech API ramah **`"Ujian selesai, terimakasih telah mengerjakan"`** saat siswa mengumpulkan ujian.
