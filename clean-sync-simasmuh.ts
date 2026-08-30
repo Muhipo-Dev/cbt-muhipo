@@ -81,9 +81,27 @@ async function syncAndPrune() {
     console.log(`  ✓ Tersinkron: ${validClassNames.length} Kelas | Dihapus (Dummy): ${deletedClasses.count} Kelas`);
 
     // 3. SINKRONISASI ADMIN & GURU DENGAN ROLE SIMASMUH
-    console.log('\n[2/4] Sinkronisasi Akun Admin & Guru dari SIMASMUH...');
     const usersRes = await client.query(`
-      SELECT u.id, u.username, u.password as password_hash, u.name, u.role, tp.nip
+      SELECT 
+        u.id, 
+        u.username, 
+        u.password as password_hash, 
+        u.name, 
+        u.role, 
+        tp.id as teacher_profile_id,
+        tp.nip,
+        COALESCE((
+          SELECT count(*) 
+          FROM "TeacherSubject" ts 
+          JOIN "Subject" sub ON ts."subjectId" = sub.id 
+          WHERE ts."teacherId" = tp.id
+        ), 0)::int as mapel_count,
+        COALESCE((
+          SELECT count(*) 
+          FROM "Schedule" sc 
+          JOIN "Subject" sub ON sc."subjectId" = sub.id 
+          WHERE sc."teacherId" = tp.id
+        ), 0)::int as schedule_count
       FROM "User" u
       LEFT JOIN "TeacherProfile" tp ON tp."userId" = u.id
       WHERE u.role != 'SISWA'
@@ -91,6 +109,8 @@ async function syncAndPrune() {
 
     const validAdminUsernames: string[] = ['admin', 'proktor1']; // Akun sistem bawaan
     const validGuruUsernames: string[] = [];
+    let adminCount = 0;
+    let guruCount = 0;
 
     for (const u of usersRes.rows) {
       const roleStr = String(u.role || '').toUpperCase();
@@ -133,42 +153,46 @@ async function syncAndPrune() {
           },
         });
       }
+
+      if (targetRole === 'ADMIN') adminCount++;
+      
+      const isGuruPengampu = targetRole === 'GURU' || (u.teacher_profile_id && (u.mapel_count > 0 || u.schedule_count > 0));
+      if (isGuruPengampu) {
+        guruCount++;
+      }
+    }
+
+    // Sinkronisasi Relasi Guru & Mata Pelajaran dari TeacherSubject SIMASMUH
+    const teacherSubjectRes = await client.query(`
+      SELECT sub.code as subject_code, u.username as teacher_username
+      FROM "TeacherSubject" ts
+      JOIN "Subject" sub ON ts."subjectId" = sub.id
+      JOIN "TeacherProfile" tp ON ts."teacherId" = tp.id
+      JOIN "User" u ON tp."userId" = u.id
+    `);
+
+    for (const ts of teacherSubjectRes.rows) {
+      const mapel = await prisma.mataPelajaran.findUnique({ where: { kode: ts.subject_code } });
+      const teacher = await prisma.user.findUnique({ where: { username: ts.teacher_username } });
+      if (mapel && teacher) {
+        await prisma.guruMataPelajaran.upsert({
+          where: {
+            guruId_mataPelajaranId: {
+              guruId: teacher.id,
+              mataPelajaranId: mapel.id,
+            },
+          },
+          update: {},
+          create: {
+            guruId: teacher.id,
+            mataPelajaranId: mapel.id,
+          },
+        });
+      }
     }
 
     console.log(`  ✓ Tersinkron Admin CBT: ${validAdminUsernames.length} Akun (Superadmin, Admin IT, Admin TU, Pegawai, Kepsek)`);
-    console.log(`  ✓ Tersinkron Guru CBT: ${validGuruUsernames.length} Guru`);
-
-    // Ambil salah satu guru resmi untuk reassign BankSoal jika ada
-    const firstOfficialGuru = await prisma.user.findFirst({
-      where: { role: 'GURU', username: { in: validGuruUsernames } },
-    });
-
-    if (firstOfficialGuru) {
-      await prisma.bankSoal.updateMany({
-        where: {
-          pembuatId: {
-            notIn: (
-              await prisma.user.findMany({
-                where: { role: 'GURU', username: { in: validGuruUsernames } },
-                select: { id: true },
-              })
-            ).map((g) => g.id),
-          },
-        },
-        data: { pembuatId: firstOfficialGuru.id },
-      });
-    }
-
-    // Bersihkan user guru yang tidak valid
-    const deletedGurus = await prisma.user.deleteMany({
-      where: {
-        role: 'GURU',
-        username: { notIn: validGuruUsernames },
-      },
-    });
-    if (deletedGurus.count > 0) {
-      console.log(`  ✓ Guru Dummy Dihapus: ${deletedGurus.count}`);
-    }
+    console.log(`  ✓ Tersinkron Guru CBT: ${validGuruUsernames.length} Guru Resmi (dan Pegawai Pengampu Mapel)`);
 
     // 4. SINKRONISASI & PEMBERSIHAN DATA SISWA (SEPENUHNYA BERBASIS NIS)
     console.log('\n[3/4] Sinkronisasi Siswa SIMASMUH (Username & Password = NIS)...');
