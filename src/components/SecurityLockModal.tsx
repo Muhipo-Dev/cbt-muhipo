@@ -53,58 +53,62 @@ export function SecurityLockModal({
   const isMobileOrTablet = deviceInfo?.isMobile || deviceInfo?.isTablet;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 text-center text-slate-800 animate-in fade-in zoom-in duration-300">
-        <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto shadow-2xs">
-          <ShieldAlert className="w-9 h-9 animate-pulse" />
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-8 shadow-2xl space-y-4 sm:space-y-5 text-center text-slate-800 animate-in fade-in zoom-in duration-300 my-auto">
+        <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto shadow-2xs">
+          <ShieldAlert className="w-7 h-7 sm:w-9 sm:h-9 animate-pulse" />
         </div>
 
         <div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 inline-flex items-center gap-1.5">
-            {isMobileOrTablet ? <Smartphone className="w-3.5 h-3.5" /> : <Laptop className="w-3.5 h-3.5" />}
+          <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 sm:px-3 py-1 rounded-full border border-emerald-200 inline-flex items-center gap-1.5">
+            {isMobileOrTablet ? <Smartphone className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <Laptop className="w-3.5 h-3.5" />}
             <span>Protokol Keamanan ({deviceInfo?.deviceName || 'Perangkat Terdeteksi'})</span>
           </span>
-          <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-2.5">
+          <h2 className="text-lg sm:text-2xl font-black text-slate-900 mt-2">
             Aktivasi Kunci & Pengawasan Ujian
           </h2>
-          <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-            Sistem pengawasan aktif untuk <b>Chrome, Mozilla Firefox, Brave, Safari (iOS/iPadOS/macOS)</b>.
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-1 leading-relaxed">
+            Sistem pengawasan aktif untuk <b>Google Chrome, Safari (iOS), Firefox, & Brave</b>.
           </p>
         </div>
 
         {/* Security Checklist Requirements */}
-        <div className="space-y-2.5 text-left text-xs bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200">
+        <div className="space-y-2 text-left text-xs bg-slate-50 p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-200">
           {/* Entire Screen Sharing Info (Diutamakan di Laptop/Desktop/MacBook) */}
           {deviceInfo?.hasDisplayMedia && !isMobileOrTablet && (
-            <div className="flex items-start gap-2.5">
+            <div className="flex items-start gap-2 sm:gap-2.5">
               <Tv className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
               <div>
-                <b className="text-slate-900">1. Perekaman Seluruh Layar (Entire Screen):</b>
+                <b className="text-slate-900 text-xs">1. Perekaman Seluruh Layar (Entire Screen):</b>
                 <span className="text-slate-500 block text-[11px] mt-0.5">
-                  Setelah menekan tombol di bawah, pilih tab/opsi <b>"Entire Screen / Seluruh Layar"</b> pada pop-up izin browser untuk pengawasan ujian.
+                  Setelah menekan tombol di bawah, pilih opsi <b>"Entire Screen / Seluruh Layar"</b> pada pop-up izin browser untuk pengawasan ujian langsung.
                 </span>
               </div>
             </div>
           )}
 
-          <div className="flex items-start gap-2.5">
+          <div className="flex items-start gap-2 sm:gap-2.5">
             <Maximize2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
             <div>
-              <b className="text-slate-900">2. Kunci Layar Penuh (Fullscreen Lockdown):</b>
+              <b className="text-slate-900 text-xs">
+                {isMobileOrTablet ? 'Mode Ujian Mobile (Android & iOS):' : 'Kunci Layar Penuh (Fullscreen Lockdown):'}
+              </b>
               <span className="text-slate-500 block text-[11px] mt-0.5">
                 {isApple && isMobileOrTablet
-                  ? 'Pada iPhone/iPad Safari: Tetap fokus pada layar Safari, dilarang swipe app atau berpindah tab.'
+                  ? 'Pada iPhone/iPad Safari: Tetap fokus pada layar ujian Safari, dilarang swipe gesture berpindah tab atau aplikasi.'
+                  : isMobileOrTablet
+                  ? 'Pada Android (Chrome/Brave): Harap tetap berada di halaman ujian, dilarang split-screen atau pop-up app.'
                   : 'Layar akan otomatis terkunci penuh. Dilarang berpindah tab browser, membuka aplikasi lain, atau split-screen.'}
               </span>
             </div>
           </div>
 
-          <div className="flex items-start gap-2.5">
+          <div className="flex items-start gap-2 sm:gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <b className="text-slate-900">Peringatan Suara & Alarm Anti-Curang:</b>
+              <b className="text-slate-900 text-xs">Peringatan Suara & Alarm Anti-Curang:</b>
               <span className="text-slate-500 block text-[11px] mt-0.5">
-                Jika terdeteksi ganti tab atau membuka aplikasi lain, alarm suara peringatan akan otomatis berbunyi dan dicatat ke pengawas.
+                Jika terdeteksi keluar dari layar ujian, sistem membunyikan alarm peringatan dan mencatat aktivitas ke dashboard proktor secara real-time.
               </span>
             </div>
           </div>
@@ -120,7 +124,7 @@ export function SecurityLockModal({
           type="button"
           disabled={activating}
           onClick={handleStart}
-          className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 disabled:opacity-50 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/20 transition cursor-pointer flex items-center justify-center gap-2"
+          className="w-full py-3 sm:py-3.5 px-5 sm:px-6 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 disabled:opacity-50 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-emerald-600/20 transition cursor-pointer flex items-center justify-center gap-2 active:scale-98"
         >
           {activating ? (
             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

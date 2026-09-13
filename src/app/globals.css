@@ -39,3 +39,44 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.4);
 }
+
+/* KaTeX & Math Formula High-Contrast Styling untuk Dark & Light Mode */
+.katex {
+  color: inherit;
+  font-size: 1.08em;
+  text-rendering: auto;
+}
+
+.dark .katex {
+  color: #f1f5f9 !important;
+}
+
+.dark .katex-display {
+  color: #f8fafc !important;
+}
+
+.dark .katex .mord,
+.dark .katex .mrel,
+.dark .katex .mbin,
+.dark .katex .mop,
+.dark .katex .mopen,
+.dark .katex .mclose,
+.dark .katex .mpunct,
+.dark .katex .minner {
+  color: #f1f5f9 !important;
+}
+
+/* Rich MathRenderer Content Styling */
+.dark .prose {
+  color: #f1f5f9;
+}
+
+.dark .prose strong,
+.dark .prose b {
+  color: #ffffff;
+}
+
+.dark .prose em,
+.dark .prose i {
+  color: #e2e8f0;
+}

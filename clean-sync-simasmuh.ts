@@ -87,9 +87,9 @@ async function syncAndPrune() {
         u.username, 
         u.password as password_hash, 
         u.name, 
-        u.role, 
+        u.role,
+        COALESCE(NULLIF(TRIM(tp.nip), ''), NULLIF(TRIM(u."nipNbm"), '')) as nip,
         tp.id as teacher_profile_id,
-        tp.nip,
         COALESCE((
           SELECT count(*) 
           FROM "TeacherSubject" ts 

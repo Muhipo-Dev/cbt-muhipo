@@ -9,14 +9,20 @@ function saveBase64ToFile(dataUrl: string | undefined | null, filePrefix: string
   if (!dataUrl.startsWith('data:image/')) return dataUrl; // Already a static URL or path
 
   try {
-    const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
-    if (!matches || matches.length < 3) return dataUrl;
+    const commaIndex = dataUrl.indexOf(',');
+    if (commaIndex === -1) return dataUrl;
 
-    let ext = matches[1].toLowerCase();
-    if (ext === 'jpeg') ext = 'jpg';
-    if (ext === 'svg+xml') ext = 'svg';
+    const meta = dataUrl.substring(0, commaIndex);
+    const base64Data = dataUrl.substring(commaIndex + 1);
 
-    const base64Data = matches[2];
+    const mimeMatch = meta.match(/data:image\/([a-zA-Z0-9+.-]+);base64/i);
+    let ext = 'webp';
+    if (mimeMatch && mimeMatch[1]) {
+      ext = mimeMatch[1].toLowerCase();
+      if (ext === 'jpeg') ext = 'jpg';
+      else if (ext === 'svg+xml') ext = 'svg';
+    }
+
     const buffer = Buffer.from(base64Data, 'base64');
 
     const uploadsDir = path.join(process.cwd(), 'public', 'uploads');

@@ -18,6 +18,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
+  HelpCircle,
+  Compass,
+  Check,
+  AlertTriangle,
 } from 'lucide-react';
 
 export default function ProktorPage() {
@@ -26,6 +30,7 @@ export default function ProktorPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [data, setData] = useState<any>(null);
   const [selectedUjianId, setSelectedUjianId] = useState('');
+  const [selectedKelasFilter, setSelectedKelasFilter] = useState('ALL');
   const [searchFilter, setSearchFilter] = useState('');
 
   // Modal actions
@@ -35,6 +40,7 @@ export default function ProktorPage() {
   const [extraMinutes, setExtraMinutes] = useState(15);
   const [actionLoading, setActionLoading] = useState(false);
   const [securityModalData, setSecurityModalData] = useState<any>(null);
+  const [showProktorGuideModal, setShowProktorGuideModal] = useState(false);
 
   // In-App Notification / Dialog Modal State
   const [notifModal, setNotifModal] = useState<{
@@ -359,21 +365,34 @@ export default function ProktorPage() {
     }
   };
 
+  // List Kelas Unik di Jadwal Ujian
+  const kelasOptions = React.useMemo(() => {
+    if (!data?.pesertaList) return [];
+    const unique = new Set<string>();
+    data.pesertaList.forEach((p: any) => {
+      if (p.kelas && p.kelas !== '-') unique.add(p.kelas);
+    });
+    return Array.from(unique).sort();
+  }, [data]);
+
   const filteredPeserta = (data?.pesertaList || []).filter((p: any) => {
+    const matchKelas = selectedKelasFilter === 'ALL' || p.kelas === selectedKelasFilter;
     const q = searchFilter.toLowerCase();
-    return (
+    const matchSearch =
+      !q ||
       p.name?.toLowerCase().includes(q) ||
       p.nis?.toLowerCase().includes(q) ||
       p.username?.toLowerCase().includes(q) ||
-      (p.nomorPeserta && p.nomorPeserta.toLowerCase().includes(q))
-    );
+      (p.nomorPeserta && p.nomorPeserta.toLowerCase().includes(q)) ||
+      (p.kelas && p.kelas.toLowerCase().includes(q));
+    return matchKelas && matchSearch;
   });
 
   // Hitung summary
-  const totalPeserta = data?.pesertaList?.length || 0;
-  const countSelesai = data?.pesertaList?.filter((p: any) => p.status === 'SELESAI').length || 0;
-  const countMengerjakan = data?.pesertaList?.filter((p: any) => p.status === 'SEDANG_MENGERJAKAN').length || 0;
-  const countBelum = data?.pesertaList?.filter((p: any) => p.status === 'BELUM_MULAI').length || 0;
+  const totalPeserta = filteredPeserta.length;
+  const countSelesai = filteredPeserta.filter((p: any) => p.status === 'SELESAI').length;
+  const countMengerjakan = filteredPeserta.filter((p: any) => p.status === 'SEDANG_MENGERJAKAN').length;
+  const countBelum = filteredPeserta.filter((p: any) => p.status === 'BELUM_MULAI').length;
 
   if (loading) {
     return (
@@ -395,6 +414,14 @@ export default function ProktorPage() {
         />
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowProktorGuideModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 border border-cyan-500/30 text-xs font-bold text-white transition cursor-pointer shadow-md shadow-cyan-600/20"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Panduan & SOP Proktor</span>
+          </button>
+
           <button
             onClick={() => fetchMonitorData(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 transition cursor-pointer"
@@ -432,10 +459,27 @@ export default function ProktorPage() {
                 </p>
               </div>
 
-              {/* Selector */}
+              {/* Selector Kelas Rombel */}
+              <select
+                value={selectedKelasFilter}
+                onChange={(e) => setSelectedKelasFilter(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              >
+                <option value="ALL">Semua Kelas ({data?.pesertaList?.length || 0})</option>
+                {kelasOptions.map((k) => (
+                  <option key={k} value={k}>
+                    Kelas {k} ({data?.pesertaList?.filter((p: any) => p.kelas === k).length || 0})
+                  </option>
+                ))}
+              </select>
+
+              {/* Selector Ujian */}
               <select
                 value={selectedUjianId}
-                onChange={(e) => setSelectedUjianId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedUjianId(e.target.value);
+                  setSelectedKelasFilter('ALL');
+                }}
                 className="px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
               >
                 {data?.ujianList?.map((u: any) => (
@@ -505,10 +549,15 @@ export default function ProktorPage() {
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-cyan-400" />
-                Live Status & Aktivitas Siswa di Ruangan
+                <span>Live Status & Aktivitas Siswa di Ruangan</span>
+                {selectedKelasFilter !== 'ALL' && (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                    Kelas: {selectedKelasFilter}
+                  </span>
+                )}
               </h3>
               <p className="text-xs text-slate-400">
-                Pantau proses pengerjaan, tangani kendala perangkat, kunci pelanggaran, atau selesaikan ujian.
+                Menampilkan <b>{filteredPeserta.length}</b> siswa {selectedKelasFilter !== 'ALL' ? `di kelas ${selectedKelasFilter}` : 'di semua kelas'}
               </p>
             </div>
 
@@ -535,6 +584,38 @@ export default function ProktorPage() {
               </div>
             </div>
           </div>
+
+          {/* Filter Cepat Barisan Kelas */}
+          {kelasOptions.length > 1 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+              <span className="text-slate-400 font-semibold shrink-0">Filter Kelas:</span>
+              <button
+                type="button"
+                onClick={() => setSelectedKelasFilter('ALL')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition shrink-0 cursor-pointer ${
+                  selectedKelasFilter === 'ALL'
+                    ? 'bg-cyan-600 text-white shadow-sm'
+                    : 'bg-slate-950/80 border border-slate-800 text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                Semua Kelas ({data?.pesertaList?.length || 0})
+              </button>
+              {kelasOptions.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setSelectedKelasFilter(k)}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition shrink-0 cursor-pointer ${
+                    selectedKelasFilter === k
+                      ? 'bg-cyan-600 text-white shadow-sm'
+                      : 'bg-slate-950/80 border border-slate-800 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  Kelas {k} ({data?.pesertaList?.filter((p: any) => p.kelas === k).length || 0})
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Table */}
           <div className="overflow-x-auto">
@@ -847,6 +928,126 @@ export default function ProktorPage() {
       <footer className="w-full py-4 text-center text-xs text-slate-500 border-t border-slate-900">
         © 2026 Proktor Station — CBT SMA Muhammadiyah 1 Ponorogo
       </footer>
+
+      {/* MODAL PANDUAN & SOP OPERASIONAL PROKTOR CBT */}
+      {showProktorGuideModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-4xl max-h-[90vh] bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-slate-100">
+            {/* Header */}
+            <div className="p-6 bg-gradient-to-r from-cyan-950 via-slate-900 to-indigo-950 border-b border-slate-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold">
+                  <Compass className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight text-white">Panduan & SOP Pengawas Ruang / Proktor CBT</h3>
+                  <p className="text-xs text-slate-400">Petunjuk Pemantauan Live, Penanganan Kendala Peserta, & Token Ujian</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowProktorGuideModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 font-bold transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs sm:text-sm text-slate-300">
+              {/* Seksi 1: Alur Kerja Proktor */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-extrabold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
+                  <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                  <span>1. Alur & SOP Pengawasan Ujian di Ruangan</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+                    <span className="text-xs font-bold text-cyan-400 px-2 py-0.5 rounded bg-cyan-500/10 inline-block">1. Sebelum Ujian</span>
+                    <p className="text-xs leading-relaxed text-slate-400">
+                      • Pastikan siswa telah duduk di ruangan sesuai nomor peserta.<br/>
+                      • Rilis / Umumkan <b>Token Ujian</b> (Klik tombol Ganti Token bila perlu diacak ulang).
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+                    <span className="text-xs font-bold text-amber-400 px-2 py-0.5 rounded bg-amber-500/10 inline-block">2. Saat Ujian</span>
+                    <p className="text-xs leading-relaxed text-slate-400">
+                      • Pantau tabel live (Siswa kuning = sedang mengerjakan, hijau = selesai).<br/>
+                      • Cek notifikasi & log warna merah bila siswa kedapatan membuka aplikasi lain atau keluar fullscreen.
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+                    <span className="text-xs font-bold text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 inline-block">3. Selesai Ujian</span>
+                    <p className="text-xs leading-relaxed text-slate-400">
+                      • Pastikan seluruh status siswa telah berubah menjadi <b>SELESAI (Hijau)</b> sebelum siswa meninggalkan ruang ujian.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seksi 2: Tindakan Cepat Mengatasi Kendala Siswa */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-extrabold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
+                  <RotateCcw className="w-4 h-4 text-amber-400" />
+                  <span>2. Panduan Tombol Aksi Cepat & Troubleshooting</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
+                    <b className="text-cyan-400 font-bold flex items-center gap-1.5">
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Tombol "Reset Login"</span>
+                    </b>
+                    <p className="text-slate-400 leading-relaxed">
+                      Gunakan jika siswa berganti perangkat smartphone/laptop, browser tertutup tanpa sengaja, atau baterai habis. <i>Semua jawaban yang sudah dipilih sebelumnya tetap aman di server.</i>
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
+                    <b className="text-amber-400 font-bold flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Tombol "+ Waktu"</span>
+                    </b>
+                    <p className="text-slate-400 leading-relaxed">
+                      Gunakan untuk memberikan dispensasi waktu tambahan (+15 / +30 menit) kepada siswa yang mengalami keterlambatan teknis di ruang ujian.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
+                    <b className="text-rose-400 font-bold flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>Tombol "Kunci Ujian" / "Selesaikan Paksa"</span>
+                    </b>
+                    <p className="text-slate-400 leading-relaxed">
+                      Gunakan jika siswa terbukti melakukan pelanggaran berat berulang kali atau menolak mengikuti tata tertib ruang ujian.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
+                    <b className="text-purple-400 font-bold flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Tombol "Reset Login Massal"</span>
+                    </b>
+                    <p className="text-slate-400 leading-relaxed">
+                      Gunakan jika terjadi pemadaman listrik sesaat atau restart router WiFi ruangan secara bersamaan agar seluruh siswa dapat langsung login ulang.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowProktorGuideModal(false)}
+                className="px-6 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-md transition cursor-pointer"
+              >
+                Saya Mengerti, Tutup Panduan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Global In-App Notification & Confirmation Dialog Modal */}
       <NotificationModal

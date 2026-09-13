@@ -44,11 +44,12 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'Data peserta tidak ditemukan' }, { status: 404 });
     }
 
-    // Auto-Grading Soal Objektif (PG, PG Kompleks, Benar/Salah, Isian Singkat)
+    // Auto-Grading Soal Objektif (PG, PG Kompleks, Benar/Salah, Menjodohkan) & Isian
     const soalList = pesertaUjian.ujian.bankSoal.soalList;
     const jawabanMap = new Map(pesertaUjian.jawabanPeserta.map((j) => [j.soalId, j]));
 
     let totalNilaiPG = 0;
+    let totalNilaiEsai = 0;
     let maxNilaiObjektif = 0;
     let adaSoalEsai = false;
 
@@ -98,17 +99,66 @@ export async function POST(
           });
         }
       } else if (soal.tipeSoal === TipeSoal.ISIAN) {
-        maxNilaiObjektif += bobot;
         const kunci = (soal.kunciJawabanTeks || '').trim().toLowerCase();
         const jawab = (jawaban?.jawabanDipilih || '').trim().toLowerCase();
         const isBenar = kunci.length > 0 && kunci === jawab;
         const skor = isBenar ? bobot : 0;
-        if (isBenar) totalNilaiPG += bobot;
+        if (isBenar) totalNilaiEsai += bobot;
 
         if (jawaban) {
           await prisma.jawabanPeserta.update({
             where: { id: jawaban.id },
             data: { isBenar, skor },
+          });
+        }
+      } else if (soal.tipeSoal === TipeSoal.MENJODOHKAN) {
+        maxNilaiObjektif += bobot;
+        let pairsCorrect = 0;
+        let totalPairs = 0;
+
+        try {
+          // Format matchingData kunci: [{ left: "...", right: "..." }]
+          const keyPairs: { left: string; right: string }[] = JSON.parse(soal.matchingData || '[]');
+          totalPairs = keyPairs.length;
+
+          // Jawaban siswa: { [left]: right } atau [{ left: "...", right: "..." }]
+          let userAnswers: Record<string, string> = {};
+          if (jawaban?.jawabanDipilih) {
+            const parsed = JSON.parse(jawaban.jawabanDipilih);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((p: any) => {
+                if (p.left && p.right) userAnswers[p.left.trim().toLowerCase()] = p.right.trim().toLowerCase();
+              });
+            } else if (typeof parsed === 'object' && parsed !== null) {
+              Object.entries(parsed).forEach(([k, v]) => {
+                userAnswers[k.trim().toLowerCase()] = String(v).trim().toLowerCase();
+              });
+            }
+          }
+
+          if (totalPairs > 0) {
+            for (const kp of keyPairs) {
+              const expectedLeft = kp.left.trim().toLowerCase();
+              const expectedRight = kp.right.trim().toLowerCase();
+              if (userAnswers[expectedLeft] && userAnswers[expectedLeft] === expectedRight) {
+                pairsCorrect++;
+              }
+            }
+          }
+        } catch (e) {
+          pairsCorrect = 0;
+        }
+
+        const proportion = totalPairs > 0 ? pairsCorrect / totalPairs : 0;
+        const skor = Number((proportion * bobot).toFixed(2));
+        const isAllBenar = totalPairs > 0 && pairsCorrect === totalPairs;
+
+        totalNilaiPG += skor;
+
+        if (jawaban) {
+          await prisma.jawabanPeserta.update({
+            where: { id: jawaban.id },
+            data: { isBenar: isAllBenar, skor },
           });
         }
       } else if (soal.tipeSoal === TipeSoal.ESAI) {
@@ -122,8 +172,11 @@ export async function POST(
 
     // Pastikan nilai tidak melebihi nilai maksimal dan di-round 2 digit desimal
     const rawTotalPG = Number(totalNilaiPG.toFixed(2));
+    const rawTotalEsai = Number(totalNilaiEsai.toFixed(2));
     const finalNilaiPG = Math.min(maxNilai, Math.max(minNilai, rawTotalPG));
-    const nilaiTotal = finalNilaiPG;
+    const finalNilaiEsai = Math.min(maxNilai, Math.max(minNilai, rawTotalEsai));
+    const rawTotal = Number((finalNilaiPG + finalNilaiEsai).toFixed(2));
+    const nilaiTotal = Math.min(maxNilai, Math.max(minNilai, rawTotal));
 
     // Update status peserta Ujian
     await prisma.pesertaUjian.update({
@@ -133,8 +186,9 @@ export async function POST(
         waktuSelesai: new Date(),
         sisaDetik: 0,
         nilaiPG: finalNilaiPG,
+        nilaiEsai: finalNilaiEsai,
         nilaiTotal,
-        isKoreksiSelesai: !adaSoalEsai, // Jika tidak ada essay, koreksi otomatis selesai 100%
+        isKoreksiSelesai: !adaSoalEsai, // Jika tidak ada soal essay manual, koreksi selesai
       },
     });
 
@@ -144,7 +198,7 @@ export async function POST(
         userId: user.userId,
         pesertaUjianId: pesertaUjian.id,
         aktivitas: 'SELESAI_UJIAN',
-        detail: `Siswa menyelesaikan ujian. Nilai PG/Objektif: ${totalNilaiPG}.`,
+        detail: `Siswa menyelesaikan ujian. Nilai PG: ${finalNilaiPG}, Nilai Isian/Esai: ${finalNilaiEsai}, Total: ${nilaiTotal}.`,
       },
     });
 
@@ -152,7 +206,9 @@ export async function POST(
       success: true,
       message: 'Ujian berhasil diselesaikan dan disimpan.',
       data: {
-        nilaiPG: totalNilaiPG,
+        nilaiPG: finalNilaiPG,
+        nilaiEsai: finalNilaiEsai,
+        nilaiTotal,
         tampilkanHasil: pesertaUjian.ujian.tampilkanHasil,
       },
     });

@@ -3,14 +3,21 @@ import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { TipeSoal } from '@prisma/client';
 
-// Helper untuk kalkulasi otomatis poin butir soal agar total poin sama dengan nilaiMaksimal
+// Engine Perhitungan Bobot CBT MUHIPO
+
+// Helper untuk kalkulasi otomatis poin butir soal secara seimbang dan proporsional:
+// ATURAN: Isian Singkat > Pilihan Ganda, dan Esai > Isian Singkat.
+// Rasio bobot standar (Weighted Ratio):
+// - PG / PG_KOMPLEKS / BENAR_SALAH = 1.0x (Dasar)
+// - ISIAN (Isian Singkat)           = 2.0x (Lebih tinggi dari PG)
+// - ESAI (Uraian / Esai)            = 4.0x (Lebih tinggi dari Isian Singkat)
 async function recalculateBankSoalPoints(bankSoalId: string) {
   try {
     const bank: any = await prisma.bankSoal.findUnique({
       where: { id: bankSoalId },
       include: {
         soalList: {
-          select: { id: true, nomorUrut: true },
+          select: { id: true, nomorUrut: true, tipeSoal: true },
           orderBy: { nomorUrut: 'asc' },
         },
       },
@@ -18,17 +25,74 @@ async function recalculateBankSoalPoints(bankSoalId: string) {
 
     if (!bank || !bank.soalList || bank.soalList.length === 0) return;
 
-    const totalSoal = bank.soalList.length;
+    const soalList = bank.soalList;
     const maxScore = Number(bank?.nilaiMaksimal) || 100.0;
-    const pointPerSoal = Number((maxScore / totalSoal).toFixed(2));
 
-    // Update semua bobot / poin soal
-    await prisma.soal.updateMany({
-      where: { bankSoalId },
-      data: {
-        bobot: pointPerSoal,
-      },
-    });
+    // Tentukan pengali rasio bobot per tipe soal:
+    // ATURAN:
+    // - Esai = 4.0x (Paling tinggi)
+    // - Isian Singkat = 2.0x (Lebih tinggi dari PG)
+    // - PG Kompleks (Multiple Choice) = 1.5x (Di atas PG tunggal)
+    // - Pencocokan (MENJODOHKAN) = 1.0x (Bobot sama dengan Pilihan Ganda)
+    // - Pilihan Ganda (PG Tunggal / Benar-Salah) = 1.0x (Dasar)
+    const getRatio = (tipe: string): number => {
+      switch (tipe) {
+        case 'ESAI':
+          return 4.0; // Esai tertinggi
+        case 'ISIAN':
+          return 2.0; // Isian lebih tinggi dari PG
+        case 'PG_KOMPLEKS':
+          return 1.5; // Multiple Choice di atas PG tunggal
+        case 'MENJODOHKAN':
+          return 1.0; // Bobot soal pencocokan sama dengan pilihan ganda
+        case 'PG':
+        case 'BENAR_SALAH':
+        default:
+          return 1.0; // Pilihan ganda dasar
+      }
+    };
+
+    // Hitung total unit bobot
+    let totalWeightUnits = 0;
+    for (const s of soalList) {
+      totalWeightUnits += getRatio(s.tipeSoal);
+    }
+
+    if (totalWeightUnits === 0) totalWeightUnits = soalList.length;
+
+    // Nilai per unit bobot
+    const unitValue = maxScore / totalWeightUnits;
+
+    // Kalkulasi bobot individual dan selaraskan pembulatan agar total poin pas = maxScore
+    let accumulatedScore = 0;
+    const updates: { id: string; bobot: number }[] = [];
+
+    for (let i = 0; i < soalList.length; i++) {
+      const s = soalList[i];
+      const isLast = i === soalList.length - 1;
+
+      if (!isLast) {
+        const rawPoint = getRatio(s.tipeSoal) * unitValue;
+        const roundedPoint = Math.max(0.1, Number(rawPoint.toFixed(2)));
+        accumulatedScore += roundedPoint;
+        updates.push({ id: s.id, bobot: roundedPoint });
+      } else {
+        // Soal terakhir menyerap selisih desimal agar total persis sama dengan nilaiMaksimal
+        const remainingPoint = Number((maxScore - accumulatedScore).toFixed(2));
+        const finalPoint = remainingPoint > 0 ? remainingPoint : Number((getRatio(s.tipeSoal) * unitValue).toFixed(2));
+        updates.push({ id: s.id, bobot: finalPoint });
+      }
+    }
+
+    // Update setiap butir soal secara paralel
+    await Promise.all(
+      updates.map((item) =>
+        prisma.soal.update({
+          where: { id: item.id },
+          data: { bobot: item.bobot },
+        })
+      )
+    );
   } catch (err) {
     console.error('Recalculate bank soal points error:', err);
   }
@@ -47,13 +111,10 @@ export async function GET(request: NextRequest) {
 
     if (bankSoalId) {
       // Filter kepemilikan jika role adalah GURU:
-      // Guru berhak mengakses jika ia adalah pembuat langsung ATAU guru pengampu mapel tersebut
+      // ATURAN: Guru HANYA berhak mengakses jika ia adalah pembuat/pengimpor langsung bank soal tersebut
       const whereClause: any = { id: bankSoalId };
       if (user.role === 'GURU') {
-        whereClause.OR = [
-          { pembuatId: user.userId },
-          { mataPelajaran: { gurus: { some: { guruId: user.userId } } } },
-        ];
+        whereClause.pembuatId = user.userId;
       }
 
       const bankSoal = await prisma.bankSoal.findFirst({
@@ -89,14 +150,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Filter list bank soal:
-    // Guru melihat bank buatannya ATAU bank soal pada mapel yang diampunya, Admin melihat semua
+    // ATURAN: Guru HANYA melihat bank buatannya/diimpornya sendiri (pembuatId: user.userId). Admin melihat semua.
     const bankWhereClause =
       user.role === 'GURU'
         ? {
-            OR: [
-              { pembuatId: user.userId },
-              { mataPelajaran: { gurus: { some: { guruId: user.userId } } } },
-            ],
+            pembuatId: user.userId,
           }
         : {};
 
@@ -121,7 +179,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Filter mata pelajaran:
-    // Jika Guru, utamakan mata pelajaran yang diampu oleh guru tersebut di database
+    // ATURAN: Guru HANYA melihat mata pelajaran yang diampunya
     let mapelList: any[] = [];
     if (user.role === 'GURU') {
       const guruMapelAssigned = await prisma.guruMataPelajaran.findMany({
@@ -129,12 +187,7 @@ export async function GET(request: NextRequest) {
         include: { mataPelajaran: true },
       });
 
-      if (guruMapelAssigned.length > 0) {
-        mapelList = guruMapelAssigned.map((gm) => gm.mataPelajaran);
-      } else {
-        // Fallback jika belum di-assign spesifik oleh admin
-        mapelList = await prisma.mataPelajaran.findMany({ orderBy: { nama: 'asc' } });
-      }
+      mapelList = guruMapelAssigned.map((gm) => gm.mataPelajaran);
     } else {
       mapelList = await prisma.mataPelajaran.findMany({
         include: {
@@ -148,7 +201,26 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const kelasList = await prisma.kelas.findMany({ orderBy: { nama: 'asc' } });
+    // Filter rombel kelas:
+    // ATURAN: Guru HANYA melihat kelas yang diampunya (dari tabel GuruKelas yang tersinkron dari SIMASMUH)
+    let kelasList: any[] = [];
+    if (user.role === 'GURU') {
+      const guruKelasAssigned = await prisma.guruKelas.findMany({
+        where: { guruId: user.userId },
+        include: { kelas: true },
+      });
+
+      if (guruKelasAssigned.length > 0) {
+        kelasList = guruKelasAssigned
+          .map((gk: { kelas: any }) => gk.kelas)
+          .sort((a: { nama: string }, b: { nama: string }) => a.nama.localeCompare(b.nama));
+      } else {
+        // Fallback jika belum ada jadwal spesifik, tampilkan kelas dari database agar tidak blank
+        kelasList = await prisma.kelas.findMany({ orderBy: { nama: 'asc' } });
+      }
+    } else {
+      kelasList = await prisma.kelas.findMany({ orderBy: { nama: 'asc' } });
+    }
 
     return NextResponse.json({
       success: true,
@@ -363,6 +435,12 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        const rawMatching = item.matchingData
+          ? typeof item.matchingData === 'string'
+            ? item.matchingData
+            : JSON.stringify(item.matchingData)
+          : null;
+
         await prisma.soal.create({
           data: {
             bankSoalId,
@@ -371,6 +449,7 @@ export async function POST(request: NextRequest) {
             pertanyaan,
             bobot,
             kunciJawabanTeks: kunciTeks,
+            matchingData: rawMatching,
             opsiJawaban: {
               create: opsiList,
             },
@@ -413,6 +492,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, message: 'Bank Soal tidak ditemukan' }, { status: 404 });
       }
 
+      // ATURAN: Guru HANYA dapat menjadwalkan bank soal yang dia buat / impor sendiri
+      if (user.role === 'GURU' && bankSoal.pembuatId !== user.userId) {
+        return NextResponse.json({ success: false, message: 'Akses ditolak. Anda hanya dapat menjadwalkan bank soal milik Anda sendiri.' }, { status: 403 });
+      }
+
       const generatedKode = kodeUjian || `UJIAN-${bankSoal.kodeBank}-${Date.now().toString().slice(-4)}`;
       const examTitle = judul || `Ujian: ${bankSoal.nama}`;
       const duration = Number(durasiMenit) || bankSoal.durasiMenit || 90;
@@ -430,6 +514,9 @@ export async function POST(request: NextRequest) {
           acakSoal: acakSoal !== false,
           acakOpsi: acakOpsi !== false,
           status: 'DIJADWALKAN',
+          ujianKelas: {
+            create: kelasIds.map((kId: string) => ({ kelasId: kId })),
+          },
         },
       });
 
@@ -462,7 +549,13 @@ export async function POST(request: NextRequest) {
 
     // 2. Tambah / Simpan Soal
     if (action === 'SAVE_SOAL') {
-      const { bankSoalId, soalId, nomorUrut, tipeSoal, pertanyaan, bobot, opsiJawaban, kunciJawabanTeks } = body;
+      const { bankSoalId, soalId, nomorUrut, tipeSoal, pertanyaan, bobot, opsiJawaban, kunciJawabanTeks, matchingData } = body;
+
+      const rawMatchingString = matchingData
+        ? typeof matchingData === 'string'
+          ? matchingData
+          : JSON.stringify(matchingData)
+        : null;
 
       if (soalId) {
         // Update Soal
@@ -474,6 +567,7 @@ export async function POST(request: NextRequest) {
             pertanyaan,
             bobot: bobot !== undefined && Number(bobot) > 0 ? Number(bobot) : 1.0,
             kunciJawabanTeks,
+            matchingData: rawMatchingString,
           },
         });
 
@@ -510,6 +604,7 @@ export async function POST(request: NextRequest) {
             pertanyaan,
             bobot: bobot !== undefined && Number(bobot) > 0 ? Number(bobot) : 1.0,
             kunciJawabanTeks,
+            matchingData: rawMatchingString,
             opsiJawaban: isChoiceType
               ? {
                   create: (opsiJawaban || []).map((o: any) => ({
@@ -548,6 +643,34 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json({ success: true, message: 'Soal berhasil dihapus' });
+    }
+
+    // 4. Arsipkan Jadwal Ujian
+    if (action === 'ARCHIVE_UJIAN') {
+      const { ujianId, status = 'NONAKTIF' } = body;
+      const updated = await prisma.ujian.update({
+        where: { id: ujianId },
+        data: { status: status as any },
+      });
+      return NextResponse.json({
+        success: true,
+        message: 'Jadwal ujian berhasil diarsipkan! Histori nilai siswa dan pengerjaan tetap tersimpan aman.',
+        data: updated,
+      });
+    }
+
+    // 5. Pulihkan / Aktifkan Kembali Jadwal Ujian dari Arsip
+    if (action === 'UNARCHIVE_UJIAN') {
+      const { ujianId } = body;
+      const updated = await prisma.ujian.update({
+        where: { id: ujianId },
+        data: { status: 'DIJADWALKAN' },
+      });
+      return NextResponse.json({
+        success: true,
+        message: 'Jadwal ujian berhasil diaktifkan kembali dari arsip.',
+        data: updated,
+      });
     }
 
     return NextResponse.json({ success: false, message: 'Aksi tidak dikenali' }, { status: 400 });

@@ -57,8 +57,14 @@ import {
   Ban,
   Video,
   Music,
+  HelpCircle,
+  Compass,
+  Archive,
+  ArchiveRestore,
+  FolderArchive,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { DAFTAR_JURUSAN_MUHIPO, DAFTAR_TIPE_UJIAN } from '@/lib/constants'
 import { NotificationModal, NotificationType } from '@/components/NotificationModal'
 
@@ -85,9 +91,11 @@ export default function ComprehensiveAdminDashboard() {
   // 2. Proktor Live State & Live Polling (2 Detik Auto-Refresh)
   const [proktorData, setProktorData] = useState<any>(null)
   const [selectedProktorUjianId, setSelectedProktorUjianId] = useState('')
+  const [selectedProktorKelas, setSelectedProktorKelas] = useState('ALL')
   const [extraTimeModal, setExtraTimeModal] = useState<any>(null)
   const [extraMinutes, setExtraMinutes] = useState(15)
   const [violationScreenModal, setViolationScreenModal] = useState<any>(null)
+  const [liveScreenFeed, setLiveScreenFeed] = useState<any>(null)
   const [isLiveActive, setIsLiveActive] = useState(true)
   const [lastLiveUpdated, setLastLiveUpdated] = useState<Date>(new Date())
 
@@ -122,14 +130,19 @@ export default function ComprehensiveAdminDashboard() {
   })
 
   // 4. Koreksi & Rekap State
+  const [koreksiUjianList, setKoreksiUjianList] = useState<any[]>([])
   const [koreksiData, setKoreksiData] = useState<any>(null)
   const [selectedKoreksiUjianId, setSelectedKoreksiUjianId] = useState('')
+  const [selectedKoreksiKelas, setSelectedKoreksiKelas] = useState('ALL')
+  const [koreksiSubTab, setKoreksiSubTab] = useState<'rekap' | 'koreksi_esai'>('rekap')
 
   // 5. Data Siswa, Guru, Kelas, Jadwal
   const [siswaData, setSiswaData] = useState<any>(null)
   const [guruData, setGuruData] = useState<any>(null)
   const [kelasList, setKelasList] = useState<any[]>([])
   const [jadwalData, setJadwalData] = useState<any>(null)
+  const [jadwalFilterTab, setJadwalFilterTab] = useState<'ALL' | 'AKTIF' | 'ARSIP'>('AKTIF')
+  const [jadwalSearch, setJadwalSearch] = useState('')
 
   // 6. Sinkronisasi SIMASMUH State
   const [syncData, setSyncData] = useState<any>(null)
@@ -159,7 +172,10 @@ export default function ComprehensiveAdminDashboard() {
   const [serverTimeData, setServerTimeData] = useState<any>(null)
   const [savingSettings, setSavingSettings] = useState(false)
 
-  // In-App Notification / Dialog Modal State
+  // Modal Panduan Operasional Admin & Proktor
+  const [showAdminGuideModal, setShowAdminGuideModal] = useState(false)
+
+  // 8. In-App Notification / Dialog Modal State
   const [notifModal, setNotifModal] = useState<{
     isOpen: boolean
     type: NotificationType
@@ -334,6 +350,30 @@ export default function ComprehensiveAdminDashboard() {
     return () => clearInterval(interval)
   }, [activeTab, selectedProktorUjianId, isLiveActive])
 
+  // Realtime Polling Layar Siswa (Active Screen Stream) jika modal inspeksi layar dibuka di Admin
+  useEffect(() => {
+    if (!violationScreenModal?.pesertaUjianId) {
+      setLiveScreenFeed(null)
+      return
+    }
+
+    const fetchLiveFeed = async () => {
+      try {
+        const res = await fetch(`/api/proktor/screen?pesertaUjianId=${violationScreenModal.pesertaUjianId}`)
+        const json = await res.json()
+        if (json.success && json.data) {
+          setLiveScreenFeed(json.data)
+        }
+      } catch (err) {
+        // silent
+      }
+    }
+
+    fetchLiveFeed()
+    const liveInterval = setInterval(fetchLiveFeed, 1500)
+    return () => clearInterval(liveInterval)
+  }, [violationScreenModal?.pesertaUjianId])
+
   const fetchSessionAndAdminData = async () => {
     try {
       setLoading(true)
@@ -396,7 +436,13 @@ export default function ComprehensiveAdminDashboard() {
           : '/api/guru/koreksi'
         const res = await fetch(url)
         const json = await res.json()
-        if (json.success) setKoreksiData(json.data)
+        if (json.success) {
+          setKoreksiUjianList(json.data.ujianList || [])
+          setKoreksiData(json.data)
+          if (!selectedKoreksiUjianId && json.data.activeUjian?.id) {
+            setSelectedKoreksiUjianId(json.data.activeUjian.id)
+          }
+        }
       } else if (activeTab === 'jadwal') {
         const res = await fetch('/api/admin?tab=jadwal')
         const json = await res.json()
@@ -422,15 +468,17 @@ export default function ComprehensiveAdminDashboard() {
         if (kJson.success) setKelasList(kJson.data)
         if (mJson.success) setMapelList(mJson.data)
       } else if (activeTab === 'cetak') {
-        const [sRes, jRes, kRes] = await Promise.all([
+        const [sRes, jRes, kRes, nRes] = await Promise.all([
           fetch('/api/admin?tab=siswa'),
           fetch('/api/admin?tab=jadwal'),
           fetch('/api/admin?tab=kelas'),
+          fetch('/api/guru/koreksi'),
         ]);
-        const [sJson, jJson, kJson] = await Promise.all([
+        const [sJson, jJson, kJson, nJson] = await Promise.all([
           sRes.json(),
           jRes.json(),
           kRes.json(),
+          nRes.json(),
         ]);
         if (sJson.success) setSiswaData(sJson.data)
         if (jJson.success) {
@@ -440,6 +488,9 @@ export default function ComprehensiveAdminDashboard() {
           }
         }
         if (kJson.success) setKelasList(kJson.data)
+        if (nJson.success && nJson.data) {
+          setKoreksiData(nJson.data)
+        }
       }
     } catch (e) {
       console.error(e)
@@ -479,11 +530,12 @@ export default function ComprehensiveAdminDashboard() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
+      showNotification('Memproses', 'Mengompres dan menyimpan logo...', 'info')
       const compressed = await compressImageFile(file, { maxWidth: 600, maxHeight: 600, quality: 0.85 })
       const newSettings = { ...settingsForm, logoUrl: compressed.dataUrl }
       setSettingsForm(newSettings)
 
-      // Auto-save langsung ke server & database agar tidak hilang jika refresh
+      // Auto-save langsung ke server & database agar tersimpan permanen
       const res = await fetch('/api/pengaturan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -492,6 +544,9 @@ export default function ComprehensiveAdminDashboard() {
       const json = await res.json()
       if (json.success && json.data?.logoUrl) {
         setSettingsForm((prev) => ({ ...prev, logoUrl: json.data.logoUrl }))
+        showNotification('Sukses', 'Logo berhasil disimpan permanen ke basis data!', 'success')
+      } else {
+        showNotification('Peringatan', json.message || 'Gagal menyimpan logo ke database.', 'warning')
       }
     } catch (err) {
       console.error('Gagal mengompres logo:', err)
@@ -503,11 +558,12 @@ export default function ComprehensiveAdminDashboard() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
+      showNotification('Memproses', 'Mengompres dan menyimpan wallpaper background...', 'info')
       const compressed = await compressImageFile(file, { maxWidth: 1920, maxHeight: 1080, quality: 0.85 })
       const newSettings = { ...settingsForm, backgroundUrl: compressed.dataUrl }
       setSettingsForm(newSettings)
 
-      // Auto-save langsung ke server & database agar tidak hilang jika refresh
+      // Auto-save langsung ke server & database agar tersimpan permanen
       const res = await fetch('/api/pengaturan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -516,6 +572,9 @@ export default function ComprehensiveAdminDashboard() {
       const json = await res.json()
       if (json.success && json.data?.backgroundUrl) {
         setSettingsForm((prev) => ({ ...prev, backgroundUrl: json.data.backgroundUrl }))
+        showNotification('Sukses', 'Wallpaper Background Master berhasil disimpan permanen ke basis data!', 'success')
+      } else {
+        showNotification('Peringatan', json.message || 'Gagal menyimpan wallpaper ke database.', 'warning')
       }
     } catch (err) {
       console.error('Gagal mengompres background master:', err)
@@ -743,10 +802,64 @@ export default function ComprehensiveAdminDashboard() {
     }
   }
 
+  const handleArchiveJadwal = async (ujianId: string, judul: string) => {
+    showConfirm(
+      'Arsipkan Jadwal Ujian',
+      `Arsipkan ujian "${judul}"? Ujian akan dipindahkan ke tab Arsip Ujian dan disembunyikan dari jadwal aktif siswa. Seluruh nilai peserta, riwayat butir jawaban, dan rekaman audit log pelanggaran tetap tersimpan aman dan utuh.`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'ARCHIVE_UJIAN', ujianId }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Jadwal Diarsipkan', json.message, 'success')
+            fetchSessionAndAdminData()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal mengarsipkan jadwal ujian', 'error')
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal mengarsipkan jadwal ujian', 'error')
+        }
+      },
+      'warning',
+      'Ya, Arsipkan Ujian'
+    )
+  }
+
+  const handleUnarchiveJadwal = async (ujianId: string, judul: string) => {
+    showConfirm(
+      'Aktifkan Kembali Jadwal Ujian',
+      `Aktifkan kembali jadwal ujian "${judul}" dari arsip ke daftar ujian aktif?`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'UNARCHIVE_UJIAN', ujianId }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Jadwal Diaktifkan', json.message, 'success')
+            fetchSessionAndAdminData()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal mengaktifkan jadwal ujian', 'error')
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal mengaktifkan jadwal ujian', 'error')
+        }
+      },
+      'info',
+      'Ya, Aktifkan Kembali'
+    )
+  }
+
   const handleDeleteJadwal = async (ujianId: string, judul: string) => {
     showConfirm(
-      'Hapus Jadwal Ujian',
-      `Hapus Jadwal Ujian "${judul}" beserta seluruh data pengerjaan peserta terkait?`,
+      'Hapus Permanen Jadwal Ujian',
+      `PERINGATAN: Menghapus permanen Jadwal Ujian "${judul}" akan membersihkan seluruh data pengerjaan peserta dan rekaman log. Jika Anda hanya ingin menyudahi ujian dan menyimpan histori nilainya, gunakan tombol ARSIPKAN. Yakin ingin hapus permanen?`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -756,7 +869,7 @@ export default function ComprehensiveAdminDashboard() {
           })
           const json = await res.json()
           if (json.success) {
-            showNotification('Jadwal Dihapus', 'Jadwal Ujian berhasil dihapus!', 'success')
+            showNotification('Jadwal Dihapus', 'Jadwal Ujian berhasil dihapus permanen!', 'success')
             fetchSessionAndAdminData()
           } else {
             showNotification('Gagal', json.message || 'Gagal menghapus jadwal ujian', 'error')
@@ -766,7 +879,7 @@ export default function ComprehensiveAdminDashboard() {
         }
       },
       'error',
-      'Ya, Hapus Jadwal'
+      'Ya, Hapus Permanen'
     )
   }
 
@@ -828,126 +941,330 @@ export default function ComprehensiveAdminDashboard() {
   }
 
   // Unduh Template Format Import Excel Soal
-  const handleDownloadTemplateSoal = () => {
-    const sampleRows = [
-      {
-        'Nomor': 1,
-        'Tipe Soal': 'PG',
-        'Pertanyaan / Soal': 'Berapakah hasil dari 25 + 15? (Mendukung KaTeX: $\\sqrt{16} = 4$)',
-        'Bobot': 2,
-        'Pilihan A': '30',
-        'Pilihan B': '35',
-        'Pilihan C': '40',
-        'Pilihan D': '45',
-        'Pilihan E': '50',
-        'Kunci Jawaban (A/B/C/D/E)': 'C',
-        'Kunci Teks/Rubrik Essay': '',
-      },
-      {
-        'Nomor': 2,
-        'Tipe Soal': 'PG_KOMPLEKS',
-        'Pertanyaan / Soal': 'Manakah di antara bilangan berikut yang merupakan bilangan prima? (Pilih semua yang benar)',
-        'Bobot': 3,
-        'Pilihan A': '2',
-        'Pilihan B': '3',
-        'Pilihan C': '4',
-        'Pilihan D': '5',
-        'Pilihan E': '9',
-        'Kunci Jawaban (A/B/C/D/E)': 'A,B,D',
-        'Kunci Teks/Rubrik Essay': '',
-      },
-      {
-        'Nomor': 3,
-        'Tipe Soal': 'BENAR_SALAH',
-        'Pertanyaan / Soal': 'Matahari terbit dari sebelah timur dan terbenam di sebelah barat.',
-        'Bobot': 2,
-        'Pilihan A': 'Benar',
-        'Pilihan B': 'Salah',
-        'Pilihan C': '',
-        'Pilihan D': '',
-        'Pilihan E': '',
-        'Kunci Jawaban (A/B/C/D/E)': 'A',
-        'Kunci Teks/Rubrik Essay': '',
-      },
-      {
-        'Nomor': 4,
-        'Tipe Soal': 'ISIAN',
-        'Pertanyaan / Soal': 'Ibu kota negara Indonesia yang baru di Kalimantan Timur adalah...',
-        'Bobot': 3,
-        'Pilihan A': '',
-        'Pilihan B': '',
-        'Pilihan C': '',
-        'Pilihan D': '',
-        'Pilihan E': '',
-        'Kunci Jawaban (A/B/C/D/E)': '',
-        'Kunci Teks/Rubrik Essay': 'Nusantara',
-      },
-      {
-        'Nomor': 5,
-        'Tipe Soal': 'ESAI',
-        'Pertanyaan / Soal': 'Jelaskan tujuan didirikannya organisasi Muhammadiyah oleh K.H. Ahmad Dahlan pada tahun 1912!',
-        'Bobot': 10,
-        'Pilihan A': '',
-        'Pilihan B': '',
-        'Pilihan C': '',
-        'Pilihan D': '',
-        'Pilihan E': '',
-        'Kunci Jawaban (A/B/C/D/E)': '',
-        'Kunci Teks/Rubrik Essay': 'Memurnikan ajaran Islam sesuai Al-Quran & Sunnah serta memajukan pendidikan dan kesejahteraan umat.',
-      },
-    ]
+  const handleDownloadTemplateSoal = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const ws = workbook.addWorksheet('Format_Import_Soal', {
+        views: [{ showGridLines: true }]
+      });
 
-    const worksheet = XLSX.utils.json_to_sheet(sampleRows)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Format_Import_Soal')
-    XLSX.writeFile(workbook, 'Template_Import_Soal_CBT_MUHIPO.xlsx')
-  }
+      // Definisikan Lebar Kolom
+      ws.columns = [
+        { key: 'col1', width: 8 },   // No.
+        { key: 'col2', width: 24 },  // Keterangan
+        { key: 'col3', width: 10 },  // Tipe
+        { key: 'col4', width: 68 },  // Isi Soal / Jawaban
+        { key: 'col5', width: 22 },  // Status Jawaban
+      ];
+
+      // Border Thin Helper
+      const thinBorder: Partial<ExcelJS.Borders> = {
+        top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+      };
+
+      const tableBorder: Partial<ExcelJS.Borders> = {
+        top: { style: 'thin', color: { argb: 'FF374151' } },
+        left: { style: 'thin', color: { argb: 'FF374151' } },
+        bottom: { style: 'thin', color: { argb: 'FF374151' } },
+        right: { style: 'thin', color: { argb: 'FF374151' } }
+      };
+
+      // Baris 1: Judul Utama
+      ws.mergeCells('A1:E1');
+      const titleCell = ws.getCell('A1');
+      titleCell.value = 'TEMPLATE IMPORT SOAL CBT';
+      titleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      titleCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4338CA' } // Indigo / Biru Ungu
+      };
+      ws.getRow(1).height = 28;
+
+      // Baris 2: Sub-judul / Keterangan Tipe
+      ws.mergeCells('A2:E2');
+      const subCell = ws.getCell('A2');
+      subCell.value = 'Tipe: Q (Pilihan Ganda), Q2 (Esai), Q3 (Jawaban Singkat), Q4 (PG Kompleks), Q5 (Benar/Salah), Q6 (Menjodohkan)';
+      subCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF1E293B' } };
+      subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      subCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E7FF' } // Indigo muda
+      };
+      ws.getRow(2).height = 22;
+
+      // Baris 3 & 4 kosong
+      ws.getRow(3).height = 14;
+      ws.getRow(4).height = 14;
+
+      // Baris 5: Table Header
+      const headerRow = ws.getRow(5);
+      headerRow.values = ['No.', 'Keterangan', 'Tipe', 'Isi Soal / Jawaban', 'Status Jawaban'];
+      headerRow.height = 26;
+      headerRow.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.alignment = { horizontal: colNumber === 4 ? 'left' : 'center', vertical: 'middle' };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF1E293B' } // Dark Slate Navy
+        };
+        cell.border = tableBorder;
+      });
+
+      // Data Baris Soal & Jawaban beserta Styling Warna
+      const rowsData = [
+        // No 1: PG
+        { row: [1, 'Soal Pilihan Ganda', 'Q', 'Ibu kota negara Indonesia adalah...', ''], bg: 'FFE0E7FF', isBold: true },
+        { row: ['', 'Jawaban Benar', 'A', 'Jakarta', 1], bg: 'FFDCFCE7', isBold: false }, // Hijau muda (benar)
+        { row: ['', '', 'A', 'Surabaya', 0], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', '', 'A', 'Bandung', 0], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', '', 'A', 'Yogyakarta', 0], bg: 'FFFFFFFF', isBold: false },
+        // No 2: Esai
+        { row: [2, 'Soal Esai', 'Q2', 'Jelaskan pengertian Pancasila sebagai dasar negara Indonesia!', ''], bg: 'FFE0F2FE', isBold: true }, // Sky Blue
+        // No 3: Jawaban Singkat
+        { row: [3, 'Jawaban Singkat', 'Q3', 'Sebutkan 3 pulau terbesar di Indonesia!', ''], bg: 'FFFEF3C7', isBold: true }, // Amber / Kuning
+        // No 4: PG Kompleks
+        { row: [4, 'Soal PG Kompleks', 'Q4', 'Manakah yang termasuk organ pernapasan pada manusia?', ''], bg: 'FFFCE7F3', isBold: true }, // Pink
+        { row: ['', 'Jawaban Benar', 'A', 'Hidung', 1], bg: 'FFDCFCE7', isBold: false },
+        { row: ['', '', 'A', 'Lambung', 0], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', 'Jawaban Benar', 'A', 'Paru-paru', 1], bg: 'FFDCFCE7', isBold: false },
+        // No 5: Benar/Salah
+        { row: [5, 'Soal Benar/Salah', 'Q5', 'Fotosintesis terjadi di dalam kloroplas tumbuhan', ''], bg: 'FFFFE4E6', isBold: true }, // Rose muda
+        { row: ['', 'Pernyataan BENAR', 'A', 'Benar', 1], bg: 'FFDCFCE7', isBold: false },
+        // No 6: Menjodohkan
+        { row: [6, 'Soal Menjodohkan', 'Q6', 'Pasangkan negara dengan ibu kotanya!', ''], bg: 'FFF3E8FF', isBold: true }, // Purple muda
+        { row: ['', 'Premis -> Respons', 'A', 'Indonesia', 'Jakarta'], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', 'Premis -> Respons', 'A', 'Malaysia', 'Kuala Lumpur'], bg: 'FFFFFFFF', isBold: false },
+      ];
+
+      rowsData.forEach((item, idx) => {
+        const rowIdx = 6 + idx;
+        const row = ws.getRow(rowIdx);
+        row.values = item.row;
+        row.height = 20;
+
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          cell.font = { name: 'Calibri', size: 10, bold: item.isBold };
+          cell.alignment = {
+            horizontal: colNumber === 4 ? 'left' : (colNumber === 2 ? (item.isBold ? 'left' : 'left') : 'center'),
+            vertical: 'middle'
+          };
+          if (item.bg !== 'FFFFFFFF') {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: item.bg }
+            };
+          }
+          cell.border = thinBorder;
+        });
+      });
+
+      // Generate Buffer and Download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'Template_Import_Soal_CBT_MUHIPO.xlsx';
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download template error:', err);
+      showNotification('Error', 'Gagal membuat file template Excel', 'error');
+    }
+  };
 
   // Upload & Parse File Excel Soal
   const handleFileUploadSoal = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    const reader = new FileReader()
+    const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result
-        const wb = XLSX.read(bstr, { type: 'binary' })
-        const wsName = wb.SheetNames[0]
-        const ws = wb.Sheets[wsName]
-        const data = XLSX.utils.sheet_to_json(ws)
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsName = wb.SheetNames[0];
+        const ws = wb.Sheets[wsName];
 
-        if (!data || data.length === 0) {
-          showNotification('Peringatan Format', 'File Excel kosong atau format tidak sesuai.', 'warning')
-          return
+        // Deteksi baris header secara dinamis (mencari baris yang mengandung 'Tipe' / 'Isi Soal')
+        let headerRowIndex = 0;
+        const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:E50');
+        for (let r = range.s.r; r <= Math.min(range.e.r, 20); r++) {
+          let foundHeader = false;
+          for (let c = range.s.c; c <= range.e.c; c++) {
+            const cell = ws[XLSX.utils.encode_cell({ r, c })];
+            const val = cell ? String(cell.v).toLowerCase().trim() : '';
+            if (val === 'tipe' || val === 'isi soal / jawaban' || val === 'keterangan' || val === 'pertanyaan') {
+              foundHeader = true;
+              break;
+            }
+          }
+          if (foundHeader) {
+            headerRowIndex = r;
+            break;
+          }
         }
 
-        const parsedItems = data.map((row: any) => {
-          const tipe = (row['Tipe Soal'] || 'PG').toUpperCase()
-          const pertanyaan = row['Pertanyaan / Soal'] || row['Pertanyaan'] || row['Soal'] || ''
-          const bobot = Number(row['Bobot']) || 2.0
-          const kunci = String(row['Kunci Jawaban (A/B/C/D/E)'] || row['Kunci'] || '').trim().toUpperCase()
-          const kunciTeks = row['Kunci Teks/Rubrik Essay'] || row['Kunci Essay'] || ''
+        const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: '' });
 
-          const opsi = ['A', 'B', 'C', 'D', 'E']
-            .map((lbl) => {
-              const konten = row[`Pilihan ${lbl}`] || row[`Opsi ${lbl}`] || row[lbl] || ''
-              return {
-                label: lbl,
-                konten: String(konten || '').trim(),
-                isBenar: kunci.includes(lbl),
+        if (!rawRows || rawRows.length === 0) {
+          showNotification('Peringatan Format', 'File Excel kosong atau format tidak sesuai.', 'warning');
+          return;
+        }
+
+        const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+        const parsedItems: any[] = [];
+        let currentSoal: any = null;
+
+        // Cek apakah file menggunakan format vertikal baru (ada kolom Tipe / Type / TIPE)
+        const hasTipeColumn = rawRows.some(
+          (r) => r['Tipe'] !== undefined || r['TIPE'] !== undefined || r['tipe'] !== undefined || r['Type'] !== undefined
+        );
+
+        if (hasTipeColumn) {
+          // ================= FORMAT BARU VERTIKAL (Q, Q2..Q6, A logika 1/0) =================
+          for (const row of rawRows) {
+            const rawTipe = String(row['Tipe'] || row['TIPE'] || row['tipe'] || row['Type'] || '').trim().toUpperCase();
+            const rawContent = String(row['Isi Soal / Jawaban'] || row['Isi Soal'] || row['Pertanyaan / Soal'] || row['Soal'] || row['Konten'] || '').trim();
+            const rawStatus = row['Status Jawaban'] !== undefined ? row['Status Jawaban'] : row['Status'];
+            const rawBobot = row['Kesulitan'] !== undefined && row['Kesulitan'] !== '' ? Number(row['Kesulitan']) : (row['Bobot'] ? Number(row['Bobot']) : null);
+
+            // Deteksi baris Soal (Q, Q1, Q2, Q3, Q4, Q5, Q6)
+            if (rawTipe.startsWith('Q')) {
+              // Simpan soal sebelumnya jika ada
+              if (currentSoal && currentSoal.pertanyaan) {
+                parsedItems.push(currentSoal);
               }
-            })
-            .filter((o) => o.konten !== '')
 
-          return {
-            tipeSoal: tipe,
-            pertanyaan,
-            bobot,
-            opsi,
-            kunciJawabanTeks: kunciTeks || undefined,
+              let dbTipe = 'PG';
+              if (rawTipe === 'Q' || rawTipe === 'Q1') dbTipe = 'PG';
+              else if (rawTipe === 'Q2') dbTipe = 'ESAI';
+              else if (rawTipe === 'Q3') dbTipe = 'ISIAN';
+              else if (rawTipe === 'Q4') dbTipe = 'PG_KOMPLEKS';
+              else if (rawTipe === 'Q5') dbTipe = 'BENAR_SALAH';
+              else if (rawTipe === 'Q6') dbTipe = 'MENJODOHKAN';
+
+              currentSoal = {
+                tipeSoal: dbTipe,
+                pertanyaan: rawContent,
+                bobot: rawBobot && rawBobot > 0 ? rawBobot : (dbTipe === 'ESAI' ? 4.0 : dbTipe === 'ISIAN' ? 2.0 : 1.0),
+                opsi: [],
+                rawMatchingPairs: [],
+                matchingData: undefined,
+                kunciJawabanTeks: undefined,
+              }
+
+              // Jika ada kunci/rubrik langsung di baris Q
+              if (rawStatus && String(rawStatus).trim()) {
+                currentSoal.kunciJawabanTeks = String(rawStatus).trim()
+              }
+            } else if (rawTipe === 'A' && currentSoal) {
+              // Deteksi baris Jawaban / Opsi untuk soal yang sedang aktif
+              if (currentSoal.tipeSoal === 'MENJODOHKAN') {
+                const left = rawContent
+                const right = String(rawStatus || '').trim()
+                if (left && right) {
+                  currentSoal.rawMatchingPairs.push({ left, right })
+                }
+              } else if (currentSoal.tipeSoal === 'BENAR_SALAH') {
+                const isBenar = String(rawStatus).trim() === '1' || String(rawStatus).toLowerCase() === 'benar' || String(rawStatus).toLowerCase() === 'true'
+                const label = letters[currentSoal.opsi.length] || `Opsi ${currentSoal.opsi.length + 1}`
+                if (rawContent) {
+                  currentSoal.opsi.push({
+                    label,
+                    konten: rawContent,
+                    isBenar,
+                  })
+                }
+              } else if (currentSoal.tipeSoal === 'ISIAN' || currentSoal.tipeSoal === 'ESAI') {
+                if (rawContent && !currentSoal.kunciJawabanTeks) {
+                  currentSoal.kunciJawabanTeks = rawContent
+                }
+              } else {
+                // PG & PG_KOMPLEKS
+                const isBenar = String(rawStatus).trim() === '1' || String(rawStatus).toLowerCase() === 'true'
+                const label = letters[currentSoal.opsi.length] || `Opsi ${currentSoal.opsi.length + 1}`
+                if (rawContent) {
+                  currentSoal.opsi.push({
+                    label,
+                    konten: rawContent,
+                    isBenar,
+                  })
+                }
+              }
+            }
           }
-        }).filter((item) => item.pertanyaan.trim() !== '')
+
+          // Masukkan soal terakhir
+          if (currentSoal && currentSoal.pertanyaan) {
+            parsedItems.push(currentSoal)
+          }
+
+          // Post-processing untuk setiap soal
+          for (const item of parsedItems) {
+            if (item.tipeSoal === 'MENJODOHKAN' && item.rawMatchingPairs && item.rawMatchingPairs.length > 0) {
+              item.matchingData = JSON.stringify(item.rawMatchingPairs)
+            }
+            delete item.rawMatchingPairs
+          }
+        } else {
+          // ================= KOMPATIBILITAS FORMAT HORIZONTAL LAMA =================
+          for (const row of rawRows) {
+            const tipe = (row['Tipe Soal'] || 'PG').toUpperCase()
+            const pertanyaan = row['Pertanyaan / Soal'] || row['Pertanyaan'] || row['Soal'] || ''
+            const bobot = Number(row['Bobot'] || row['Kesulitan']) || 2.0
+            const kunci = String(row['Kunci Jawaban (A/B/C/D/E)'] || row['Kunci'] || '').trim().toUpperCase()
+            const kunciTeks = row['Kunci Teks/Rubrik Essay'] || row['Kunci Essay'] || ''
+
+            let matchingData: string | undefined = undefined
+            if (tipe === 'MENJODOHKAN') {
+              const pairs: { left: string; right: string }[] = []
+              ;['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach((lbl) => {
+                const val = String(row[`Pilihan ${lbl}`] || row[`Opsi ${lbl}`] || row[lbl] || '').trim()
+                if (val && val.includes('=')) {
+                  const [left, ...rest] = val.split('=')
+                  const right = rest.join('=').trim()
+                  if (left.trim() && right) {
+                    pairs.push({ left: left.trim(), right })
+                  }
+                }
+              })
+              if (pairs.length > 0) {
+                matchingData = JSON.stringify(pairs)
+              }
+            }
+
+            const opsi = ['A', 'B', 'C', 'D', 'E']
+              .map((lbl) => {
+                const konten = row[`Pilihan ${lbl}`] || row[`Opsi ${lbl}`] || row[lbl] || ''
+                return {
+                  label: lbl,
+                  konten: String(konten || '').trim(),
+                  isBenar: kunci.includes(lbl),
+                }
+              })
+              .filter((o) => o.konten !== '')
+
+            if (pertanyaan.trim() !== '') {
+              parsedItems.push({
+                tipeSoal: tipe,
+                pertanyaan,
+                bobot,
+                opsi,
+                matchingData,
+                kunciJawabanTeks: kunciTeks || undefined,
+              })
+            }
+          }
+        }
 
         if (parsedItems.length === 0) {
           showNotification('Peringatan Data', 'Tidak ditemukan baris pertanyaan soal yang valid pada file Excel.', 'warning')
@@ -1162,26 +1479,127 @@ export default function ComprehensiveAdminDashboard() {
 
 
 
+  const fetchKoreksiData = async (ujianId?: string) => {
+    try {
+      const url = ujianId ? `/api/guru/koreksi?ujianId=${ujianId}` : '/api/guru/koreksi'
+      const res = await fetch(url)
+      const json = await res.json()
+      if (json.success) {
+        setKoreksiUjianList(json.data.ujianList || [])
+        setKoreksiData(json.data)
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleSimpanNilaiEssay = async (jawabanPesertaId: string, skor: number, pesertaUjianId: string) => {
+    try {
+      const res = await fetch('/api/guru/koreksi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jawabanPesertaId,
+          skor,
+          pesertaUjianId,
+        }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        showNotification('Nilai Disimpan', 'Nilai isian/essay berhasil disimpan dan total skor otomatis terakumulasi!', 'success')
+        fetchKoreksiData(selectedKoreksiUjianId)
+      } else {
+        showNotification('Gagal', json.message || 'Gagal menyimpan nilai', 'error')
+      }
+    } catch (e) {
+      showNotification('Error', 'Gagal menyimpan nilai', 'error')
+    }
+  }
+
+  // List Kelas Unik untuk Filter Ruang Ujian / Proktor Live
+  const proktorKelasOptions = useMemo(() => {
+    if (!proktorData?.pesertaList) return []
+    const unique = new Set<string>()
+    proktorData.pesertaList.forEach((p: any) => {
+      if (p.kelas && p.kelas !== '-') unique.add(p.kelas)
+    })
+    return Array.from(unique).sort()
+  }, [proktorData])
+
+  // Filtered Peserta Proktor Live berdasarkan Jadwal Terpilih & Kelas
+  const filteredProktorPeserta = useMemo(() => {
+    if (!proktorData?.pesertaList) return []
+    return proktorData.pesertaList.filter((p: any) => {
+      const matchKelas = selectedProktorKelas === 'ALL' || p.kelas === selectedProktorKelas
+      const matchSearch =
+        !searchQuery.trim() ||
+        p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.nis?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.kelas?.toLowerCase().includes(searchQuery.toLowerCase())
+      return matchKelas && matchSearch
+    })
+  }, [proktorData, selectedProktorKelas, searchQuery])
+
+  // List Kelas Unik untuk Filter Rekap & Koreksi Nilai
+  const koreksiKelasOptions = useMemo(() => {
+    if (!koreksiData?.hasilList) return []
+    const unique = new Set<string>()
+    koreksiData.hasilList.forEach((p: any) => {
+      const kelasNama = p.siswa?.kelas?.nama
+      if (kelasNama) unique.add(kelasNama)
+    })
+    return Array.from(unique).sort()
+  }, [koreksiData])
+
+  // Filtered Peserta Koreksi & Rekap Nilai berdasarkan Jadwal Terpilih & Kelas
+  const filteredKoreksiPeserta = useMemo(() => {
+    if (!koreksiData?.hasilList) return []
+    return koreksiData.hasilList.filter((p: any) => {
+      const kelasNama = p.siswa?.kelas?.nama
+      const matchKelas = selectedKoreksiKelas === 'ALL' || kelasNama === selectedKoreksiKelas
+      const matchSearch =
+        !searchQuery.trim() ||
+        p.siswa?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.siswa?.nis?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.siswa?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        kelasNama?.toLowerCase().includes(searchQuery.toLowerCase())
+      return matchKelas && matchSearch
+    })
+  }, [koreksiData, selectedKoreksiKelas, searchQuery])
+
   const handleExportExcel = () => {
-    if (!koreksiData?.hasilList?.length) {
+    const listToExport = filteredKoreksiPeserta.length > 0 ? filteredKoreksiPeserta : koreksiData?.hasilList
+    if (!listToExport?.length) {
       showNotification('Informasi', 'Belum ada data nilai untuk diekspor.', 'info')
       return
     }
-    const rows = koreksiData.hasilList.map((p: any, idx: number) => ({
-      No: idx + 1,
-      NIS: p.siswa.nis || p.siswa.username,
-      NISN: p.siswa.nisn || '-',
-      'Nama Siswa': p.siswa.name,
-      Kelas: p.siswa.kelas?.nama || '-',
-      'Nilai PG/Objektif': p.nilaiPG,
-      'Nilai Essay': p.nilaiEsai,
-      'Total Nilai': p.nilaiTotal,
-      Status: p.status,
-    }))
+    const currentKkm = Number(koreksiData?.activeUjian?.bankSoal?.kkm ?? 75)
+    const rows = listToExport.map((p: any, idx: number) => {
+      const isTuntas = Number(p.nilaiTotal ?? 0) >= currentKkm
+      const nilaiPGFormatted = p.nilaiPG != null ? Number(Number(p.nilaiPG).toFixed(2)) : 0
+      const nilaiEsaiFormatted = p.nilaiEsai != null ? Number(Number(p.nilaiEsai).toFixed(2)) : 0
+      const nilaiTotalFormatted = p.nilaiTotal != null ? Number(Number(p.nilaiTotal).toFixed(2)) : 0
+
+      return {
+        No: idx + 1,
+        NIS: p.siswa.nis || p.siswa.username,
+        NISN: p.siswa.nisn || '-',
+        'Nama Siswa': p.siswa.name,
+        Kelas: p.siswa.kelas?.nama || '-',
+        'Nilai PG/Pilihan': nilaiPGFormatted,
+        'Nilai Isian/Essay': nilaiEsaiFormatted,
+        'Total Nilai': nilaiTotalFormatted,
+        'KKM Mapel': currentKkm,
+        'Ketuntasan': isTuntas ? 'TUNTAS' : 'REMIDIAL',
+        'Status Ujian': p.status,
+      }
+    })
     const worksheet = XLSX.utils.json_to_sheet(rows)
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap_Nilai_CBT')
-    XLSX.writeFile(workbook, `Rekap_Nilai_${koreksiData?.activeUjian?.kodeUjian || 'Ujian'}.xlsx`)
+    const namaKelasSuffix = selectedKoreksiKelas !== 'ALL' ? `_${selectedKoreksiKelas}` : ''
+    XLSX.writeFile(workbook, `Rekap_Nilai_${koreksiData?.activeUjian?.kodeUjian || 'Ujian'}${namaKelasSuffix}.xlsx`)
   }
 
   const filteredSiswaList = useMemo(() => {
@@ -1437,34 +1855,156 @@ export default function ComprehensiveAdminDashboard() {
           {/* TAB 1: DASHBOARD */}
           {activeTab === 'dashboard' && dashboardData && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3.5">
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 shadow-xs dark:shadow-lg backdrop-blur-md">
-                  <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 block font-semibold">Total Siswa</span>
-                  <span className="text-lg sm:text-2xl font-black text-blue-600 dark:text-blue-400">{dashboardData.counts.countSiswa}</span>
+              {/* Statistik Utama CBT Muhipo (Clean & Rapi 4 Metrik Utama + Detail Status) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                <div className="p-4 rounded-2xl bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 shadow-xs dark:shadow-md backdrop-blur-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Total Siswa</span>
+                    <Users className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-blue-600 dark:text-blue-400">{dashboardData.counts.countSiswa}</span>
+                    <span className="text-[11px] text-slate-400">({dashboardData.counts.countKelas} Rombel)</span>
+                  </div>
                 </div>
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 shadow-xs dark:shadow-lg backdrop-blur-md">
-                  <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 block font-semibold">Total Guru</span>
-                  <span className="text-lg sm:text-2xl font-black text-amber-600 dark:text-amber-400">{dashboardData.counts.countGuru}</span>
+
+                <div className="p-4 rounded-2xl bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 shadow-xs dark:shadow-md backdrop-blur-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Bank Soal</span>
+                    <BookOpen className="w-4 h-4 text-emerald-500" />
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{dashboardData.counts.countBankSoal}</span>
+                    <span className="text-[11px] text-slate-400">({dashboardData.counts.countGuru} Guru)</span>
+                  </div>
                 </div>
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 shadow-xs dark:shadow-lg backdrop-blur-md">
-                  <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 block font-semibold">Rombel Kelas</span>
-                  <span className="text-lg sm:text-2xl font-black text-cyan-600 dark:text-cyan-400">{dashboardData.counts.countKelas}</span>
+
+                <div className="p-4 rounded-2xl bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 shadow-xs dark:shadow-md backdrop-blur-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Jadwal Ujian</span>
+                    <Calendar className="w-4 h-4 text-purple-500" />
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-purple-600 dark:text-purple-400">
+                      {dashboardData.counts.countUjianHariIni !== undefined ? dashboardData.counts.countUjianHariIni : dashboardData.counts.countUjian}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {dashboardData.counts.countUjianHariIni !== undefined
+                        ? `Hari Ini (${dashboardData.counts.countUjianTotal || dashboardData.counts.countUjian} Total)`
+                        : 'Sesi Aktif'}
+                    </span>
+                  </div>
                 </div>
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 shadow-xs dark:shadow-lg backdrop-blur-md">
-                  <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 block font-semibold">Bank Soal</span>
-                  <span className="text-lg sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">{dashboardData.counts.countBankSoal}</span>
+
+                <div className="p-4 rounded-2xl bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 shadow-xs dark:shadow-md backdrop-blur-md">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Live Peserta (Hari Ini)</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    </div>
+                    <Activity className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-amber-600 dark:text-amber-400 font-bold block">
+                        Sedang Ujian: {dashboardData.counts.countPesertaMengerjakan}
+                      </span>
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold block">
+                        Selesai Hari Ini: {dashboardData.counts.countPesertaSelesai}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 shadow-xs dark:shadow-lg backdrop-blur-md">
-                  <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 block font-semibold">Jadwal Ujian</span>
-                  <span className="text-lg sm:text-2xl font-black text-rose-600 dark:text-rose-400">{dashboardData.counts.countUjian}</span>
+              </div>
+
+              {/* CARD PANDUAN & SOP OPERASIONAL PROKTOR / ADMIN CBT */}
+              <div className="bg-white/90 dark:bg-slate-900/90 border border-blue-500/30 dark:border-blue-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/15 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                      <Compass className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>Petunjuk & SOP Proktor / Administrator CBT</span>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                          Siap Ujian
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Panduan terpadu pelaksanaan ujian, monitoring live 2s, penanganan gangguan peserta, dan cetak dokumen.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminGuideModal(true)}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/20 transition cursor-pointer self-start sm:self-auto"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>Buka SOP & Panduan Lengkap</span>
+                  </button>
                 </div>
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 shadow-xs dark:shadow-lg backdrop-blur-md">
-                  <span className="text-[10px] sm:text-[11px] text-amber-600 dark:text-amber-400 block font-semibold">Sedang Ujian</span>
-                  <span className="text-lg sm:text-2xl font-black text-amber-500 dark:text-amber-300">{dashboardData.counts.countPesertaMengerjakan}</span>
-                </div>
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 shadow-xs dark:shadow-lg backdrop-blur-md">
-                  <span className="text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 block font-semibold">Selesai Ujian</span>
-                  <span className="text-lg sm:text-2xl font-black text-emerald-600 dark:text-emerald-300">{dashboardData.counts.countPesertaSelesai}</span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div
+                    onClick={() => setActiveTab('jadwal')}
+                    className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 hover:border-blue-500/50 hover:shadow-md transition cursor-pointer space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between text-blue-600 dark:text-blue-400">
+                      <span className="text-xs font-black px-2 py-0.5 rounded bg-blue-500/15 dark:bg-blue-500/20">Fase 1</span>
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Pra-Ujian & Jadwal</h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                      Verifikasi rombel siswa, pastikan jadwal ujian aktif dan token ujian terbit.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setActiveTab('proktor_live')}
+                    className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 hover:border-cyan-500/50 hover:shadow-md transition cursor-pointer space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between text-cyan-600 dark:text-cyan-400">
+                      <span className="text-xs font-black px-2 py-0.5 rounded bg-cyan-500/15 dark:bg-cyan-500/20">Fase 2</span>
+                      <Radio className="w-4 h-4 animate-pulse" />
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Monitoring Real-Time</h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                      Pantau live 2 detik status pengerjaan, tangkapan layar ujian, dan audit pelanggaran.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setActiveTab('proktor_live')}
+                    className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 hover:border-amber-500/50 hover:shadow-md transition cursor-pointer space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between text-amber-600 dark:text-amber-400">
+                      <span className="text-xs font-black px-2 py-0.5 rounded bg-amber-500/15 dark:bg-amber-500/20">Fase 3</span>
+                      <RotateCcw className="w-4 h-4" />
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Troubleshooting</h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                      Reset login 1-klik untuk siswa ganti HP, tambah menit ekstra, atau kunci ujian pelanggar.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      setActiveTab('cetak')
+                      setCetakDocType('rekap_nilai')
+                    }}
+                    className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 hover:border-emerald-500/50 hover:shadow-md transition cursor-pointer space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400">
+                      <span className="text-xs font-black px-2 py-0.5 rounded bg-emerald-500/15 dark:bg-emerald-500/20">Fase 4</span>
+                      <Printer className="w-4 h-4" />
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Pasca Ujian & Dokumen</h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                      Cetak Berita Acara, Daftar Hadir resmi, Kartu Peserta, dan Rekap Nilai Excel.
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -1574,23 +2114,55 @@ export default function ComprehensiveAdminDashboard() {
                         );
                       }
 
-                      return filtered.map((u: any) => (
-                        <div
-                          key={u.id}
-                          className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/60 dark:border-white/5 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-xs backdrop-blur-sm hover:border-slate-300 dark:hover:border-white/20 transition"
-                        >
-                          <div>
-                            <span className="font-mono text-blue-600 dark:text-blue-400 font-bold block">{u.kodeUjian}</span>
-                            <h4 className="text-sm font-bold text-slate-900 dark:text-white">{u.judul}</h4>
-                            <p className="text-slate-500 dark:text-slate-400">
-                              Mapel: <b>{u.bankSoal?.mataPelajaran?.nama || '-'}</b> • Durasi: <b>{u.durasiMenit} Menit</b>
-                            </p>
+                      return filtered.map((u: any) => {
+                        const wMulai = u.waktuMulai ? new Date(u.waktuMulai) : null;
+                        const wSelesai = u.waktuSelesai ? new Date(u.waktuSelesai) : null;
+                        const isArchived = u.status === 'NONAKTIF';
+
+                        const now = new Date();
+                        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+                        const isMulaiHariIni = wMulai ? wMulai >= startOfToday && wMulai <= endOfToday : false;
+                        const isToday = isMulaiHariIni && !isArchived;
+                        const isPast = (wMulai ? wMulai < startOfToday : false) || (wSelesai ? wSelesai < startOfToday : false) || isArchived;
+
+                        return (
+                          <div
+                            key={u.id}
+                            className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/60 dark:border-white/5 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-xs backdrop-blur-sm hover:border-slate-300 dark:hover:border-white/20 transition"
+                          >
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-blue-600 dark:text-blue-400 font-bold">{u.kodeUjian}</span>
+                                {isToday ? (
+                                  <span className="px-2 py-0.2 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-bold border border-blue-500/20">
+                                    Hari Ini
+                                  </span>
+                                ) : isPast ? (
+                                  <span className="px-2 py-0.2 rounded-md bg-slate-200 dark:bg-slate-800 text-slate-500 text-[10px] font-bold">
+                                    Arsip
+                                  </span>
+                                ) : null}
+                              </div>
+                              <h4 className="text-sm font-bold text-slate-900 dark:text-white">{u.judul}</h4>
+                              <p className="text-slate-500 dark:text-slate-400">
+                                Mapel: <b>{u.bankSoal?.mataPelajaran?.nama || '-'}</b> • Durasi: <b>{u.durasiMenit} Menit</b>
+                                {wMulai && ` • ${wMulai.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`}
+                              </p>
+                            </div>
+                            <span className={`self-start sm:self-center px-2.5 py-1 rounded-full font-bold text-[11px] ${
+                              isToday
+                                ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30'
+                                : isPast
+                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-300 dark:border-slate-700'
+                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                            }`}>
+                              {isToday ? 'SESI AKTIF HARI INI' : isPast ? 'ARSIP' : u.status}
+                            </span>
                           </div>
-                          <span className="self-start sm:self-center px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold">
-                            {u.status}
-                          </span>
-                        </div>
-                      ));
+                        );
+                      });
                     })()}
                   </div>
                 </div>
@@ -1762,12 +2334,28 @@ export default function ComprehensiveAdminDashboard() {
 
                     <select
                       value={selectedProktorUjianId}
-                      onChange={(e) => setSelectedProktorUjianId(e.target.value)}
-                      className="px-3 py-2 rounded-xl bg-slate-50/90 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white backdrop-blur-sm focus:outline-none focus:border-cyan-500"
+                      onChange={(e) => {
+                        setSelectedProktorUjianId(e.target.value)
+                        setSelectedProktorKelas('ALL')
+                      }}
+                      className="px-3 py-2 rounded-xl bg-slate-50/90 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white backdrop-blur-sm focus:outline-none focus:border-cyan-500 font-bold"
                     >
                       {proktorData?.ujianList?.map((u: any) => (
                         <option key={u.id} value={u.id}>
                           {u.kodeUjian} - {u.judul}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={selectedProktorKelas}
+                      onChange={(e) => setSelectedProktorKelas(e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-slate-50/90 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white backdrop-blur-sm focus:outline-none focus:border-cyan-500 font-semibold"
+                    >
+                      <option value="ALL">Semua Kelas ({proktorData?.pesertaList?.length || 0})</option>
+                      {proktorKelasOptions.map((k) => (
+                        <option key={k} value={k}>
+                          Kelas {k} ({proktorData?.pesertaList?.filter((p: any) => p.kelas === k).length || 0})
                         </option>
                       ))}
                     </select>
@@ -1776,7 +2364,51 @@ export default function ComprehensiveAdminDashboard() {
               </div>
 
               <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Status Pengerjaan Peserta</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>Status Pengerjaan Peserta</span>
+                      {selectedProktorKelas !== 'ALL' && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
+                          Kelas: {selectedProktorKelas}
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Menampilkan <b>{filteredProktorPeserta.length}</b> siswa aktif {selectedProktorKelas !== 'ALL' ? `di rombel ${selectedProktorKelas}` : 'di semua kelas'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Filter Cepat:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProktorKelas('ALL')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                        selectedProktorKelas === 'ALL'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                      }`}
+                    >
+                      Semua
+                    </button>
+                    {proktorKelasOptions.map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setSelectedProktorKelas(k)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                          selectedProktorKelas === k
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        {k}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap sm:whitespace-normal">
                     <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-white/10">
@@ -1790,9 +2422,16 @@ export default function ComprehensiveAdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
-                      {proktorData?.pesertaList?.map((p: any) => (
-                        <tr key={p.pesertaUjianId} className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition ${p.jumlahPelanggaran > 0 ? 'bg-rose-50/30 dark:bg-rose-950/20' : ''}`}>
-                          <td className="py-3 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">{p.nis || p.nomorPeserta || p.username}</td>
+                      {filteredProktorPeserta.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="text-center py-8 text-slate-400 text-xs font-semibold">
+                            Tidak ada data peserta ujian untuk filter kelas/pencarian ini.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredProktorPeserta.map((p: any) => (
+                          <tr key={p.pesertaUjianId} className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition ${p.jumlahPelanggaran > 0 ? 'bg-rose-50/30 dark:bg-rose-950/20' : ''}`}>
+                            <td className="py-3 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">{p.nis || p.nomorPeserta || p.username}</td>
                           <td className="py-3 px-4">
                             <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                               <span>{p.name}</span>
@@ -1824,18 +2463,24 @@ export default function ComprehensiveAdminDashboard() {
                           <td className="py-3 px-4 text-center">{p.jumlahJawaban} Soal</td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                              {/* Tombol Lihat Layar Siswa (Snapshot Bukti Pelanggaran) */}
+                              {/* Tombol Lihat Layar Siswa (Live Realtime Monitor & Snapshot) */}
                               <button
                                 onClick={() => setViolationScreenModal(p)}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-xs ${
-                                  p.latestScreenshot || p.jumlahPelanggaran > 0
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition shadow-xs ${
+                                  p.hasLiveScreen
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30'
+                                    : p.latestScreenshot || p.jumlahPelanggaran > 0
                                     ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
                                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
-                                title="Lihat Rekaman Layar & Log Pelanggaran Siswa"
+                                title="Pantau Layar Realtime & Log Siswa"
                               >
-                                <Monitor className="w-3.5 h-3.5" />
-                                <span>Lihat Layar</span>
+                                {p.hasLiveScreen ? (
+                                  <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                                ) : (
+                                  <Monitor className="w-3.5 h-3.5" />
+                                )}
+                                <span>{p.hasLiveScreen ? 'Live Layar' : 'Lihat Layar'}</span>
                               </button>
 
                               <button
@@ -1856,7 +2501,7 @@ export default function ComprehensiveAdminDashboard() {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      )))}
                     </tbody>
                   </table>
                 </div>
@@ -2586,137 +3231,689 @@ export default function ComprehensiveAdminDashboard() {
             </div>
           )}
 
-          {/* TAB 4: KOREKSI & REKAP NILAI */}
-          {activeTab === 'koreksi_nilai' && (
-            <div className="space-y-6">
-              <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Rekapitulasi Nilai & Koreksi</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{koreksiData?.activeUjian?.judul}</p>
-                </div>
-                <button
-                  onClick={handleExportExcel}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white shadow-md cursor-pointer transition"
-                >
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>Unduh Rekap Nilai Excel (.xlsx)</span>
-                </button>
-              </div>
+          {/* TAB 4: KOREKSI ESSAY & REKAP NILAI */}
+          {activeTab === 'koreksi_nilai' && (() => {
+            const currentKkm = Number(koreksiData?.activeUjian?.bankSoal?.kkm ?? 75);
+            const totalSiswa = filteredKoreksiPeserta.length;
+            const tuntasCount = filteredKoreksiPeserta.filter((p: any) => Number(p.nilaiTotal ?? 0) >= currentKkm).length;
+            const remidiCount = totalSiswa - tuntasCount;
+            const persenTuntas = totalSiswa > 0 ? Math.round((tuntasCount / totalSiswa) * 100) : 0;
+            const avgNilai = totalSiswa > 0 
+              ? (filteredKoreksiPeserta.reduce((acc: number, p: any) => acc + Number(p.nilaiTotal ?? 0), 0) / totalSiswa).toFixed(1)
+              : '0';
 
-              <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap sm:whitespace-normal">
-                    <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-white/10">
-                      <tr>
-                        <th className="py-3 px-4">NIS</th>
-                        <th className="py-3 px-4">Nama Siswa</th>
-                        <th className="py-3 px-4">Kelas</th>
-                        <th className="py-3 px-4">Nilai PG/Pilihan</th>
-                        <th className="py-3 px-4">Nilai Tulisan/Essay</th>
-                        <th className="py-3 px-4">Total Nilai</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
-                      {koreksiData?.hasilList?.map((p: any) => (
-                        <tr key={p.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
-                          <td className="py-3 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">{p.siswa.nis || p.siswa.username}</td>
-                          <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{p.siswa.name}</td>
-                          <td className="py-3 px-4">{p.siswa.kelas?.nama}</td>
-                          <td className="py-3 px-4 text-emerald-600 dark:text-emerald-400 font-bold">{p.nilaiPG}</td>
-                          <td className="py-3 px-4 text-amber-600 dark:text-amber-400 font-bold">{p.nilaiEsai}</td>
-                          <td className="py-3 px-4 font-black text-slate-900 dark:text-white">{p.nilaiTotal}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
+            // Hitung butir soal esai & isian
+            const samplePeserta = koreksiData?.hasilList?.[0];
+            const hasEssaySoal = samplePeserta?.jawabanPeserta?.some((j: any) => j.soal?.tipeSoal === 'ESAI' || j.soal?.tipeSoal === 'ISIAN');
 
-          {/* TAB 5: JADWAL UJIAN */}
-          {activeTab === 'jadwal' && (
-            <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-white/10">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <span>Jadwal Ujian Aktif</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Atur jadwal, jam mulai, durasi pengerjaan, dan distribusi ujian ke rombel kelas</p>
-                </div>
-                <button
-                  onClick={() => {
-                    const firstBs = bankSoalList[0]
-                    const defaultTipe = 'PAS'
-                    setJadwalForm({
-                      tipeUjian: defaultTipe,
-                      kodeUjian: firstBs ? `${defaultTipe}-${firstBs.kodeBank}-${new Date().getFullYear()}` : `${defaultTipe}-${new Date().getFullYear()}`,
-                      judul: firstBs ? `${defaultTipe} ${firstBs.nama}` : '',
-                      bankSoalId: firstBs?.id || '',
-                      durasiMenit: firstBs?.durasiMenit || 90,
-                      waktuMulai: formatLocalDatetime(),
-                      waktuSelesai: formatLocalDatetime(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
-                      lockBrowser: true,
-                      acakSoal: true,
-                      acakOpsi: true,
-                      kelasIds: [],
-                    })
-                    setShowJadwalModal(true)
-                  }}
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white shadow-md shadow-blue-600/20 cursor-pointer transition active:scale-95 shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>+ Buat Jadwal Ujian Baru</span>
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {(!jadwalData?.jadwalList || jadwalData.jadwalList.length === 0) ? (
-                  <div className="text-center py-12 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 rounded-2xl text-xs text-slate-400">
-                    <CalendarDays className="w-8 h-8 mx-auto mb-2 text-slate-400 opacity-60" />
-                    <p className="font-semibold text-slate-600 dark:text-slate-300">Belum ada Jadwal Ujian yang dibuat.</p>
-                    <p className="mt-1">Klik tombol <b>+ Buat Jadwal Ujian Baru</b> di atas atau masuk ke menu <b>Bank Soal</b> dan klik <b>Kirim ke Kelas</b>.</p>
+            return (
+              <div className="space-y-6">
+                {/* Header & Selector */}
+                <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <span className="text-xs text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider block">
+                      Rekapitulasi Nilai & Koreksi Isian / Esai
+                    </span>
+                    <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">
+                      {koreksiData?.activeUjian?.judul || 'Pilih Jadwal Ujian'}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Mapel: <b>{koreksiData?.activeUjian?.bankSoal?.mataPelajaran?.nama || '-'}</b> • KKM Standar: <b className="text-blue-600 dark:text-blue-400">{currentKkm} Poin</b> • Total <b>{filteredKoreksiPeserta.length}</b> siswa {selectedKoreksiKelas !== 'ALL' ? `kelas ${selectedKoreksiKelas}` : 'seluruh kelas'}
+                    </p>
                   </div>
-                ) : (
-                  jadwalData.jadwalList.map((u: any) => (
-                    <div key={u.id} className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-950 border border-slate-200/60 dark:border-white/10 flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs backdrop-blur-sm shadow-xs">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-blue-600 dark:text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded">
-                            {u.kodeUjian}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                            {u.status}
-                          </span>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Selector Jadwal Ujian */}
+                    <select
+                      value={selectedKoreksiUjianId}
+                      onChange={(e) => {
+                        setSelectedKoreksiUjianId(e.target.value)
+                        setSelectedKoreksiKelas('ALL')
+                        fetchKoreksiData(e.target.value)
+                      }}
+                      className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white"
+                    >
+                      {koreksiUjianList.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.kodeUjian} - {u.judul}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Selector Kelas Rombel */}
+                    <select
+                      value={selectedKoreksiKelas}
+                      onChange={(e) => setSelectedKoreksiKelas(e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-900 dark:text-white"
+                    >
+                      <option value="ALL">Semua Kelas ({koreksiData?.hasilList?.length || 0})</option>
+                      {koreksiKelasOptions.map((k) => (
+                        <option key={k} value={k}>
+                          Kelas {k} ({koreksiData?.hasilList?.filter((p: any) => p.siswa?.kelas?.nama === k).length || 0})
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={handleExportExcel}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white shadow-md transition cursor-pointer"
+                    >
+                      <FileSpreadsheet className="w-4 h-4" />
+                      <span>Ekspor Excel {selectedKoreksiKelas !== 'ALL' ? `(${selectedKoreksiKelas})` : ''}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-Tabs: Area Koreksi Esai & Rekap Nilai KKM */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-200/80 dark:border-white/10 pb-3">
+                  <div className="flex items-center gap-2 p-1 rounded-2xl bg-slate-100/90 dark:bg-slate-950/80 border border-slate-200/80 dark:border-white/10 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setKoreksiSubTab('rekap')}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl transition cursor-pointer ${
+                        koreksiSubTab === 'rekap'
+                          ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <GraduationCap className="w-4 h-4" />
+                      <span>Rekap Nilai & Ketuntasan KKM</span>
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300">
+                        {filteredKoreksiPeserta.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setKoreksiSubTab('koreksi_esai')}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl transition cursor-pointer ${
+                        koreksiSubTab === 'koreksi_esai'
+                          ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Edit className="w-4 h-4" />
+                      <span>Area Koreksi Isian / Esai</span>
+                      {hasEssaySoal && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300">
+                          Manual
+                        </span>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Filter Cepat Barisan Kelas */}
+                  {koreksiKelasOptions.length > 1 && (
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs max-w-full">
+                      <span className="text-slate-400 text-[11px] font-semibold shrink-0">Filter:</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedKoreksiKelas('ALL')}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition shrink-0 cursor-pointer text-xs ${
+                          selectedKoreksiKelas === 'ALL'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        Semua ({koreksiData?.hasilList?.length || 0})
+                      </button>
+                      {koreksiKelasOptions.map((k) => (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setSelectedKoreksiKelas(k)}
+                          className={`px-2.5 py-1 rounded-lg font-bold transition shrink-0 cursor-pointer text-xs ${
+                            selectedKoreksiKelas === k
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+                          }`}
+                        >
+                          {k} ({koreksiData?.hasilList?.filter((p: any) => p.siswa?.kelas?.nama === k).length || 0})
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* VIEW 1: REKAP NILAI BERDASARKAN KKM KELAS */}
+                {koreksiSubTab === 'rekap' && (
+                  <div className="space-y-6">
+                    {/* Ringkasan Statistik Ketuntasan KKM */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                      <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl p-4 shadow-sm backdrop-blur-xl">
+                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block uppercase">
+                          Target KKM Mapel
+                        </span>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="text-2xl font-black text-blue-600 dark:text-blue-400">{currentKkm}</span>
+                          <span className="text-xs text-slate-500">Poin Minimal</span>
                         </div>
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">{u.judul}</h4>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
-                            Mulai: <b>{new Date(u.waktuMulai).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })} WIB</b>
-                          </span>
-                          <span>• Durasi: <b>{u.durasiMenit} Menit</b></span>
-                          <span>• Peserta Terdaftar: <b>{u._count?.pesertaUjian || 0} Siswa</b></span>
-                          <span>• Bank Soal: <b>{u.bankSoal?.nama || '-'}</b></span>
-                        </div>
+                        <p className="text-[10.5px] text-slate-400 mt-1">Acuan standar kelulusan</p>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                        <button
-                          onClick={() => handleDeleteJadwal(u.id, u.judul)}
-                          className="px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer transition flex items-center gap-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Hapus Jadwal</span>
-                        </button>
+                      <div className="bg-white/90 dark:bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-4 shadow-sm backdrop-blur-xl bg-gradient-to-br from-emerald-500/5 to-transparent">
+                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 block uppercase">
+                          Peserta Tuntas (≥ KKM)
+                        </span>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{tuntasCount}</span>
+                          <span className="text-xs text-emerald-600/80 font-bold">({persenTuntas}%)</span>
+                        </div>
+                        <p className="text-[10.5px] text-slate-400 mt-1">Memenuhi kriteria ketuntasan</p>
+                      </div>
+
+                      <div className="bg-white/90 dark:bg-slate-900/90 border border-rose-500/30 rounded-2xl p-4 shadow-sm backdrop-blur-xl bg-gradient-to-br from-rose-500/5 to-transparent">
+                        <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400 block uppercase">
+                          Perlu Remidial (&lt; KKM)
+                        </span>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="text-2xl font-black text-rose-600 dark:text-rose-400">{remidiCount}</span>
+                          <span className="text-xs text-rose-600/80 font-bold">({100 - persenTuntas}%)</span>
+                        </div>
+                        <p className="text-[10.5px] text-slate-400 mt-1">Belum mencapai KKM</p>
+                      </div>
+
+                      <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl p-4 shadow-sm backdrop-blur-xl">
+                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block uppercase">
+                          Rata-Rata Nilai
+                        </span>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="text-2xl font-black text-purple-600 dark:text-purple-400">{avgNilai}</span>
+                          <span className="text-xs text-slate-500">/ 100</span>
+                        </div>
+                        <p className="text-[10.5px] text-slate-400 mt-1">
+                          {selectedKoreksiKelas !== 'ALL' ? `Kelas ${selectedKoreksiKelas}` : 'Semua Rombel'}
+                        </p>
                       </div>
                     </div>
-                  ))
+
+                    {/* Tabel Rekapitulasi Nilai Per Kelas */}
+                    <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl shadow-sm dark:shadow-xl backdrop-blur-xl overflow-hidden">
+                      <div className="p-4 sm:p-5 border-b border-slate-200/80 dark:border-white/10 flex justify-between items-center">
+                        <div>
+                          <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                            Tabel Rekapitulasi Hasil Ujian & Ketuntasan Siswa
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {selectedKoreksiKelas !== 'ALL' ? `Rombel Kelas ${selectedKoreksiKelas}` : 'Seluruh Rombel Kelas'} • Nilai otomatis dievaluasi terhadap KKM ({currentKkm})
+                          </p>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-xl">
+                          {filteredKoreksiPeserta.length} Peserta
+                        </span>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-slate-50/80 dark:bg-slate-950/80 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-white/10">
+                              <th className="py-3 px-4 w-12 text-center">No</th>
+                              <th className="py-3 px-4">Nama Siswa</th>
+                              <th className="py-3 px-4">NIS / Username</th>
+                              <th className="py-3 px-4">Kelas</th>
+                              <th className="py-3 px-4 text-center">Nilai PG</th>
+                              <th className="py-3 px-4 text-center">Nilai Isian/Esai</th>
+                              <th className="py-3 px-4 text-center">Total Nilai</th>
+                              <th className="py-3 px-4 text-center">KKM</th>
+                              <th className="py-3 px-4 text-center">Status Ketuntasan</th>
+                              <th className="py-3 px-4 text-center">Aksi</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200/60 dark:divide-white/5 text-slate-800 dark:text-slate-200">
+                            {filteredKoreksiPeserta.length === 0 ? (
+                              <tr>
+                                <td colSpan={10} className="text-center py-10 text-slate-400 italic">
+                                  Tidak ada data peserta ujian untuk filter kelas ini.
+                                </td>
+                              </tr>
+                            ) : (
+                              filteredKoreksiPeserta.map((p: any, idx: number) => {
+                                const isTuntas = Number(p.nilaiTotal ?? 0) >= currentKkm;
+                                const hasTulisan = p.jawabanPeserta?.some((j: any) => j.soal?.tipeSoal === 'ESAI' || j.soal?.tipeSoal === 'ISIAN');
+                                const displayPG = p.nilaiPG != null ? Number(Number(p.nilaiPG).toFixed(2)) : 0;
+                                const displayEsai = p.nilaiEsai != null ? Number(Number(p.nilaiEsai).toFixed(2)) : 0;
+                                const displayTotal = p.nilaiTotal != null ? Number(Number(p.nilaiTotal).toFixed(2)) : 0;
+
+                                return (
+                                  <tr key={p.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                                    <td className="py-3 px-4 text-center font-mono text-slate-400">{idx + 1}</td>
+                                    <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">
+                                      {p.siswa?.name}
+                                    </td>
+                                    <td className="py-3 px-4 font-mono text-slate-500">
+                                      {p.siswa?.nis || p.siswa?.username}
+                                    </td>
+                                    <td className="py-3 px-4 font-semibold text-blue-600 dark:text-blue-400">
+                                      {p.siswa?.kelas?.nama || '-'}
+                                    </td>
+                                    <td className="py-3 px-4 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                      {displayPG}
+                                    </td>
+                                    <td className="py-3 px-4 text-center font-mono font-bold text-amber-500 dark:text-amber-400">
+                                      {displayEsai}
+                                    </td>
+                                    <td className="py-3 px-4 text-center font-mono font-extrabold text-sm text-slate-900 dark:text-white">
+                                      {displayTotal}
+                                    </td>
+                                    <td className="py-3 px-4 text-center font-mono font-semibold text-slate-400">
+                                      {currentKkm}
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-black ${
+                                        isTuntas
+                                          ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                          : 'bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                                      }`}>
+                                        {isTuntas ? '✓ TUNTAS' : '✗ REMIDIAL'}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                      {hasTulisan ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setKoreksiSubTab('koreksi_esai')}
+                                          className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-bold text-[10.5px] hover:bg-amber-100 cursor-pointer"
+                                        >
+                                          Koreksi Esai
+                                        </button>
+                                      ) : (
+                                        <span className="text-[10px] text-slate-400 font-mono">Auto (PG)</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* VIEW 2: AREA KOREKSI ISIAN / ESAI */}
+                {koreksiSubTab === 'koreksi_esai' && (
+                  <div className="space-y-4">
+                    {filteredKoreksiPeserta.length === 0 ? (
+                      <div className="text-center py-12 bg-white/70 dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 rounded-2xl sm:rounded-3xl text-slate-500 text-xs font-semibold">
+                        Tidak ada data peserta ujian untuk filter kelas ini.
+                      </div>
+                    ) : (
+                      filteredKoreksiPeserta.map((peserta: any) => {
+                        const tulisanAnswers = peserta.jawabanPeserta?.filter((j: any) => j.soal?.tipeSoal === 'ESAI' || j.soal?.tipeSoal === 'ISIAN') || [];
+                        const isTuntas = Number(peserta.nilaiTotal ?? 0) >= currentKkm;
+                        const displayPG = peserta.nilaiPG != null ? Number(Number(peserta.nilaiPG).toFixed(2)) : 0;
+                        const displayEsai = peserta.nilaiEsai != null ? Number(Number(peserta.nilaiEsai).toFixed(2)) : 0;
+                        const displayTotal = peserta.nilaiTotal != null ? Number(Number(peserta.nilaiTotal).toFixed(2)) : 0;
+
+                        return (
+                          <div
+                            key={peserta.id}
+                            className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4"
+                          >
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200/60 dark:border-white/10 pb-3">
+                              <div>
+                                <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
+                                  NIS: {peserta.siswa?.nis || peserta.siswa?.username} • Kelas {peserta.siswa?.kelas?.nama}
+                                </span>
+                                <h4 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                  <span>{peserta.siswa?.name}</span>
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                    isTuntas
+                                      ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300'
+                                      : 'bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300'
+                                  }`}>
+                                    {isTuntas ? 'Tuntas KKM' : 'Remidial'}
+                                  </span>
+                                </h4>
+                              </div>
+
+                              <div className="flex items-center gap-4 text-xs font-mono">
+                                <div>
+                                  <span className="text-slate-500 dark:text-slate-400">Nilai PG:</span>{' '}
+                                  <b className="text-emerald-600 dark:text-emerald-400">{displayPG}</b>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 dark:text-slate-400">Nilai Isian/Esai:</span>{' '}
+                                  <b className="text-amber-500 dark:text-amber-400">{displayEsai}</b>
+                                </div>
+                                <div className="px-3 py-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-white/10">
+                                  <span className="text-slate-500 dark:text-slate-400">Total:</span>{' '}
+                                  <b className="text-slate-900 dark:text-white text-sm">{displayTotal}</b>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Tulisan & Isian List */}
+                            {tulisanAnswers.length === 0 ? (
+                              <p className="text-xs text-slate-500 italic py-2">
+                                Tidak ada butir soal isian atau essay pada ujian ini (Seluruh butir soal berbentuk pilihan ganda / objektif otomatis).
+                              </p>
+                            ) : (
+                              <div className="space-y-3 pt-1">
+                                {tulisanAnswers.map((j: any, i: number) => {
+                                  const isIsian = j.soal?.tipeSoal === 'ISIAN';
+                                  const isEssay = j.soal?.tipeSoal === 'ESAI';
+                                  const badgeTipe = isIsian ? 'Isian Singkat' : 'Uraian / Essay';
+
+                                  return (
+                                    <div key={j.id} className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-950 border border-slate-200/60 dark:border-white/10 space-y-2 text-xs">
+                                      <div className="flex justify-between items-center font-semibold text-slate-700 dark:text-slate-300">
+                                        <div className="flex items-center gap-2">
+                                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                            isIsian 
+                                              ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800' 
+                                              : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                                          }`}>
+                                            {badgeTipe}
+                                          </span>
+                                          <span>Soal Tulisan #{i + 1} (Bobot Maksimal: <b>{j.soal?.bobot} Poin</b>)</span>
+                                        </div>
+                                        <span className="font-mono text-slate-500 text-[11px]">
+                                          Skor Saat Ini: <b className={j.skor > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}>{j.skor}</b> / {j.soal?.bobot}
+                                        </span>
+                                      </div>
+                                      <div className="text-slate-700 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-900 p-2.5 rounded-xl">
+                                        <MathRenderer content={j.soal?.pertanyaan} />
+                                      </div>
+
+                                      {j.soal?.kunciJawabanTeks && (
+                                        <div className="p-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900 text-blue-900 dark:text-blue-200 text-[11.5px]">
+                                          <span className="font-bold">Kunci / Rubrik Acuan Guru:</span> {j.soal.kunciJawabanTeks}
+                                        </div>
+                                      )}
+
+                                      <div className="pt-1">
+                                        <span className="text-slate-500 dark:text-slate-400 block font-semibold mb-1">Jawaban yang Ditulis Siswa:</span>
+                                        <div className="p-3 rounded-xl bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white font-mono whitespace-pre-wrap">
+                                          {j.jawabanDipilih || <span className="italic text-slate-400">(Siswa tidak mengisi jawaban)</span>}
+                                        </div>
+                                      </div>
+
+                                      {/* Scoring Input */}
+                                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                                        <label className="text-slate-700 dark:text-slate-300 font-semibold">Beri Nilai ({badgeTipe}):</label>
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          max={j.soal?.bobot}
+                                          step="0.5"
+                                          defaultValue={j.skor}
+                                          id={`score-${j.id}`}
+                                          className="w-24 p-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono text-center font-bold"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const input = document.getElementById(`score-${j.id}`) as HTMLInputElement
+                                            handleSimpanNilaiEssay(j.id, Number(input.value), peserta.id)
+                                          }}
+                                          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold cursor-pointer transition shadow-sm"
+                                        >
+                                          Simpan Nilai
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const input = document.getElementById(`score-${j.id}`) as HTMLInputElement
+                                            if (input) input.value = String(j.soal?.bobot || 0)
+                                            handleSimpanNilaiEssay(j.id, Number(j.soal?.bobot || 0), peserta.id)
+                                          }}
+                                          className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold cursor-pointer transition text-[11px]"
+                                        >
+                                          Beri Nilai Maksimal ({j.soal?.bobot})
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 )}
               </div>
-            </div>
-          )}
+            );
+          })()}
+
+          {/* TAB 5: JADWAL UJIAN */}
+          {activeTab === 'jadwal' && (() => {
+            const rawJadwalList = jadwalData?.jadwalList || [];
+            const q = jadwalSearch.toLowerCase().trim();
+
+            const filteredList = rawJadwalList.filter((u: any) => {
+              const isArchived = u.status === 'NONAKTIF';
+              if (jadwalFilterTab === 'AKTIF' && isArchived) return false;
+              if (jadwalFilterTab === 'ARSIP' && !isArchived) return false;
+
+              if (!q) return true;
+              const judul = (u.judul || '').toLowerCase();
+              const kode = (u.kodeUjian || '').toLowerCase();
+              const mapel = (u.bankSoal?.mataPelajaran?.nama || '').toLowerCase();
+              return judul.includes(q) || kode.includes(q) || mapel.includes(q);
+            });
+
+            const countAktif = rawJadwalList.filter((u: any) => u.status !== 'NONAKTIF').length;
+            const countArsip = rawJadwalList.filter((u: any) => u.status === 'NONAKTIF').length;
+
+            return (
+              <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-white/10">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      <span>Manajemen Jadwal Ujian & Arsip</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Kelola jadwal aktif, arsipkan ujian selesai, serta amankan histori nilai dan pelanggaran peserta
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const firstBs = bankSoalList[0]
+                      const defaultTipe = 'PAS'
+                      setJadwalForm({
+                        tipeUjian: defaultTipe,
+                        kodeUjian: firstBs ? `${defaultTipe}-${firstBs.kodeBank}-${new Date().getFullYear()}` : `${defaultTipe}-${new Date().getFullYear()}`,
+                        judul: firstBs ? `${defaultTipe} ${firstBs.nama}` : '',
+                        bankSoalId: firstBs?.id || '',
+                        durasiMenit: firstBs?.durasiMenit || 90,
+                        waktuMulai: formatLocalDatetime(),
+                        waktuSelesai: formatLocalDatetime(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+                        lockBrowser: true,
+                        acakSoal: true,
+                        acakOpsi: true,
+                        kelasIds: [],
+                      })
+                      setShowJadwalModal(true)
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white shadow-md shadow-blue-600/20 cursor-pointer transition active:scale-95 shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Buat Jadwal Ujian Baru</span>
+                  </button>
+                </div>
+
+                {/* Banner Info Pengarsipan */}
+                <div className="p-3.5 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-500/30 text-xs flex items-start gap-3">
+                  <Archive className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                  <div className="text-slate-700 dark:text-slate-300 text-[11px] leading-relaxed">
+                    <b>Fitur Arsipkan:</b> Mengarsipkan jadwal ujian akan memindahkan sesi ujian ke daftar arsip dan menyembunyikannya dari jadwal aktif siswa, dengan <b>tetap menyimpan utuh</b> seluruh riwayat nilai siswa, jawaban, dan audit log pelanggaran untuk kebutuhan rekap dan pencetakan nilai.
+                  </div>
+                </div>
+
+                {/* Filter Tabs & Search Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-white/5 self-start sm:self-auto shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setJadwalFilterTab('AKTIF')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        jadwalFilterTab === 'AKTIF'
+                          ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <CalendarDays className="w-3.5 h-3.5" />
+                      <span>Jadwal Aktif</span>
+                      <span className="ml-1 px-1.5 py-0.2 rounded-full bg-blue-100 dark:bg-blue-800 text-[10px]">
+                        {countAktif}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setJadwalFilterTab('ARSIP')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        jadwalFilterTab === 'ARSIP'
+                          ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Archive className="w-3.5 h-3.5" />
+                      <span>Arsip Ujian</span>
+                      <span className="ml-1 px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-[10px]">
+                        {countArsip}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setJadwalFilterTab('ALL')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        jadwalFilterTab === 'ALL'
+                          ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <span>Semua ({rawJadwalList.length})</span>
+                    </button>
+                  </div>
+
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={jadwalSearch}
+                      onChange={(e) => setJadwalSearch(e.target.value)}
+                      placeholder="Cari jadwal ujian, kode, atau mapel..."
+                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50/90 dark:bg-slate-950 border border-slate-200/80 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-500 backdrop-blur-sm"
+                    />
+                    {jadwalSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setJadwalSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {filteredList.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 rounded-2xl text-xs text-slate-400">
+                      <CalendarDays className="w-8 h-8 mx-auto mb-2 text-slate-400 opacity-60" />
+                      <p className="font-semibold text-slate-600 dark:text-slate-300">
+                        {jadwalSearch
+                          ? `Tidak ditemukan jadwal dengan kata kunci "${jadwalSearch}"`
+                          : jadwalFilterTab === 'ARSIP'
+                          ? 'Belum ada Jadwal Ujian yang diarsipkan.'
+                          : 'Belum ada Jadwal Ujian aktif yang dibuat.'}
+                      </p>
+                      <p className="mt-1 text-[11px]">
+                        {jadwalFilterTab === 'ARSIP'
+                          ? 'Klik tombol Arsipkan pada jadwal aktif untuk memindahkannya ke arsip.'
+                          : 'Klik tombol + Buat Jadwal Ujian Baru di atas untuk menjadwalkan ujian.'}
+                      </p>
+                    </div>
+                  ) : (
+                    filteredList.map((u: any) => {
+                      const isArchived = u.status === 'NONAKTIF';
+
+                      return (
+                        <div
+                          key={u.id}
+                          className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs backdrop-blur-sm shadow-xs transition ${
+                            isArchived
+                              ? 'bg-slate-100/70 dark:bg-slate-950/50 border-slate-300/70 dark:border-white/5 opacity-85 hover:opacity-100'
+                              : 'bg-slate-50/80 dark:bg-slate-950 border-slate-200/60 dark:border-white/10'
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-blue-600 dark:text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded">
+                                {u.kodeUjian}
+                              </span>
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                  isArchived
+                                    ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                                    : u.status === 'SEDANG_BERJALAN'
+                                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                                    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                }`}
+                              >
+                                {isArchived ? 'ARSIP (NONAKTIF)' : u.status}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white">{u.judul}</h4>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                Mulai: <b>{new Date(u.waktuMulai).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })} WIB</b>
+                              </span>
+                              <span>• Durasi: <b>{u.durasiMenit} Menit</b></span>
+                              <span>• Peserta Terdaftar: <b>{u._count?.pesertaUjian || 0} Siswa</b></span>
+                              <span>• Bank Soal: <b>{u.bankSoal?.nama || '-'}</b></span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                            {isArchived ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUnarchiveJadwal(u.id, u.judul)}
+                                className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/60 cursor-pointer transition flex items-center gap-1.5"
+                                title="Pulihkan dan aktifkan kembali ujian ini"
+                              >
+                                <ArchiveRestore className="w-3.5 h-3.5" />
+                                <span>Pulihkan Jadwal</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleArchiveJadwal(u.id, u.judul)}
+                                className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/60 cursor-pointer transition flex items-center gap-1.5"
+                                title="Arsipkan ujian ini (nilai dan riwayat peserta tetap tersimpan)"
+                              >
+                                <Archive className="w-3.5 h-3.5" />
+                                <span>Arsipkan</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteJadwal(u.id, u.judul)}
+                              className="px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer transition flex items-center gap-1"
+                              title="Hapus permanen jadwal ujian"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Hapus</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* TAB 6: DATA SISWA DENGAN SEARCH */}
           {activeTab === 'siswa' && (
@@ -2968,17 +4165,27 @@ export default function ComprehensiveAdminDashboard() {
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       Pilih format dokumen resmi, sesuaikan filter rombel/ruangan, dan cetak langsung.
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {cetakDocType === 'rekap_nilai' && (
+                          <button
+                            type="button"
+                            onClick={handleExportExcel}
+                            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer active:scale-95 transition"
+                          >
+                            <Download className="w-4 h-4" />
+                            <span>Unduh File Excel</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => window.print()}
+                          className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-blue-600/20 cursor-pointer active:scale-95 transition"
+                        >
+                          <Printer className="w-4 h-4" />
+                          <span>Cetak Sekarang (Print / PDF)</span>
+                        </button>
+                      </div>
                     </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => window.print()}
-                      className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-blue-600/20 cursor-pointer active:scale-95 transition"
-                    >
-                      <Printer className="w-4 h-4" />
-                      <span>Cetak Sekarang (Print / PDF)</span>
-                    </button>
                   </div>
                 </div>
 
@@ -3032,7 +4239,11 @@ export default function ComprehensiveAdminDashboard() {
                     </label>
                     <select
                       value={cetakJadwalId}
-                      onChange={(e) => setCetakJadwalId(e.target.value)}
+                      onChange={(e) => {
+                        const newJadwalId = e.target.value
+                        setCetakJadwalId(newJadwalId)
+                        fetchKoreksiData(newJadwalId)
+                      }}
                       className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white"
                     >
                       {(jadwalData?.jadwalList || []).map((j: any) => (
@@ -3136,35 +4347,31 @@ export default function ComprehensiveAdminDashboard() {
                                   </div>
                                   <div className="space-y-1 min-w-0 flex-1">
                                     <div>
-                                      <span className="text-[9px] text-slate-500 block">Nama Lengkap:</span>
-                                      <b className="font-bold text-slate-900 block truncate">{st.name}</b>
+                                      <span className="text-[9px] text-slate-500 uppercase block font-semibold">Nama Peserta:</span>
+                                      <b className="text-[11px] font-bold text-slate-900 uppercase truncate block">
+                                        {st.name}
+                                      </b>
+                                    </div>
+                                    <div>
+                                      <span className="text-[9px] text-slate-500 uppercase block font-semibold">NIS / Username:</span>
+                                      <b className="text-[11px] font-bold font-mono text-blue-600">
+                                        {st.username}
+                                      </b>
                                     </div>
                                     <div className="grid grid-cols-2 gap-1 text-[10px]">
                                       <div>
-                                        <span className="text-[8px] text-slate-500 block">NIS / Login:</span>
-                                        <b className="font-mono">{st.username}</b>
+                                        <span className="text-[9px] text-slate-500 uppercase block">Kelas:</span>
+                                        <b>{st.kelas?.nama || '-'}</b>
                                       </div>
                                       <div>
-                                        <span className="text-[8px] text-slate-500 block">NISN:</span>
-                                        <b className="font-mono">{st.nisn || '-'}</b>
+                                        <span className="text-[9px] text-slate-500 uppercase block">Ruang / Sesi:</span>
+                                        <b>{st.ruangUjian || 'Lab 1'} / S{st.sesiUjian || 1}</b>
                                       </div>
                                     </div>
-                                    <div className="text-[10px]">
-                                      <span className="text-[8px] text-slate-500 block">Kelas:</span>
-                                      <b>{st.kelas?.nama || '-'}</b>
+                                    <div>
+                                      <span className="text-[9px] text-slate-500 uppercase block font-semibold">Password Default:</span>
+                                      <b className="font-mono text-slate-700">{st.passwordRaw || '123456'}</b>
                                     </div>
-                                  </div>
-                                </div>
-
-                                {/* Footer Kartu & Password */}
-                                <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-[9px] bg-slate-50 p-1.5 rounded">
-                                  <div>
-                                    <span className="text-slate-500 block text-[8px]">Kata Sandi Ujian:</span>
-                                    <b className="font-mono text-[10px] text-blue-700 font-bold">{st.username}</b>
-                                  </div>
-                                  <div className="text-right text-[8px] text-slate-500">
-                                    <span>Ponorogo, {new Date().toLocaleDateString('id-ID')}</span>
-                                    <span className="block font-bold text-slate-700">Panitia CBT MUHIPO</span>
                                   </div>
                                 </div>
                               </div>
@@ -3174,9 +4381,9 @@ export default function ComprehensiveAdminDashboard() {
                       </div>
                     )}
 
-                    {/* 2. DOKUMEN: DAFTAR HADIR PESERTA UJIAN */}
+                    {/* 2. DOKUMEN: DAFTAR HADIR PESERTA */}
                     {cetakDocType === 'daftar_hadir' && (
-                      <div className="space-y-4">
+                      <div className="space-y-5">
                         {/* Kop Resmi */}
                         <div className="flex items-center gap-4 pb-4 border-b-2 border-black">
                           <img
@@ -3371,38 +4578,69 @@ export default function ComprehensiveAdminDashboard() {
                           </div>
                         </div>
 
-                        <table className="w-full text-xs border-collapse border border-black">
-                          <thead>
-                            <tr className="bg-slate-100 text-center font-bold">
-                              <th className="border border-black p-2 w-10">No</th>
-                              <th className="border border-black p-2 w-28">NIS / No. Peserta</th>
-                              <th className="border border-black p-2 text-left">Nama Lengkap Siswa</th>
-                              <th className="border border-black p-2 w-24">Kelas</th>
-                              <th className="border border-black p-2 w-24">Nilai PG</th>
-                              <th className="border border-black p-2 w-24">Nilai Essay</th>
-                              <th className="border border-black p-2 w-24">Total Nilai</th>
-                              <th className="border border-black p-2 w-24">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rawStudents.map((st: any, idx: number) => (
-                              <tr key={st.id} className="border-b border-black text-center">
-                                <td className="border border-black p-2 font-mono">{idx + 1}</td>
-                                <td className="border border-black p-2 font-mono">{st.username}</td>
-                                <td className="border border-black p-2 text-left font-semibold uppercase">{st.name}</td>
-                                <td className="border border-black p-2">{st.kelas?.nama || '-'}</td>
-                                <td className="border border-black p-2 font-mono">100.0</td>
-                                <td className="border border-black p-2 font-mono">0.0</td>
-                                <td className="border border-black p-2 font-mono font-bold text-blue-700 print:text-black">
-                                  100.0
-                                </td>
-                                <td className="border border-black p-2 font-bold text-emerald-600 print:text-black">
-                                  TUNTAS
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        {(() => {
+                          const hasilUjianList = koreksiData?.hasilList || [];
+                          const currentKkm = Number(activeJadwal?.bankSoal?.kkm ?? koreksiData?.activeUjian?.bankSoal?.kkm ?? 75);
+
+                          const rowsToDisplay = rawStudents.map((st: any) => {
+                            const foundHasil = hasilUjianList.find((h: any) => h.siswa?.id === st.id || h.siswa?.username === st.username);
+                            const nilaiPG = foundHasil?.nilaiPG != null ? Number(Number(foundHasil.nilaiPG).toFixed(2)) : 0;
+                            const nilaiEsai = foundHasil?.nilaiEsai != null ? Number(Number(foundHasil.nilaiEsai).toFixed(2)) : 0;
+                            const nilaiTotal = foundHasil?.nilaiTotal != null ? Number(Number(foundHasil.nilaiTotal).toFixed(2)) : 0;
+                            const statusPeserta = foundHasil?.status || 'BELUM_MENGERJAKAN';
+                            const isTuntas = nilaiTotal >= currentKkm;
+
+                            return {
+                              st,
+                              nilaiPG,
+                              nilaiEsai,
+                              nilaiTotal,
+                              statusPeserta,
+                              isTuntas,
+                            };
+                          });
+
+                          return (
+                            <table className="w-full text-xs border-collapse border border-black">
+                              <thead>
+                                <tr className="bg-slate-100 text-center font-bold">
+                                  <th className="border border-black p-2 w-10">No</th>
+                                  <th className="border border-black p-2 w-28">NIS / No. Peserta</th>
+                                  <th className="border border-black p-2 text-left">Nama Lengkap Siswa</th>
+                                  <th className="border border-black p-2 w-24">Kelas</th>
+                                  <th className="border border-black p-2 w-20 text-center">Nilai PG</th>
+                                  <th className="border border-black p-2 w-20 text-center">Nilai Essay</th>
+                                  <th className="border border-black p-2 w-20 text-center">Total Skor</th>
+                                  <th className="border border-black p-2 w-24 text-center">Ketuntasan</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {rowsToDisplay.map(({ st, nilaiPG, nilaiEsai, nilaiTotal, statusPeserta, isTuntas }: any, idx: number) => (
+                                  <tr key={st.id} className="border-b border-black text-center">
+                                    <td className="border border-black p-2 font-mono">{idx + 1}</td>
+                                    <td className="border border-black p-2 font-mono">{st.username}</td>
+                                    <td className="border border-black p-2 text-left font-semibold uppercase">{st.name}</td>
+                                    <td className="border border-black p-2">{st.kelas?.nama || '-'}</td>
+                                    <td className="border border-black p-2 font-mono">{nilaiPG}</td>
+                                    <td className="border border-black p-2 font-mono">{nilaiEsai}</td>
+                                    <td className="border border-black p-2 font-mono font-bold text-blue-700 print:text-black">
+                                      {nilaiTotal}
+                                    </td>
+                                    <td className="border border-black p-2 font-bold text-[11px]">
+                                      {statusPeserta === 'SELESAI' ? (
+                                        <span className={isTuntas ? 'text-emerald-600 print:text-black' : 'text-rose-600 print:text-black'}>
+                                          {isTuntas ? 'TUNTAS' : 'REMIDIAL'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-400 print:text-black">{statusPeserta}</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
@@ -3461,9 +4699,29 @@ export default function ComprehensiveAdminDashboard() {
                   <div className="p-5 sm:p-6 space-y-6">
                     {/* 1. Logo Sekolah & Sistem (Terkompres Otomatis) */}
                     <div className="space-y-2">
-                      <label className="block text-slate-900 dark:text-slate-200 font-semibold text-xs">
-                        Logo Sekolah & Sistem (Terkompres Otomatis)
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="block text-slate-900 dark:text-slate-200 font-semibold text-xs">
+                          Logo Sekolah & Sistem (Terkompres Otomatis)
+                        </label>
+                        {settingsForm.logoUrl && settingsForm.logoUrl !== '/pic_logo.png' && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const newSettings = { ...settingsForm, logoUrl: '/pic_logo.png' }
+                              setSettingsForm(newSettings)
+                              await fetch('/api/pengaturan', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(newSettings),
+                              })
+                              showNotification('Sukses', 'Logo dikembalikan ke default.', 'success')
+                            }}
+                            className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium hover:underline cursor-pointer"
+                          >
+                            Reset Default
+                          </button>
+                        )}
+                      </div>
                       <div className="flex items-center gap-4">
                         {settingsForm.logoUrl && (
                           <img
@@ -3490,9 +4748,29 @@ export default function ComprehensiveAdminDashboard() {
 
                     {/* 2. Wallpaper Background Master */}
                     <div className="space-y-2 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
-                      <label className="block font-bold text-slate-900 dark:text-slate-100 text-xs">
-                        Wallpaper Background Master
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="block font-bold text-slate-900 dark:text-slate-100 text-xs">
+                          Wallpaper Background Master
+                        </label>
+                        {settingsForm.backgroundUrl && settingsForm.backgroundUrl !== '/muhipo-front.jpg' && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const newSettings = { ...settingsForm, backgroundUrl: '/muhipo-front.jpg' }
+                              setSettingsForm(newSettings)
+                              await fetch('/api/pengaturan', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(newSettings),
+                              })
+                              showNotification('Sukses', 'Wallpaper latar belakang dikembalikan ke default.', 'success')
+                            }}
+                            className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium hover:underline cursor-pointer"
+                          >
+                            Reset Default
+                          </button>
+                        )}
+                      </div>
                       <div className="flex items-center gap-4 mt-2">
                         {settingsForm.backgroundUrl ? (
                           <div className="relative w-20 h-12 rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shrink-0 shadow-xs">
@@ -3500,6 +4778,9 @@ export default function ComprehensiveAdminDashboard() {
                               src={settingsForm.backgroundUrl}
                               alt="Preview Background Master"
                               className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).src = '/muhipo-front.jpg';
+                              }}
                             />
                           </div>
                         ) : (
@@ -3702,31 +4983,68 @@ export default function ComprehensiveAdminDashboard() {
               </button>
             </div>
 
-            {/* Tampilan Screenshot Layar Snapshot */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <ShieldAlert className="w-4 h-4 text-rose-500" />
-                  <span>Bukti Tangkapan Layar Pelanggaran (Snapshot):</span>
-                </span>
-                {violationScreenModal.latestScreenshotTime && (
-                  <span className="text-[10.5px] text-slate-400 font-mono">
-                    Waktu: {new Date(violationScreenModal.latestScreenshotTime).toLocaleTimeString('id-ID')} WIB
+            {/* Tab/Switcher Tampilan: Layar Realtime Aktif vs Bukti Pelanggaran Terakhir */}
+            <div className="space-y-3">
+              {/* Header Live Feed */}
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-2xl border border-slate-200 dark:border-white/10">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-3 w-3">
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${liveScreenFeed?.isOnline ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                    <span className={`relative inline-flex rounded-full h-3 w-3 ${liveScreenFeed?.isOnline ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                   </span>
-                )}
+                  <span className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
+                    <span>{liveScreenFeed?.isOnline ? '🔴 LIVE MONITORING AKTIF' : 'STATUS TERAKHIR PESERTA'}</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                  {liveScreenFeed ? (
+                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10">
+                      {liveScreenFeed.browser} • {liveScreenFeed.device}
+                    </span>
+                  ) : (
+                    <span>Menghubungkan ke layar siswa...</span>
+                  )}
+                </div>
               </div>
 
-              {violationScreenModal.latestScreenshot ? (
-                <div className="relative rounded-2xl overflow-hidden border-2 border-rose-500/40 shadow-lg bg-black group">
+              {/* Tampilan Feed Layar Realtime */}
+              {liveScreenFeed?.screenImage ? (
+                <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-500/50 shadow-xl bg-black group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={liveScreenFeed.screenImage}
+                    alt={`Layar Aktif ${violationScreenModal.name}`}
+                    className="w-full h-auto max-h-[380px] object-contain bg-slate-950 mx-auto"
+                  />
+                  <div className="absolute bottom-2 left-2 right-2 p-2 rounded-xl bg-slate-950/85 backdrop-blur-md text-white text-[11px] flex justify-between items-center border border-white/10">
+                    <div className="flex items-center gap-2 font-mono">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>
+                        {liveScreenFeed.isStreamNative ? 'Native Chrome Screen Stream' : 'Mobile Active Exam Guard'} • Update: {Math.round(liveScreenFeed.ageMs / 1000)}s lalu
+                      </span>
+                    </div>
+                    <a
+                      href={liveScreenFeed.screenImage}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold shrink-0 ml-2 shadow-xs transition cursor-pointer"
+                    >
+                      Buka Penuh
+                    </a>
+                  </div>
+                </div>
+              ) : violationScreenModal.latestScreenshot ? (
+                <div className="relative rounded-2xl overflow-hidden border-2 border-amber-500/50 shadow-lg bg-black group">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={violationScreenModal.latestScreenshot}
                     alt={`Layar Pelanggaran ${violationScreenModal.name}`}
-                    className="w-full h-auto max-h-80 object-contain bg-slate-950"
+                    className="w-full h-auto max-h-[360px] object-contain bg-slate-950 mx-auto"
                   />
-                  <div className="absolute bottom-2 left-2 right-2 p-2 rounded-xl bg-black/75 backdrop-blur-sm text-white text-[11px] flex justify-between items-center">
+                  <div className="absolute bottom-2 left-2 right-2 p-2 rounded-xl bg-slate-950/80 backdrop-blur-sm text-white text-[11px] flex justify-between items-center">
                     <span className="font-mono truncate">
-                      ⚠ {violationScreenModal.latestViolationDetail || 'Terdeteksi meninggalkan layar ujian'}
+                      ⚠ Snapshot Tersimpan: {violationScreenModal.latestViolationDetail || 'Terdeteksi berpindah layar'}
                     </span>
                     <a
                       href={violationScreenModal.latestScreenshot}
@@ -3734,18 +5052,18 @@ export default function ComprehensiveAdminDashboard() {
                       rel="noreferrer"
                       className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-[10px] font-bold shrink-0 ml-2"
                     >
-                      Buka Resolusi Penuh
+                      Buka Penuh
                     </a>
                   </div>
                 </div>
               ) : (
                 <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 space-y-2">
-                  <Monitor className="w-10 h-10 text-slate-400 opacity-50 mx-auto" />
+                  <Monitor className="w-10 h-10 text-slate-400 opacity-50 mx-auto animate-pulse" />
                   <p className="font-semibold text-xs text-slate-700 dark:text-slate-300">
-                    Belum ada snapshot layar pelanggaran tersimpan.
+                    Menunggu koneksi feed layar siswa aktif...
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                    Screenshot otomatis diambil saat siswa berpindah tab browser, keluar dari mode layar penuh (fullscreen exit), atau melakukan aktivitas mencurigakan.
+                    Jika siswa menggunakan <b>Google Chrome</b> di Laptop/PC dengan screen share aktif, feed monitor akan langsung mengalir secara realtime. Di perangkat Mobile Android/iOS, sistem memancarkan visual status ujian siswa secara otomatis.
                   </p>
                 </div>
               )}
@@ -4814,6 +6132,157 @@ export default function ComprehensiveAdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PANDUAN LENGKAP OPERASIONAL & SOP PROKTOR / ADMIN */}
+      {showAdminGuideModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-4xl max-h-[90vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="p-6 bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white flex items-center justify-between shrink-0 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-500/20 backdrop-blur-md flex items-center justify-center font-bold text-blue-400">
+                  <Compass className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight">SOP & Panduan Operasional Administrator / Proktor CBT</h3>
+                  <p className="text-xs text-slate-300">Standar Prosedur Operasional Ujian, Monitoring Live, & Penanganan Masalah</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAdminGuideModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white font-bold transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
+              {/* SOP Tahapan Ujian */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                  <Activity className="w-4 h-4 text-blue-500" />
+                  <span>1. SOP Tahapan Pelaksanaan Ujian (Pra, Sedang, & Pasca Ujian)</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 space-y-1.5">
+                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded bg-blue-500/10 inline-block">Fase 1: Pra-Ujian</span>
+                    <p className="text-xs leading-relaxed">
+                      1. Pastikan sinkronisasi data siswa/guru dari SIMASMUH telah terbaru.<br/>
+                      2. Pastikan jadwal ujian telah terdistribusi ke kelas rombel.<br/>
+                      3. Rilis Token Ujian melalui menu <b>Monitoring Proktor</b> sebelum sesi ujian dimulai.<br/>
+                      4. Cetak <b>Kartu Peserta</b> & <b>Daftar Hadir</b> di menu <i>Cetak Dokumen</i>.
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 space-y-1.5">
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 inline-block">Fase 2: Saat Ujian Berlangsung</span>
+                    <p className="text-xs leading-relaxed">
+                      1. Pantau status realtime pengerjaan di tab <b>Proktor Live (2s refresh)</b>.<br/>
+                      2. Cek indikator warna status siswa (Kuning: Mengerjakan, Hijau: Selesai, Abu-abu: Belum Mulai).<br/>
+                      3. Pantau log audit trail untuk melihat peringatan siswa yang mencoba membuka tab lain atau keluar layar penuh.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Troubleshooting Matriks */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
+                  <RotateCcw className="w-4 h-4 text-amber-500" />
+                  <span>2. Panduan Troubleshooting & Aksi Darurat Proktor</span>
+                </h4>
+                <div className="space-y-2">
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">
+                      1
+                    </div>
+                    <div className="text-xs space-y-0.5">
+                      <b className="text-slate-900 dark:text-white">Siswa Ganti HP / Browser Tertutup / Baterai Drop:</b>
+                      <p className="text-slate-600 dark:text-slate-300">
+                        Cukup klik tombol <b>"Reset Login"</b> pada baris siswa di tab Monitoring Proktor. Siswa dapat login kembali dari perangkat lain tanpa kehilangan jawaban sebelumnya.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">
+                      2
+                    </div>
+                    <div className="text-xs space-y-0.5">
+                      <b className="text-slate-900 dark:text-white">Siswa Mengalami Kendala Teknis & Butuh Waktu Tambahan:</b>
+                      <p className="text-slate-600 dark:text-slate-300">
+                        Klik tombol <b>"Tambah Waktu"</b> (+15 / +30 menit) pada siswa bersangkutan. Waktu siswa akan langsung bertambah di lembar ujiannya secara otomatis.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">
+                      3
+                    </div>
+                    <div className="text-xs space-y-0.5">
+                      <b className="text-slate-900 dark:text-white">Siswa Melakukan Pelanggaran Berulang (Curang):</b>
+                      <p className="text-slate-600 dark:text-slate-300">
+                        Klik tombol <b>"Kunci Ujian"</b> untuk membekukan lembar soal siswa, atau <b>"Selesaikan Paksa"</b> bila pengawas memutuskan menghentikan ujian siswa.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">
+                      4
+                    </div>
+                    <div className="text-xs space-y-0.5">
+                      <b className="text-slate-900 dark:text-white">Gangguan Server / Jaringan Serentak Satu Ruangan:</b>
+                      <p className="text-slate-600 dark:text-slate-300">
+                        Gunakan tombol <b>"Reset Login Massal"</b> di bagian atas Proktor Live untuk mengizinkan seluruh peserta login ulang secara bersamaan.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seksi 3: Fitur Keunggulan dibanding ZYACBT */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-900/20 to-indigo-900/30 border border-blue-500/30 space-y-2">
+                <b className="text-blue-600 dark:text-blue-300 text-xs sm:text-sm font-bold flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-blue-400" />
+                  <span>Keunggulan Fitur CBT MUHIPO Next-Gen:</span>
+                </b>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>Real-time WebSocket / Polling 2s tanpa lag.</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>Live Screen Monitoring & Snapshot Layar Ujian.</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>Sinkronisasi instan dengan database SIMASMUH.</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>Cetak Dokumen Berita Acara & Daftar Hadir Otomatis.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-white/10 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowAdminGuideModal(false)}
+                className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition cursor-pointer"
+              >
+                Tutup Panduan Proktor
+              </button>
+            </div>
           </div>
         </div>
       )}

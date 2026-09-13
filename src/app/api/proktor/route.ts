@@ -5,18 +5,60 @@ import { prisma } from '@/lib/prisma';
 export async function GET(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || (user.role !== 'ADMIN' && user.role !== 'PROKTOR')) {
+    if (!user || !['ADMIN', 'PROKTOR', 'GURU'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const ujianId = searchParams.get('ujianId');
+    const filterHari = searchParams.get('filterHari'); // 'HARI_INI' | 'SEMUA'
+
+    // Pengawasan Ujian untuk Guru:
+    // Guru berhak memantau ujian yang berlangsung saat itu/hari itu (sebagai pengawas ruang),
+    // serta ujian yang dijadwalkan pada hari yang sama atau ujian miliknya sendiri.
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const ujianWhereClause: any = {};
+    if (user.role === 'GURU') {
+      if (filterHari === 'SEMUA') {
+        // Jika guru memilih tampilkan semua ujian
+        ujianWhereClause.OR = [
+          { bankSoal: { pembuatId: user.userId } },
+          { waktuMulai: { lte: endOfToday }, waktuSelesai: { gte: startOfToday } },
+        ];
+      } else {
+        // Default untuk Guru: Pantauan ujian saat itu & jadwal di hari yang sama (atau ujian buatannya)
+        ujianWhereClause.OR = [
+          // 1. Ujian yang dijadwalkan / berlangsung di hari yang sama (hari ini)
+          {
+            waktuMulai: { lte: endOfToday },
+            waktuSelesai: { gte: startOfToday },
+          },
+          // 2. Ujian yang dibuat oleh guru bersangkutan (kapan pun)
+          {
+            bankSoal: { pembuatId: user.userId },
+          },
+          // 3. Ujian yang saat ini memiliki peserta aktif sedang mengerjakan
+          {
+            pesertaUjian: {
+              some: { status: 'SEDANG_MENGERJAKAN' },
+            },
+          },
+        ];
+      }
+    }
 
     const ujianList = await prisma.ujian.findMany({
+      where: ujianWhereClause,
       include: {
-        bankSoal: { include: { mataPelajaran: true } },
+        bankSoal: { include: { mataPelajaran: true, pembuat: { select: { id: true, name: true } } } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        { waktuMulai: 'desc' },
+        { createdAt: 'desc' },
+      ],
     });
 
     const activeUjian = ujianId
@@ -73,6 +115,7 @@ export async function GET(request: NextRequest) {
           latestScreenshotTime: latestScreenshotLog?.createdAt || null,
           latestViolationActivity: violationLogs[0]?.aktivitas || null,
           latestViolationDetail: violationLogs[0]?.detail || null,
+          hasLiveScreen: Boolean(global.__cbtLiveScreenStore?.get(p.id) && (Date.now() - (global.__cbtLiveScreenStore?.get(p.id)?.timestamp || 0) < 12000)),
         };
       });
     }
@@ -94,7 +137,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || (user.role !== 'ADMIN' && user.role !== 'PROKTOR')) {
+    if (!user || !['ADMIN', 'PROKTOR', 'GURU'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
@@ -193,8 +236,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, message: 'Peserta tidak ditemukan' }, { status: 404 });
       }
 
-      // Hitung skor PG otomatis
+      // Hitung skor objektif (PG, PG Kompleks, Benar/Salah, Isian Singkat) otomatis
       let totalNilaiPG = 0;
+      let totalNilaiEsai = 0;
+      let adaEsai = false;
       const jawabanMap = new Map(p.jawabanPeserta.map((j) => [j.soalId, j]));
       const soalList = p.ujian.bankSoal.soalList;
 
@@ -207,8 +252,63 @@ export async function POST(request: NextRequest) {
           if (jwb && opsiBenar && jwb.jawabanDipilih === opsiBenar.id) {
             totalNilaiPG += bobot;
           }
+        } else if (soal.tipeSoal === 'PG_KOMPLEKS') {
+          let chosenIds: string[] = [];
+          try {
+            if (jwb?.jawabanDipilih) chosenIds = JSON.parse(jwb.jawabanDipilih);
+          } catch (e) {
+            chosenIds = [];
+          }
+          const correctOpsiIds = soal.opsiJawaban.filter((o) => o.isBenar).map((o) => o.id);
+          const isIdentical =
+            chosenIds.length === correctOpsiIds.length &&
+            chosenIds.every((id) => correctOpsiIds.includes(id));
+          if (isIdentical) totalNilaiPG += bobot;
+        } else if (soal.tipeSoal === 'ISIAN') {
+          const kunci = (soal.kunciJawabanTeks || '').trim().toLowerCase();
+          const jawab = (jwb?.jawabanDipilih || '').trim().toLowerCase();
+          if (kunci.length > 0 && kunci === jawab) {
+            totalNilaiEsai += bobot;
+          }
+        } else if (soal.tipeSoal === 'MENJODOHKAN') {
+          let pairsCorrect = 0;
+          let totalPairs = 0;
+          try {
+            const keyPairs: { left: string; right: string }[] = JSON.parse(soal.matchingData || '[]');
+            totalPairs = keyPairs.length;
+            let userAnswers: Record<string, string> = {};
+            if (jwb?.jawabanDipilih) {
+              const parsed = JSON.parse(jwb.jawabanDipilih);
+              if (Array.isArray(parsed)) {
+                parsed.forEach((p: any) => {
+                  if (p.left && p.right) userAnswers[p.left.trim().toLowerCase()] = p.right.trim().toLowerCase();
+                });
+              } else if (typeof parsed === 'object' && parsed !== null) {
+                Object.entries(parsed).forEach(([k, v]) => {
+                  userAnswers[k.trim().toLowerCase()] = String(v).trim().toLowerCase();
+                });
+              }
+            }
+            if (totalPairs > 0) {
+              for (const kp of keyPairs) {
+                if (userAnswers[kp.left.trim().toLowerCase()] === kp.right.trim().toLowerCase()) {
+                  pairsCorrect++;
+                }
+              }
+            }
+          } catch (e) {
+            pairsCorrect = 0;
+          }
+          const prop = totalPairs > 0 ? pairsCorrect / totalPairs : 0;
+          totalNilaiPG += Number((prop * bobot).toFixed(2));
+        } else if (soal.tipeSoal === 'ESAI') {
+          adaEsai = true;
         }
       }
+
+      const finalPG = Number(totalNilaiPG.toFixed(2));
+      const finalEsai = Number(totalNilaiEsai.toFixed(2));
+      const finalTotal = Number((finalPG + finalEsai).toFixed(2));
 
       await prisma.pesertaUjian.update({
         where: { id: pesertaUjianId },
@@ -216,8 +316,10 @@ export async function POST(request: NextRequest) {
           status: 'SELESAI',
           waktuSelesai: new Date(),
           sisaDetik: 0,
-          nilaiPG: totalNilaiPG,
-          nilaiTotal: totalNilaiPG,
+          nilaiPG: finalPG,
+          nilaiEsai: finalEsai,
+          nilaiTotal: finalTotal,
+          isKoreksiSelesai: !adaEsai,
         },
       });
 

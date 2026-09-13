@@ -12,14 +12,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const ujianId = searchParams.get('ujianId');
 
-    // Filter ujian: GURU melihat ujian dari bank soal miliknya ATAU mapel yang diampunya
+    // Filter ujian:
+    // ATURAN: GURU HANYA melihat jadwal ujian yang dibuat dari bank soal miliknya sendiri
+    // Satu guru tidak dapat melihat jadwal ujian, bank soal, dan nilai mapel milik guru lain
     const ujianWhereClause: any = {};
     if (user.role === 'GURU') {
       ujianWhereClause.bankSoal = {
-        OR: [
-          { pembuatId: user.userId },
-          { mataPelajaran: { gurus: { some: { guruId: user.userId } } } },
-        ],
+        pembuatId: user.userId,
       };
     }
 
@@ -38,14 +37,11 @@ export async function GET(request: NextRequest) {
     let activeUjian: any = null;
 
     if (activeUjianId) {
-      // Pastikan guru berhak mengakses ujian ini
+      // Pastikan guru berhak mengakses ujian ini (Hanya jika dibuat oleh guru login)
       const singleUjianWhere: any = { id: activeUjianId };
       if (user.role === 'GURU') {
         singleUjianWhere.bankSoal = {
-          OR: [
-            { pembuatId: user.userId },
-            { mataPelajaran: { gurus: { some: { guruId: user.userId } } } },
-          ],
+          pembuatId: user.userId,
         };
       }
 
@@ -79,7 +75,12 @@ export async function GET(request: NextRequest) {
           orderBy: { siswa: { name: 'asc' } },
         });
 
-        hasilList = peserta;
+        hasilList = peserta.map((p) => ({
+          ...p,
+          nilaiPG: p.nilaiPG != null ? Number(Number(p.nilaiPG).toFixed(2)) : 0,
+          nilaiEsai: p.nilaiEsai != null ? Number(Number(p.nilaiEsai).toFixed(2)) : 0,
+          nilaiTotal: p.nilaiTotal != null ? Number(Number(p.nilaiTotal).toFixed(2)) : 0,
+        }));
       }
     }
 
@@ -137,12 +138,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const finalPG = Number(totalPG.toFixed(2));
+      const finalTulisan = Number(totalTulisan.toFixed(2));
+      const finalTotal = Number((finalPG + finalTulisan).toFixed(2));
+
       await prisma.pesertaUjian.update({
         where: { id: pesertaUjianId },
         data: {
-          nilaiPG: totalPG,
-          nilaiEsai: totalTulisan,
-          nilaiTotal: totalPG + totalTulisan,
+          nilaiPG: finalPG,
+          nilaiEsai: finalTulisan,
+          nilaiTotal: finalTotal,
           isKoreksiSelesai: true,
         },
       });

@@ -60,6 +60,7 @@ model User {
   
   // Relasi Guru
   mataPelajaran GuruMataPelajaran[]
+  guruKelas     GuruKelas[]
   bankSoalList  BankSoal[]
   
   // Relasi Peserta Ujian
@@ -71,13 +72,39 @@ model User {
 }
 
 model Kelas {
-  id        String   @id @default(cuid())
-  nama      String   @unique // Contoh: X-MIPA 1, XI-IPS 2, XII-F1
-  tingkat   Int      // 10, 11, 12
-  jurusan   String   // MIPA, IPS, UMUM, dsb.
+  id        String       @id @default(cuid())
+  nama      String       @unique // Contoh: X-MIPA 1, XI-IPS 2, XII-F1
+  tingkat   Int          // 10, 11, 12
+  jurusan   String       // MIPA, IPS, UMUM, dsb.
   users     User[]
+  guruKelas GuruKelas[]
+  ujianList UjianKelas[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model GuruKelas {
+  id        String   @id @default(cuid())
+  guruId    String
+  kelasId   String
+  guru      User     @relation(fields: [guruId], references: [id], onDelete: Cascade)
+  kelas     Kelas    @relation(fields: [kelasId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  @@unique([guruId, kelasId])
+}
+
+model UjianKelas {
+  id        String   @id @default(cuid())
+  ujianId   String
+  kelasId   String
+  ujian     Ujian    @relation(fields: [ujianId], references: [id], onDelete: Cascade)
+  kelas     Kelas    @relation(fields: [kelasId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([ujianId, kelasId])
 }
 
 model MataPelajaran {
@@ -186,6 +213,7 @@ model Ujian {
   
   status            StatusUjian    @default(DIJADWALKAN)
   
+  ujianKelas        UjianKelas[]
   pesertaUjian      PesertaUjian[]
   
   createdAt         DateTime       @default(now())

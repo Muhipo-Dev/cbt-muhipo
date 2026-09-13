@@ -14,7 +14,7 @@ async function getSimasmuhClient() {
   return client;
 }
 
-import { normalizeJurusan, DAFTAR_JURUSAN_MUHIPO } from '@/lib/constants';
+import { normalizeJurusan, DAFTAR_JURUSAN_MUHIPO, getTingkatFromNamaKelas } from '@/lib/constants';
 
 // GET: Cek Status Sinkronisasi Real-Time antara SIMASMUH & CBT MUHIPO
 export async function GET() {
@@ -23,6 +23,9 @@ export async function GET() {
     if (!user || user.role !== 'ADMIN') {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
+    // ...
+    // ...
+
 
     let isSimasmuhConnected = false;
     let simasmuhStats = {
@@ -191,15 +194,17 @@ export async function POST(request: NextRequest) {
         for (const row of classesRes.rows) {
           const rawProgram = row.sampleProgram || row.name;
           const jurusan = normalizeJurusan(rawProgram);
+          // Selaraskan tingkat: prioritaskan deteksi dari nama kelas (X=10, XI=11, XII=12) lalu fallback gradeLevel
+          const calculatedTingkat = getTingkatFromNamaKelas(row.name) || row.gradeLevel || 10;
           await prisma.kelas.upsert({
-            where: { nama: row.name },
+            where: { nama: row.name.trim() },
             update: {
-              tingkat: row.gradeLevel || 10,
+              tingkat: calculatedTingkat,
               jurusan,
             },
             create: {
-              nama: row.name,
-              tingkat: row.gradeLevel || 10,
+              nama: row.name.trim(),
+              tingkat: calculatedTingkat,
               jurusan,
             },
           });
@@ -211,12 +216,16 @@ export async function POST(request: NextRequest) {
       if (target === 'ALL' || target === 'KELAS_MAPEL' || target === 'MAPEL') {
         const subjectsRes = await client.query('SELECT id, name, code FROM "Subject"');
         for (const row of subjectsRes.rows) {
+          const cleanCode = (row.code || '').trim().toUpperCase();
+          const cleanName = (row.name || '').trim();
+          if (!cleanCode) continue;
+
           await prisma.mataPelajaran.upsert({
-            where: { kode: row.code },
-            update: { nama: row.name },
+            where: { kode: cleanCode },
+            update: { nama: cleanName },
             create: {
-              kode: row.code,
-              nama: row.name,
+              kode: cleanCode,
+              nama: cleanName,
             },
           });
           stats.mapelCount++;
@@ -232,8 +241,8 @@ export async function POST(request: NextRequest) {
             u.password as password_hash, 
             u.name, 
             u.role,
+            COALESCE(NULLIF(TRIM(tp.nip), ''), NULLIF(TRIM(u."nipNbm"), '')) as nip,
             tp.id as teacher_profile_id,
-            tp.nip,
             COALESCE((
               SELECT count(*) 
               FROM "TeacherSubject" ts 
@@ -316,13 +325,14 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // 2. Dari tabel Schedule SIMASMUH (Jadwal Mengajar)
+          // 2. Dari tabel Schedule SIMASMUH (Jadwal Mengajar Mapel & Rombel Kelas)
           const scheduleRes = await client.query(`
-            SELECT sub.code as subject_code, u.username as teacher_username
+            SELECT sub.code as subject_code, u.username as teacher_username, c.name as class_name
             FROM "Schedule" s
             JOIN "Subject" sub ON s."subjectId" = sub.id
             JOIN "TeacherProfile" tp ON s."teacherId" = tp.id
             JOIN "User" u ON tp."userId" = u.id
+            LEFT JOIN "Class" c ON s."classId" = c.id
           `);
 
           for (const sched of scheduleRes.rows) {
@@ -342,6 +352,26 @@ export async function POST(request: NextRequest) {
                   mataPelajaranId: mapel.id,
                 },
               });
+            }
+
+            // Sinkronisasi Guru ke Rombel Kelas yang diajar
+            if (teacher && sched.class_name) {
+              const k = await prisma.kelas.findUnique({ where: { nama: sched.class_name } });
+              if (k) {
+                await prisma.guruKelas.upsert({
+                  where: {
+                    guruId_kelasId: {
+                      guruId: teacher.id,
+                      kelasId: k.id,
+                    },
+                  },
+                  update: {},
+                  create: {
+                    guruId: teacher.id,
+                    kelasId: k.id,
+                  },
+                });
+              }
             }
           }
 
@@ -369,7 +399,7 @@ export async function POST(request: NextRequest) {
             }
           }
         } catch (schedErr: any) {
-          console.warn('Gagal sinkronisasi relasi guru-mapel dari SIMASMUH:', schedErr.message);
+          console.warn('Gagal sinkronisasi relasi guru-mapel-kelas dari SIMASMUH:', schedErr.message);
         }
       }
 
@@ -440,26 +470,40 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // Otomatis daftarkan siswa resmi ke ujian yang ada
-        const activeUjians = await prisma.ujian.findMany();
-        const allSiswa = await prisma.user.findMany({ where: { role: 'SISWA' } });
+        // Otomatis daftarkan siswa resmi HANYA ke ujian yang ditujukan untuk kelasnya
+        const activeUjians = await prisma.ujian.findMany({
+          include: {
+            ujianKelas: true,
+          },
+        });
+
         for (const uj of activeUjians) {
-          for (const sw of allSiswa) {
-            await prisma.pesertaUjian.upsert({
+          const targetKelasIds = uj.ujianKelas.map((uk) => uk.kelasId);
+          if (targetKelasIds.length > 0) {
+            const eligibleSiswa = await prisma.user.findMany({
               where: {
-                ujianId_siswaId: {
-                  ujianId: uj.id,
-                  siswaId: sw.id,
-                },
-              },
-              update: {},
-              create: {
-                ujianId: uj.id,
-                siswaId: sw.id,
-                status: 'BELUM_MULAI',
-                sisaDetik: uj.durasiMenit * 60,
+                role: 'SISWA',
+                kelasId: { in: targetKelasIds },
               },
             });
+
+            for (const sw of eligibleSiswa) {
+              await prisma.pesertaUjian.upsert({
+                where: {
+                  ujianId_siswaId: {
+                    ujianId: uj.id,
+                    siswaId: sw.id,
+                  },
+                },
+                update: {},
+                create: {
+                  ujianId: uj.id,
+                  siswaId: sw.id,
+                  status: 'BELUM_MULAI',
+                  sisaDetik: uj.durasiMenit * 60,
+                },
+              });
+            }
           }
         }
       }
@@ -493,23 +537,35 @@ export async function POST(request: NextRequest) {
 
           const studentMapByNis = new Map<string, string>();
           for (const s of simasmuhStudents.rows) {
-            if (s.nis) studentMapByNis.set(String(s.nis).trim(), s.id);
-            if (s.nisn) studentMapByNis.set(String(s.nisn).trim(), s.id);
+            if (s.nis) {
+              const cleanNis = String(s.nis).trim();
+              studentMapByNis.set(cleanNis, s.id);
+              studentMapByNis.set(cleanNis.toLowerCase(), s.id);
+            }
+            if (s.nisn) {
+              const cleanNisn = String(s.nisn).trim();
+              studentMapByNis.set(cleanNisn, s.id);
+              studentMapByNis.set(cleanNisn.toLowerCase(), s.id);
+            }
           }
 
           const subjectMapByCode = new Map<string, string>();
+          const subjectMapByName = new Map<string, string>();
           for (const sb of simasmuhSubjects.rows) {
             if (sb.code) subjectMapByCode.set(String(sb.code).trim().toUpperCase(), sb.id);
+            if (sb.name) subjectMapByName.set(String(sb.name).trim().toUpperCase(), sb.id);
           }
 
           let syncedGradeCount = 0;
 
           for (const p of pesertaSelesai) {
-            const studentNis = p.siswa.nis || p.siswa.username;
-            const subjectCode = p.ujian.bankSoal.mataPelajaran.kode.toUpperCase();
+            const rawNis = p.siswa.nis || p.siswa.username;
+            const studentNis = rawNis ? String(rawNis).trim() : '';
+            const subjectCode = p.ujian.bankSoal.mataPelajaran.kode ? String(p.ujian.bankSoal.mataPelajaran.kode).trim().toUpperCase() : '';
+            const subjectName = p.ujian.bankSoal.mataPelajaran.nama ? String(p.ujian.bankSoal.mataPelajaran.nama).trim().toUpperCase() : '';
 
-            const simasmuhStudentId = studentMapByNis.get(studentNis);
-            const simasmuhSubjectId = subjectMapByCode.get(subjectCode);
+            const simasmuhStudentId = studentMapByNis.get(studentNis) || studentMapByNis.get(studentNis.toLowerCase());
+            const simasmuhSubjectId = subjectMapByCode.get(subjectCode) || subjectMapByName.get(subjectName);
 
             if (!simasmuhStudentId || !simasmuhSubjectId) continue;
 
@@ -528,7 +584,7 @@ export async function POST(request: NextRequest) {
             const finalScore = Number(p.nilaiTotal) || 0;
             const gradeId = `cbt-grade-${p.id}`;
 
-            // Upsert ke tabel "Grade" di database SIMASMUH
+            // Upsert ke tabel "Grade" di database SIMASMUH (Strict ON CONFLICT)
             await client.query(
               `
               INSERT INTO "Grade" (id, "studentId", "subjectId", type, semester, score)

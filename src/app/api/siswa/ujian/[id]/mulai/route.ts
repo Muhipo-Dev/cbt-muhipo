@@ -51,6 +51,27 @@ export async function POST(
       }, { status: 400 });
     }
 
+    // 2b. Verifikasi Batasan Kelas Ujian (Siswa HANYA dapat mengerjakan ujian untuk kelasnya sendiri)
+    const targetClasses = await prisma.ujianKelas.findMany({
+      where: { ujianId },
+      include: { kelas: true },
+    });
+
+    if (targetClasses.length > 0) {
+      const studentUser = await prisma.user.findUnique({
+        where: { id: user.userId },
+        select: { kelasId: true },
+      });
+
+      const isEligibleClass = studentUser?.kelasId && targetClasses.some((tc) => tc.kelasId === studentUser.kelasId);
+      if (!isEligibleClass) {
+        return NextResponse.json({
+          success: false,
+          message: 'Ujian ini tidak diperuntukkan bagi kelas Anda.',
+        }, { status: 403 });
+      }
+    }
+
     // 3. Verifikasi Status Pendaftaran Peserta Siswa
     let peserta = await prisma.pesertaUjian.findUnique({
       where: {
@@ -66,9 +87,22 @@ export async function POST(
     const totalMaxDetik = ujian.durasiMenit * 60;
     let computedSisaDetik = totalMaxDetik;
 
-    // Jika jadwal ujian memiliki waktuMulai, hitung waktu kedaluwarsa jadwal
+    // Jika jadwal ujian memiliki waktuMulai, hitung waktu kedaluwarsa jadwal & cek apakah jadwal sudah dibuka
     if (ujian.waktuMulai) {
       const scheduledStart = new Date(ujian.waktuMulai);
+
+      // Cek apakah waktu saat ini belum mencapai jadwal mulai
+      if (now < scheduledStart) {
+        const formattedStart = scheduledStart.toLocaleString('id-ID', {
+          dateStyle: 'full',
+          timeStyle: 'short',
+        });
+        return NextResponse.json({
+          success: false,
+          message: `Ujian belum dibuka. Jadwal mulai: ${formattedStart} WIB.`,
+        }, { status: 400 });
+      }
+
       const scheduledEndFromDuration = new Date(scheduledStart.getTime() + totalMaxDetik * 1000);
       
       // Jika ada waktuSelesai yang lebih ketat, gunakan yang terkecil
@@ -83,7 +117,7 @@ export async function POST(
       const diffMs = absoluteEnd.getTime() - now.getTime();
       const sisaDariJadwal = Math.floor(diffMs / 1000);
 
-      // Jika siswa mulai setelah jadwal mulai, sisa waktu otomatis terpangkas
+      // Jika siswa mulai setelah jadwal berakhir, tolak
       if (sisaDariJadwal <= 0) {
         return NextResponse.json({
           success: false,
@@ -95,7 +129,7 @@ export async function POST(
     }
 
     if (!peserta) {
-      // Daftarkan siswa secara otomatis jika kelas siswa sinkron dengan jadwal ujian
+      // Daftarkan siswa jika kelasnya memenuhi syarat
       peserta = await prisma.pesertaUjian.create({
         data: {
           ujianId,
@@ -203,6 +237,7 @@ export async function POST(
       mediaAudio: s.mediaAudio || undefined,
       mediaGambar: s.mediaGambar || undefined,
       bobot: s.bobot,
+      matchingData: s.matchingData || undefined,
       opsiJawaban: (s.opsiJawaban || []).map((o) => ({
         id: o.id,
         label: o.label,
