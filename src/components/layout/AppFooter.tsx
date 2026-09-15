@@ -15,7 +15,7 @@ export function AppFooter({ variant = 'minimal', className = '' }: AppFooterProp
         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
       </span>
       <span className="tracking-wide text-center truncate">
-        &copy; 2026 CBT SMA MUHIPO (Computer Based Test)
+        Copyright &copy; 2026 Muhipo Dev
       </span>
     </footer>
   );
