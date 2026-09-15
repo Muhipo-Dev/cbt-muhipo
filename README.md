@@ -64,9 +64,8 @@ Server akan aktif di `http://localhost:3010` (dan dapat diakses seluruh komputer
 
 | Role | Username Default | Password Default | Halaman | Deskripsi |
 | :--- | :--- | :--- | :--- | :--- |
-| **Super Admin** | `admin` | `admin123` | `/admin` | Manajemen penuh Data Modul, Data Peserta, Data Tes, Token, Proktor & Pengaturan |
-| **Guru Pengampu** | `guru_mtk` / NIP Guru | `123456` | `/guru` | Pembuatan Bank Soal, Koreksi Essay, dan Ekspor Nilai |
-| **Peserta / Siswa** | NIS Siswa | `123456` | `/siswa` | Portal Ujian CBT, Input Token, dan Lembar Jawaban Soal |
+| **Administrasi (Super Admin)** | `nailar` | `nailar` | `/admin` | Manajemen penuh Data Modul, Data Peserta, Data Tes, Token, Proktor & Pengaturan |
+| **Proktor (Pengawas Lab)** | `niam` | `niam` | `/proktor` | Pengawasan Ujian, Reset Login Peserta, Tambah Waktu & Monitoring |
 
 ---
 

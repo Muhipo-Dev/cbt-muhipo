@@ -128,14 +128,20 @@ function Start-CBTApp {
     Stop-PortProcess $CBT_PORT
     if (Test-Path $APP_PID_FILE) { Remove-Item $APP_PID_FILE -Force }
 
-    Write-Status "Menjalankan CBT Web App pada port $CBT_PORT..." "Cyan"
-    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c cd /d `"$ROOT`" && npx next dev -H 0.0.0.0 -p $CBT_PORT > `"$APP_LOG`" 2>&1" -PassThru -WindowStyle Hidden
+    $nextFolder = Join-Path $ROOT ".next"
+    if (-not (Test-Path $nextFolder)) {
+        Write-Info "Build production belum ada. Membangun sistem (build)..."
+        cmd.exe /c "cd /d `"$ROOT`" && npm run build"
+    }
+
+    Write-Status "Menjalankan CBT Web App Mode Production pada port $CBT_PORT..." "Cyan"
+    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c cd /d `"$ROOT`" && npx next start -H 0.0.0.0 -p $CBT_PORT > `"$APP_LOG`" 2>&1" -PassThru -WindowStyle Hidden
     
     $proc.Id | Out-File $APP_PID_FILE -Force -Encoding ASCII
     Start-Sleep -Seconds 3
 
     if (Test-PortListening $CBT_PORT) {
-        Write-Ok "CBT Web App berhasil aktif di http://localhost:$CBT_PORT"
+        Write-Ok "CBT Web App Production berhasil aktif di http://localhost:$CBT_PORT"
     } else {
         Write-Info "Server sedang inisialisasi di latar belakang (cek $APP_LOG)"
     }
@@ -220,9 +226,10 @@ while ($true) {
     Write-Host "  [4] Jalankan Prisma Studio GUI Saja (:5560)" -ForegroundColor Cyan
     Write-Host "  [5] Buka Browser CBT Web App (http://localhost:3010)" -ForegroundColor Yellow
     Write-Host "  [6] Inisialisasi Ulang Skema Database (Prisma db push & seed)" -ForegroundColor Magenta
+    Write-Host "  [7] Rebuild Sistem (Prisma generate + Next.js build)" -ForegroundColor Cyan
     Write-Host "  [0] Keluar" -ForegroundColor DarkGray
     Write-Host ""
-    $choice = Read-Host "  Pilih nomor menu (0-6)"
+    $choice = Read-Host "  Pilih nomor menu (0-7)"
 
     switch ($choice) {
         "1" { Start-AllServices; Read-Host "  Tekan Enter untuk kembali ke menu..." }
@@ -233,6 +240,13 @@ while ($true) {
         "6" {
             Write-Status "Inisialisasi database..." "Cyan"
             cmd.exe /c "cd /d `"$ROOT`" && npx prisma db push && npx tsx prisma/seed.ts"
+            Read-Host "  Tekan Enter untuk kembali ke menu..."
+        }
+        "7" {
+            Write-Status "Rebuilding sistem CBT..." "Cyan"
+            Stop-CBTApp
+            cmd.exe /c "cd /d `"$ROOT`" && npx prisma generate && npm run build"
+            Start-CBTApp
             Read-Host "  Tekan Enter untuk kembali ke menu..."
         }
         "0" { exit 0 }

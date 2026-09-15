@@ -55,8 +55,8 @@ async function main() {
   await prisma.kelas.deleteMany();
 
   // 2. Hash Password Default
-  const hashedPassword = await bcrypt.hash('123456', 10);
-  const adminPassword = await bcrypt.hash('admin123', 10);
+  const nailarPassword = await bcrypt.hash('nailar', 10);
+  const niamPassword = await bcrypt.hash('niam', 10);
 
   // 3. Buat Kelas
   const kelas10A = await prisma.kelas.create({
@@ -69,12 +69,12 @@ async function main() {
     data: { nama: 'XII-F1 (MIPA)', tingkat: 12, jurusan: 'MIPA' },
   });
 
-  // 4. Buat Akun Super Admin, Admin & Proktor
+  // 4. Buat Akun Administrasi & Proktor
   await prisma.user.create({
     data: {
       username: 'nailar',
-      password: adminPassword,
-      name: 'Nailar (Super Administrator)',
+      password: nailarPassword,
+      name: 'Nailar (Administrator CBT)',
       role: Role.SUPERADMIN,
       nip: '199001012015011001',
     },
@@ -82,35 +82,15 @@ async function main() {
 
   await prisma.user.create({
     data: {
-      username: 'admin',
-      password: adminPassword,
-      name: 'Administrator CBT Muhipo',
-      role: Role.ADMIN,
-      nip: '198501012010011001',
-    },
-  });
-
-  await prisma.user.create({
-    data: {
-      username: 'proktor1',
-      password: hashedPassword,
-      name: 'Proktor Lab Komputer 1',
+      username: 'niam',
+      password: niamPassword,
+      name: 'Niam (Proktor CBT)',
       role: Role.PROKTOR,
       ruangUjian: 'Lab Komputer 1',
     },
   });
 
-  // 5. Buat Akun Guru & Topik / Mata Pelajaran
-  const guruMtk = await prisma.user.create({
-    data: {
-      username: 'guru_mtk',
-      password: hashedPassword,
-      name: 'Drs. H. Ahmad Dahlan, M.Pd',
-      role: Role.GURU,
-      nip: '197505122000031002',
-    },
-  });
-
+  // 5. Buat Topik / Mata Pelajaran Demo
   const mapelMtk = await prisma.mataPelajaran.create({
     data: {
       kode: 'MTK-XII',
@@ -119,10 +99,6 @@ async function main() {
       jurusan: 'MIPA',
       durasiMenit: 90,
       kkm: 75.0,
-      pembuatId: guruMtk.id,
-      gurus: {
-        create: { guruId: guruMtk.id },
-      },
     },
   });
 
@@ -131,35 +107,6 @@ async function main() {
   });
   await prisma.mataPelajaran.create({
     data: { kode: 'AIK-XII', nama: 'Al-Islam & Kemuhammadiyahan XII', tingkat: 12, jurusan: 'UMUM' },
-  });
-
-  // 6. Buat Akun Siswa Demo
-  const siswa1 = await prisma.user.create({
-    data: {
-      username: 'siswa01',
-      password: hashedPassword,
-      name: 'Muhammad Farhan Ramadhan',
-      role: Role.SISWA,
-      nomorPeserta: 'MHP-2026-001',
-      jenisKelamin: 'L',
-      kelasId: kelas12A.id,
-      ruangUjian: 'Lab Komputer 1',
-      sesiUjian: 1,
-    },
-  });
-
-  const siswa2 = await prisma.user.create({
-    data: {
-      username: 'siswa02',
-      password: hashedPassword,
-      name: 'Aisyah Putri Azzahra',
-      role: Role.SISWA,
-      nomorPeserta: 'MHP-2026-002',
-      jenisKelamin: 'P',
-      kelasId: kelas12A.id,
-      ruangUjian: 'Lab Komputer 1',
-      sesiUjian: 1,
-    },
   });
 
   // 7. Buat Soal-soal Demo Beragam Tipe Langsung di dalam Topik / Mata Pelajaran
@@ -301,31 +248,10 @@ async function main() {
     },
   });
 
-  // 9. Daftarkan Peserta Ujian
-  await prisma.pesertaUjian.create({
-    data: {
-      ujianId: ujianMtk.id,
-      siswaId: siswa1.id,
-      status: StatusPeserta.BELUM_MULAI,
-    },
-  });
-
-  await prisma.pesertaUjian.create({
-    data: {
-      ujianId: ujianMtk.id,
-      siswaId: siswa2.id,
-      status: StatusPeserta.BELUM_MULAI,
-    },
-  });
-
   console.log('✅ Seeding berhasil selesai!');
-  console.log('--- AKUN DEFAULT UNTUK TESTING & PRODUKSI ---');
-  console.log('Super Admin: username=nailar, password=admin123 (Hak Akses Penuh & Manajemen Pengguna)');
-  console.log('Admin Master: username=admin, password=admin123');
-  console.log('Proktor    : username=proktor1, password=123456 (Pengawasan Ujian & Reset Siswa)');
-  console.log('Guru       : username=guru_mtk, password=123456');
-  console.log('Siswa 1    : username=siswa01, password=123456');
-  console.log('Siswa 2    : username=siswa02, password=123456');
+  console.log('--- AKUN DEFAULT CBT MUHIPO ---');
+  console.log('Administrasi : username=nailar, password=nailar (Hak Akses Penuh Super Admin)');
+  console.log('Proktor      : username=niam, password=niam (Pengawasan Ujian & Reset Siswa)');
 }
 
 main()

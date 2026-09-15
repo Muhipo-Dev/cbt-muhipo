@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  /* Optimasi Performa & Ringan */
+  compress: true,
+  poweredByHeader: false,
+  reactStrictMode: true,
   // Mengizinkan semua origin dinamis (semua IP lokal, semua domain tunnel, localhost, dsb)
   allowedDevOrigins: [
     '*',
