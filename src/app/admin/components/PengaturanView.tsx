@@ -90,7 +90,7 @@ export function PengaturanView({
           </div>
           <div>
             <h2 className="text-lg font-black text-slate-900 dark:text-white">
-              Pengaturan CBT Mandiri
+              Pengaturan CBT
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Konfigurasi identitas sekolah, logo, background, tahun ajaran, dan zona waktu server.

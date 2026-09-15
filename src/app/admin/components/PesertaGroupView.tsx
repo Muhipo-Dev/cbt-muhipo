@@ -119,7 +119,7 @@ export function PesertaGroupView({
             <span>Data Group / Rombel Peserta Ujian</span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Kelola kelompok peserta, kelas, dan rombongan belajar mandiri untuk alokasi distribusi ujian.
+            Kelola kelompok peserta, kelas, dan rombongan belajar untuk alokasi distribusi ujian.
           </p>
         </div>
 

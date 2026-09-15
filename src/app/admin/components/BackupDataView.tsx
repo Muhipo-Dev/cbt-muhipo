@@ -240,7 +240,7 @@ export function BackupDataView({
             <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
               <span>Backup, Ekspor & Pemeliharaan Data</span>
               <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-bold border border-blue-500/20">
-                Sistem Mandiri
+                Sistem CBT
               </span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">

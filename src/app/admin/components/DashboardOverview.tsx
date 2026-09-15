@@ -96,13 +96,13 @@ export function DashboardOverview({
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs font-bold text-blue-200">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>CBT Mandiri Aktif</span>
+              <span>Sistem CBT Aktif</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
               Selamat Datang, {cleanName(currentUser?.name)}!
             </h2>
             <p className="text-sm text-blue-100 max-w-2xl leading-relaxed">
-              Sistem Computer Based Test (CBT) mandiri {settings.schoolName || 'SMA Muhammadiyah 1 Ponorogo'}. Kelola data modul, peserta, dan tes ujian secara mandiri tanpa ketergantungan eksternal.
+              Sistem Computer Based Test (CBT) {settings.schoolName || 'SMA Muhammadiyah 1 Ponorogo'}. Kelola data modul, peserta, dan tes pelaksanaan ujian.
             </p>
           </div>
 

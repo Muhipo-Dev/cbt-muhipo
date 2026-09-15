@@ -876,7 +876,7 @@ export function ModulTopikView({
                   required
                   value={modulForm.nama}
                   onChange={(e) => setModulForm({ ...modulForm, nama: e.target.value })}
-                  placeholder="Contoh: Tryout TKA, Ujian Sekolah, Asesmen Mandiri"
+                  placeholder="Contoh: Tryout TKA, Ujian Sekolah, Asesmen Sumatif"
                   className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                 />
               </div>

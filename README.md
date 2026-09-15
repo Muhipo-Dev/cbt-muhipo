@@ -1,4 +1,4 @@
-# 🎓 CBT MUHIPO — Platform Computer Based Test Mandiri SMA Muhammadiyah 1 Ponorogo
+# 🎓 CBT MUHIPO — Platform Computer Based Test SMA Muhammadiyah 1 Ponorogo
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.3.3-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-blue?style=for-the-badge&logo=react)](https://react.dev/)
@@ -7,9 +7,9 @@
 [![SQLite](https://img.shields.io/badge/SQLite-Zero--Config-003B57?style=for-the-badge&logo=sqlite)](https://www.sqlite.org/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v4-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
 
-> **CBT MUHIPO** adalah sistem ujian berbasis komputer (*Computer Based Test*) mandiri, cepat, aman, dan tangguh yang dirancang khusus untuk memenuhi kebutuhan asesmen digital di **SMA Muhammadiyah 1 Ponorogo**.
+> **CBT MUHIPO** adalah sistem ujian berbasis komputer (*Computer Based Test*) yang cepat, aman, dan tangguh yang dirancang khusus untuk memenuhi kebutuhan asesmen digital di **SMA Muhammadiyah 1 Ponorogo**.
 
-Platform ini beroperasi 100% mandiri (*standalone*) menggunakan file database SQLite lokal tanpa ketergantungan pada server database eksternal, memudahkan instalasi dan operasional di jaringan LAN / Lab Komputer sekolah maupun jaringan terpusat.
+Platform ini beroperasi secara *standalone* menggunakan file database SQLite lokal tanpa ketergantungan pada server database eksternal, memudahkan instalasi dan operasional di jaringan LAN / Lab Komputer sekolah maupun jaringan terpusat.
 
 ---
 

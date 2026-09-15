@@ -49,7 +49,7 @@ if errorlevel 1 (
 
 echo.
 echo ==============================================================================
-echo    SETUP BERHASIL! Database SQLite siap digunakan untuk ujian CBT Mandiri.
+echo    SETUP BERHASIL! Database SQLite siap digunakan untuk ujian CBT.
 echo ==============================================================================
 echo.
 echo  AKUN DEFAULT PENGGUNA CBT:

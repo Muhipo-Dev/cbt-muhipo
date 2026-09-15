@@ -110,7 +110,7 @@ export function TesTambahView({
           <span>Tambah & Terbitkan Jadwal Tes Baru</span>
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Formulir pembuatan tes ujian CBT mandiri berdasarkan Topik / Mata Pelajaran.
+          Formulir pembuatan tes ujian CBT berdasarkan Topik / Mata Pelajaran.
         </p>
       </div>
 

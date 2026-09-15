@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
           data: [
             { nama: 'Default', deskripsi: 'Modul Utama / Standar CBT' },
             { nama: 'Ujian Sekolah', deskripsi: 'Asesmen & Ujian Sekolah' },
-            { nama: 'Asesmen Mandiri', deskripsi: 'Evaluasi & Latihan Mandiri' },
+            { nama: 'Asesmen Sekolah', deskripsi: 'Evaluasi & Asesmen Sekolah' },
           ],
         });
       }

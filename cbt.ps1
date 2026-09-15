@@ -28,7 +28,7 @@ function Write-Banner {
     Write-Host ""
     Write-Host "  +==================================================+" -ForegroundColor Cyan
     Write-Host "  |       CBT MUHIPO STANDALONE - Muhipo Dev         |" -ForegroundColor Cyan
-    Write-Host "  |    Sistem CBT Mandiri SMA Muhammadiyah 1 Ponorogo|" -ForegroundColor Cyan
+    Write-Host "  |    Sistem CBT SMA Muhammadiyah 1 Ponorogo        |" -ForegroundColor Cyan
     Write-Host "  |  Port Server: :$CBT_PORT (HTTPS) & :$STUDIO_PORT (Studio) |" -ForegroundColor DarkCyan
     Write-Host "  +==================================================+" -ForegroundColor Cyan
     Write-Host ""

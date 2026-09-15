@@ -239,7 +239,7 @@ export default function ComprehensiveAdminDashboard() {
       })
       const json = await res.json()
       if (json.success) {
-        showNotification('Pengaturan Disimpan', 'Pengaturan sistem CBT mandiri berhasil disimpan!', 'success')
+        showNotification('Pengaturan Disimpan', 'Pengaturan sistem CBT berhasil disimpan!', 'success')
         fetchAllData()
       } else {
         showNotification('Gagal Simpan', json.message || 'Gagal menyimpan pengaturan.', 'error')
