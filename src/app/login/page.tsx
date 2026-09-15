@@ -100,7 +100,7 @@ export default function SingleSignInLoginPage() {
       {/* Top Header Navbar */}
       <header className="w-full px-4 sm:px-6 lg:px-10 py-3 sm:py-3.5 border-b border-white/20 dark:border-white/10 bg-white/75 dark:bg-slate-950/75 backdrop-blur-md flex items-center justify-between z-10 shadow-sm">
         <SchoolBrandHeader
-          subtitle="Portal Ujian"
+          subtitle="Portal Ujian SMA Muhammadiyah 1 Ponorogo"
           logoUrl={settings.logoUrl}
           appTitle={settings.appTitle || 'CBT SMA MUHIPO'}
         />

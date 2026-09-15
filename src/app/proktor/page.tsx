@@ -377,7 +377,7 @@ export default function ProktorPage() {
       {/* Proktor Topbar */}
       <header className="px-6 py-4 bg-slate-900/90 border-b border-slate-800 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between">
         <SchoolBrandHeader
-          subtitle="Manajemen Ujian"
+          subtitle="Manajemen Ujian SMA Muhammadiyah 1 Ponorogo"
           logoUrl={settings.logoUrl}
           appTitle={settings.appTitle || 'CBT SMA MUHIPO'}
         />

@@ -1254,7 +1254,7 @@ export default function GuruDashboardPage() {
         {/* Navbar Induk Terpadu */}
         <AppNavbar
           appTitle={settingsForm.appTitle && settingsForm.appTitle !== 'CBT' && settingsForm.appTitle !== 'CBT MUHIPO' ? settingsForm.appTitle : 'CBT SMA MUHIPO'}
-          subtitle="Manajemen Ujian - Guru"
+          subtitle="Manajemen Ujian Guru SMA Muhammadiyah 1 Ponorogo"
           logoUrl={settingsForm.logoUrl}
           onToggleSidebar={activeTab !== 'dashboard' ? () => setSidebarOpen(true) : undefined}
           userProfile={{

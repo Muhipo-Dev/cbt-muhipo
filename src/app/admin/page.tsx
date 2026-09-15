@@ -536,7 +536,7 @@ export default function ComprehensiveAdminDashboard() {
         {/* Navbar */}
         <AppNavbar
           appTitle={settingsForm.appTitle && settingsForm.appTitle !== 'CBT' && settingsForm.appTitle !== 'CBT MUHIPO' ? settingsForm.appTitle : 'CBT SMA MUHIPO'}
-          subtitle="Manajemen Ujian"
+          subtitle="Manajemen Ujian SMA Muhammadiyah 1 Ponorogo"
           logoUrl={settingsForm.logoUrl}
           onToggleSidebar={() => setSidebarOpen(true)}
           userProfile={{

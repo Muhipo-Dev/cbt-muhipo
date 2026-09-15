@@ -166,7 +166,7 @@ export default function SiswaPortalPage() {
       {/* 3. AppNavbar Terpadu */}
       <AppNavbar
         appTitle={pengaturan?.appTitle && pengaturan?.appTitle !== 'CBT' && pengaturan?.appTitle !== 'CBT MUHIPO' ? pengaturan.appTitle : 'CBT SMA MUHIPO'}
-        subtitle="Sistem Ujian"
+        subtitle="Sistem Ujian SMA Muhammadiyah 1 Ponorogo"
         logoUrl={pengaturan?.logoUrl}
         userProfile={{
           name: siswa?.name || 'Siswa CBT',

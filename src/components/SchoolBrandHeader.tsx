@@ -9,7 +9,7 @@ interface SchoolBrandHeaderProps {
 }
 
 export const SchoolBrandHeader: React.FC<SchoolBrandHeaderProps> = ({
-  subtitle = 'Portal Ujian',
+  subtitle = 'Portal Ujian SMA Muhammadiyah 1 Ponorogo',
   className = '',
   showBadge = false,
   logoUrl = '/pic_logo.png',
