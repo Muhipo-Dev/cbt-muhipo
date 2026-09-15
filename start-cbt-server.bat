@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-REM Atur PATH sistem agar semua utility (Node, PowerShell, netstat, taskkill, ping) selalu dapat diakses
+REM Atur PATH sistem agar semua utility selalu tersedia
 set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0;C:\Program Files\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\nodejs;%PATH%"
 set "NODE_ENV=production"
 
@@ -45,7 +45,7 @@ if not exist ".next" (
     ping 127.0.0.1 -n 2 >nul
 )
 
-REM 3. Jalankan server pertama kali jika belum aktif
+REM 3. Inisialisasi awal server jika belum berjalan
 set "INIT_PID="
 for /f "delims=" %%p in ('powershell.exe -NoProfile -Command "(Get-NetTCPConnection -LocalPort 443 -State Listen -ErrorAction SilentlyContinue).OwningProcess"') do (
     if %%p GTR 0 set "INIT_PID=%%p"
@@ -74,7 +74,7 @@ echo ===========================================================================
 echo.
 
 if defined SERVER_PID (
-    echo  STATUS SERVER : [ AKTIF - SIAP DIGUNAKAN (PID: !SERVER_PID!) ]
+    echo  STATUS SERVER : [ AKTIF - SIAP DIGUNAKAN ] (PID: !SERVER_PID!)
 ) else (
     echo  STATUS SERVER : [ NONAKTIF / MATI ]
 )
@@ -98,6 +98,15 @@ if defined LAST_IP (
 )
 echo             Pada browser siswa, klik "Lanjutan / Advanced" lalu "Lanjutkan ke situs".
 echo.
+echo  ------------------------------------------------------------------------------
+echo  LOG STATUS TERAKHIR:
+if exist "cbt-app.log" (
+    powershell.exe -NoProfile -Command "Get-Content -Path 'cbt-app.log' -Tail 6 | ForEach-Object { '   | ' + $_ }"
+) else (
+    echo    (Belum ada catatan log aktivitas)
+)
+echo  ------------------------------------------------------------------------------
+echo.
 echo ==============================================================================
 echo  PILIHAN KONTROL SERVER CBT:
 echo ==============================================================================
@@ -106,9 +115,9 @@ echo    [2] MATIKAN SERVER      - Matikan server CBT (POWER OFF)
 echo    [3] NYALAKAN SERVER     - Jalankan server CBT (POWER ON)
 echo    [4] REBUILD SISTEM      - Build ulang source code + Restart server
 echo    [5] BUKA DI BROWSER     - Buka https://localhost di browser
-echo    [6] LIHAT LOG SERVER    - Tampilkan aktivitas log server realtime
-echo    [7] REFRESH STATUS      - Segarkan tampilan status
-echo    [0] KELUAR              - Tutup menu controller
+echo    [6] LIHAT SEMUA LOG     - Buka log lengkap aktivitas server
+echo    [7] REFRESH TAMPILAN    - Segarkan status dan daftar alamat IP
+echo    [0] KELUAR              - Matikan server dan tutup jendela
 echo ==============================================================================
 echo.
 set "CHOICE="
@@ -138,7 +147,7 @@ echo [2/2] Menyalakan server CBT Mode Secure HTTPS di Port 443 ^& 80...
 call :SUB_START_SERVER
 echo.
 echo [SUKSES] Server CBT berhasil direstart!
-ping 127.0.0.1 -n 3 >nul
+ping 127.0.0.1 -n 2 >nul
 goto MENU_LOOP
 
 
@@ -149,7 +158,7 @@ echo Menghentikan server CBT...
 call :SUB_STOP_SERVER
 echo.
 echo [SUKSES] Server CBT berhasil dinonaktifkan (Port 443 dan 80 dibebaskan).
-ping 127.0.0.1 -n 3 >nul
+ping 127.0.0.1 -n 2 >nul
 goto MENU_LOOP
 
 
@@ -161,7 +170,7 @@ call :SUB_STOP_SERVER
 call :SUB_START_SERVER
 echo.
 echo [SUKSES] Server CBT berhasil dinyalakan!
-ping 127.0.0.1 -n 3 >nul
+ping 127.0.0.1 -n 2 >nul
 goto MENU_LOOP
 
 
@@ -203,17 +212,17 @@ goto MENU_LOOP
 cls
 color 0F
 echo ==============================================================================
-echo                       LOG AKTIVITAS SERVER CBT (TERAKHIR)
+echo                       LOG AKTIVITAS LENGKAP SERVER CBT
 echo ==============================================================================
 echo.
 if exist "cbt-app.log" (
-    powershell.exe -NoProfile -Command "Get-Content -Path 'cbt-app.log' -Tail 25"
+    powershell.exe -NoProfile -Command "Get-Content -Path 'cbt-app.log' -Tail 40"
 ) else (
     echo [INFO] File cbt-app.log belum tersedia.
 )
 echo.
 echo ==============================================================================
-echo Tekan sembarang tombol untuk kembali ke menu utama...
+echo Tekan sembarang tombol untuk kembali ke dashboard...
 pause >nul
 goto MENU_LOOP
 
@@ -221,18 +230,9 @@ goto MENU_LOOP
 :DO_EXIT
 echo.
 echo ==============================================================================
-echo  PILIHAN KELUAR:
-echo  [1] Matikan server CBT dan tutup jendela (POWER OFF)
-echo  [2] Biarkan server CBT tetap berjalan di latar belakang dan tutup jendela
-echo ==============================================================================
-set "EXIT_OPT="
-set /p "EXIT_OPT=>> Masukkan pilihan Anda [1/2]: "
-if "%EXIT_OPT%"=="1" (
-    echo Menghentikan server CBT...
-    call :SUB_STOP_SERVER
-    echo Server dimatikan.
-)
-echo Sampai jumpa!
+echo Menghentikan server CBT dan menutup jendela...
+call :SUB_STOP_SERVER
+echo Selesai. Sampai jumpa!
 ping 127.0.0.1 -n 2 >nul
 exit /b 0
 
@@ -242,7 +242,7 @@ REM SUBROUTINES
 REM ==============================================================================
 
 :SUB_START_SERVER
-echo [..] Menjalankan server CBT di latar belakang...
+echo [..] Mengaktifkan service HTTPS Server Port 443 ^& 80...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c node server.js > cbt-app.log 2>&1' -WorkingDirectory '%~dp0.' -WindowStyle Hidden" >nul 2>&1
 ping 127.0.0.1 -n 3 >nul
 goto :eof
