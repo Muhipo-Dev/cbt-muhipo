@@ -73,7 +73,7 @@ export default function ComprehensiveAdminDashboard() {
   // Settings State
   const [settingsForm, setSettingsForm] = useState({
     schoolName: 'SMA Muhammadiyah 1 Ponorogo',
-    appTitle: 'CBT MUHIPO',
+    appTitle: 'CBT SMA MUHIPO',
     academicYear: '2026/2027',
     semester: 'Ganjil',
     timezone: 'Asia/Jakarta',
@@ -535,8 +535,8 @@ export default function ComprehensiveAdminDashboard() {
       <div className="flex-1 lg:ml-72 print:ml-0 print:m-0 print:p-0 flex flex-col justify-between min-w-0 transition-all duration-300 relative z-10">
         {/* Navbar */}
         <AppNavbar
-          appTitle={settingsForm.appTitle || 'CBT MUHIPO'}
-          subtitle="Manajemen Ujian Mandiri SMA Muhammadiyah 1 Ponorogo"
+          appTitle={settingsForm.appTitle && settingsForm.appTitle !== 'CBT' && settingsForm.appTitle !== 'CBT MUHIPO' ? settingsForm.appTitle : 'CBT SMA MUHIPO'}
+          subtitle="Manajemen Ujian"
           logoUrl={settingsForm.logoUrl}
           onToggleSidebar={() => setSidebarOpen(true)}
           userProfile={{

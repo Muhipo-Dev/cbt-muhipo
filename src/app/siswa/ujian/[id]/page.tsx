@@ -899,7 +899,7 @@ export default function LembarUjianPage({
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center text-slate-800 dark:text-slate-100">
         <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4 shadow-sm" />
-        <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Menyiapkan Lembar Ujian CBT Muhipo...</p>
+        <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Menyiapkan Lembar Ujian CBT SMA MUHIPO...</p>
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Memuat soal dan preferensi ujian</p>
       </div>
     );

@@ -70,7 +70,7 @@ export default function GuruDashboardPage() {
   // Settings State (Logo & Wallpaper)
   const [settingsForm, setSettingsForm] = useState({
     schoolName: 'SMA Muhammadiyah 1 Ponorogo',
-    appTitle: 'CBT MUHIPO',
+    appTitle: 'CBT SMA MUHIPO',
     academicYear: '2026/2027',
     semester: 'Ganjil',
     logoUrl: '/pic_logo.png',
@@ -1253,8 +1253,8 @@ export default function GuruDashboardPage() {
       >
         {/* Navbar Induk Terpadu */}
         <AppNavbar
-          appTitle={settingsForm.appTitle || 'CBT MUHIPO'}
-          subtitle="Portal Guru Pengampu & Pembuat Soal"
+          appTitle={settingsForm.appTitle && settingsForm.appTitle !== 'CBT' && settingsForm.appTitle !== 'CBT MUHIPO' ? settingsForm.appTitle : 'CBT SMA MUHIPO'}
+          subtitle="Manajemen Ujian - Guru"
           logoUrl={settingsForm.logoUrl}
           onToggleSidebar={activeTab !== 'dashboard' ? () => setSidebarOpen(true) : undefined}
           userProfile={{

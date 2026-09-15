@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { SchoolBrandHeader } from '@/components/SchoolBrandHeader';
+import { AppFooter } from '@/components/layout/AppFooter';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useRealtimeServerClock } from '@/lib/time-sync';
 import {
@@ -23,7 +24,7 @@ export default function SingleSignInLoginPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [settings, setSettings] = useState({
     schoolName: 'SMA Muhammadiyah 1 Ponorogo',
-    appTitle: 'CBT MUHIPO',
+    appTitle: 'CBT SMA MUHIPO',
     backgroundUrl: '/muhipo-front.jpg',
     logoUrl: '/pic_logo.png',
   });
@@ -37,7 +38,7 @@ export default function SingleSignInLoginPage() {
         if (json.success && json.data) {
           setSettings({
             schoolName: json.data.schoolName || 'SMA Muhammadiyah 1 Ponorogo',
-            appTitle: json.data.appTitle || 'CBT MUHIPO',
+            appTitle: json.data.appTitle || 'CBT SMA MUHIPO',
             backgroundUrl: json.data.backgroundUrl || '/muhipo-front.jpg',
             logoUrl: json.data.logoUrl || '/pic_logo.png',
           });
@@ -99,9 +100,9 @@ export default function SingleSignInLoginPage() {
       {/* Top Header Navbar */}
       <header className="w-full px-4 sm:px-6 lg:px-10 py-3 sm:py-3.5 border-b border-white/20 dark:border-white/10 bg-white/75 dark:bg-slate-950/75 backdrop-blur-md flex items-center justify-between z-10 shadow-sm">
         <SchoolBrandHeader
-          subtitle={`Portal Ujian ${settings.schoolName || 'SMA Muhammadiyah 1 Ponorogo'}`}
+          subtitle="Portal Ujian"
           logoUrl={settings.logoUrl}
-          appTitle={settings.appTitle}
+          appTitle={settings.appTitle || 'CBT SMA MUHIPO'}
         />
         <div className="flex items-center gap-2.5 sm:gap-4 text-xs font-medium">
           <ThemeToggle />
@@ -236,15 +237,8 @@ export default function SingleSignInLoginPage() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full py-3.5 sm:py-4 border-t border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2 z-10 px-4">
-        <span className="relative flex h-2 w-2 shrink-0">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-        </span>
-        <span className="text-center">
-          Copyright © 2026 - CBT (Computer Based Test) • SMA Muhammadiyah 1 Ponorogo
-        </span>
-      </footer>
+      <AppFooter />
     </div>
   );
 }
+

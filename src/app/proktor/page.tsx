@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SchoolBrandHeader } from '@/components/SchoolBrandHeader';
+import { AppFooter } from '@/components/layout/AppFooter';
 import { NotificationModal, NotificationType } from '@/components/NotificationModal';
 import {
   MonitorPlay,
@@ -108,7 +109,7 @@ export default function ProktorPage() {
   }>({
     logoUrl: '/pic_logo.png',
     backgroundUrl: '/muhipo-front.jpg',
-    appTitle: 'CBT MUHIPO',
+    appTitle: 'CBT SMA MUHIPO',
     schoolName: 'SMA Muhammadiyah 1 Ponorogo',
   });
 
@@ -121,7 +122,7 @@ export default function ProktorPage() {
           setSettings({
             logoUrl: json.data.logoUrl || '/pic_logo.png',
             backgroundUrl: json.data.backgroundUrl || '/muhipo-front.jpg',
-            appTitle: json.data.appTitle || 'CBT MUHIPO',
+            appTitle: json.data.appTitle || 'CBT SMA MUHIPO',
             schoolName: json.data.schoolName || 'SMA Muhammadiyah 1 Ponorogo',
           });
         }
@@ -366,7 +367,7 @@ export default function ProktorPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
         <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-sm font-medium text-slate-400">Menghubungkan ke Ruang Proktor CBT Muhipo...</p>
+        <p className="text-sm font-medium text-slate-400">Menghubungkan ke Ruang Proktor CBT SMA MUHIPO...</p>
       </div>
     );
   }
@@ -376,9 +377,9 @@ export default function ProktorPage() {
       {/* Proktor Topbar */}
       <header className="px-6 py-4 bg-slate-900/90 border-b border-slate-800 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between">
         <SchoolBrandHeader
-          subtitle={`Ruang Monitoring Proktor & Pengawas - ${settings.schoolName || 'SMA Muhammadiyah 1 Ponorogo'}`}
+          subtitle="Manajemen Ujian"
           logoUrl={settings.logoUrl}
-          appTitle={settings.appTitle || 'CBT'}
+          appTitle={settings.appTitle || 'CBT SMA MUHIPO'}
         />
 
         <div className="flex items-center gap-3">
@@ -824,9 +825,7 @@ export default function ProktorPage() {
       )}
 
       {/* Footer */}
-      <footer className="w-full py-4 text-center text-xs text-slate-500 border-t border-slate-900">
-        © 2026 Proktor Station — CBT SMA Muhammadiyah 1 Ponorogo
-      </footer>
+      <AppFooter className="border-slate-900 bg-slate-950/80" />
 
       {/* MODAL PANDUAN & SOP OPERASIONAL PROKTOR CBT */}
       {showProktorGuideModal && (

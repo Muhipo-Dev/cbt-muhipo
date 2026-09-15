@@ -25,11 +25,11 @@ interface AppNavbarProps {
 }
 
 export function AppNavbar({
-  subtitle = 'Portal Ujian SMA Muhammadiyah 1 Ponorogo',
+  subtitle,
   hideSubtitleOnMobile = false,
   logoHref = '/',
   logoUrl = '/pic_logo.png',
-  appTitle = 'CBT',
+  appTitle = 'CBT SMA MUHIPO',
   userProfile,
   onLogout,
   onToggleSidebar,
@@ -38,6 +38,7 @@ export function AppNavbar({
   className = '',
 }: AppNavbarProps) {
   const activeLogo = logoUrl || '/pic_logo.png'
+  const displayTitle = appTitle && appTitle !== 'CBT' && appTitle !== 'CBT MUHIPO' ? appTitle : 'CBT SMA MUHIPO'
 
   return (
     <header
@@ -70,10 +71,10 @@ export function AppNavbar({
           <div className="flex flex-col justify-center min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="font-black text-sm sm:text-base lg:text-lg tracking-tight leading-none text-slate-900 dark:text-white">
-                CBT
+                {displayTitle}
               </span>
               <span className="text-[11px] sm:text-xs font-semibold text-blue-600 dark:text-blue-400 font-sans tracking-normal">
-                (Computer Based Test)
+                (Computer based test)
               </span>
             </div>
             {subtitle && (

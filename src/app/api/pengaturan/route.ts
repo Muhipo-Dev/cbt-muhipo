@@ -53,7 +53,7 @@ export async function GET() {
         data: {
           id: 'default-settings',
           schoolName: 'SMA Muhammadiyah 1 Ponorogo',
-          appTitle: 'CBT MUHIPO',
+          appTitle: 'CBT SMA MUHIPO',
           academicYear: '2026/2027',
           semester: 'Ganjil',
           timezone: 'Asia/Jakarta',
@@ -100,7 +100,7 @@ export async function GET() {
       data: {
         id: 'default-settings',
         schoolName: 'SMA Muhammadiyah 1 Ponorogo',
-        appTitle: 'CBT MUHIPO',
+        appTitle: 'CBT SMA MUHIPO',
         academicYear: '2026/2027',
         semester: 'Ganjil',
         timezone: 'Asia/Jakarta',
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
 
     // Simpan file base64 ke disk public/uploads/ agar permanen dan cepat di-cache browser
     if (logoUrl && logoUrl.startsWith('data:image/')) {
-      logoUrl = saveBase64ToFile(logoUrl, 'logo-cbt');
+      logoUrl = saveBase64ToFile(logoUrl, 'logo-sekolah');
     }
     if (backgroundUrl && backgroundUrl.startsWith('data:image/')) {
       backgroundUrl = saveBase64ToFile(backgroundUrl, 'wallpaper-cbt');
@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
       create: {
         id: 'default-settings',
         schoolName: schoolName?.trim() || 'SMA Muhammadiyah 1 Ponorogo',
-        appTitle: appTitle?.trim() || 'CBT MUHIPO',
+        appTitle: appTitle?.trim() || 'CBT SMA MUHIPO',
         academicYear: academicYear?.trim() || '2026/2027',
         semester: semester?.trim() || 'Ganjil',
         timezone: timezone?.trim() || 'Asia/Jakarta',

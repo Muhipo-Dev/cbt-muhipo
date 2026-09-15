@@ -29,7 +29,7 @@ if errorlevel 1 (
 REM 2. Cek apakah build Next.js sudah ada
 if not exist ".next" (
     echo [INFO] Build sistem production belum ditemukan.
-    echo Melakukan compiling build pertama kali (membutuhkan waktu sebentar)...
+    echo Melakukan compiling build pertama kali ^(membutuhkan waktu sebentar^)...
     echo.
     call npm run build
     if errorlevel 1 (
@@ -72,9 +72,9 @@ echo ===========================================================================
 echo.
 
 if defined SERVER_PID (
-    echo  STATUS SERVER : [ AKTIF / ONLINE - SIAP DIGUNAKAN (PID: !SERVER_PID!) ]
+    echo  STATUS SERVER : [ AKTIF / ONLINE - SIAP DIGUNAKAN ^(PID: !SERVER_PID!^) ]
 ) else (
-    echo  STATUS SERVER : [ NONAKTIF / OFFLINE (SERVER MATI) ]
+    echo  STATUS SERVER : [ NONAKTIF / OFFLINE ^(SERVER MATI^) ]
 )
 
 echo  PORT UTAMA    : 443 (HTTPS Secure) ^& 80 (HTTP Auto-Redirect)
@@ -90,9 +90,9 @@ for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /i "IPv4"') do (
 )
 echo.
 if defined LAST_IP (
-    echo  [Catatan]: HTTP (http://!LAST_IP!) otomatis dialihkan ke HTTPS (https://!LAST_IP!).
+    echo  [Catatan]: HTTP ^(http://!LAST_IP!^) otomatis dialihkan ke HTTPS ^(https://!LAST_IP!^).
 ) else (
-    echo  [Catatan]: HTTP (port 80) otomatis dialihkan ke HTTPS (port 443).
+    echo  [Catatan]: HTTP ^(port 80^) otomatis dialihkan ke HTTPS ^(port 443^).
 )
 echo             Pada browser siswa, klik "Lanjutan / Advanced" lalu "Lanjutkan ke situs".
 echo.

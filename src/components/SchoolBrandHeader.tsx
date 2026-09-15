@@ -9,13 +9,14 @@ interface SchoolBrandHeaderProps {
 }
 
 export const SchoolBrandHeader: React.FC<SchoolBrandHeaderProps> = ({
-  subtitle = 'Portal Ujian SMA Muhammadiyah 1 Ponorogo',
+  subtitle = 'Portal Ujian',
   className = '',
   showBadge = false,
   logoUrl = '/pic_logo.png',
-  appTitle = 'CBT',
+  appTitle = 'CBT SMA MUHIPO',
 }) => {
   const activeLogo = logoUrl || '/pic_logo.png';
+  const displayTitle = appTitle && appTitle !== 'CBT' && appTitle !== 'CBT MUHIPO' ? appTitle : 'CBT SMA MUHIPO';
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
@@ -34,9 +35,9 @@ export const SchoolBrandHeader: React.FC<SchoolBrandHeaderProps> = ({
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white leading-none">
-            <span>{appTitle}</span>{' '}
+            <span>{displayTitle}</span>{' '}
             <span className="text-blue-600 dark:text-blue-400 font-bold text-xs sm:text-sm font-sans tracking-normal">
-              (Computer Based Test)
+              (Computer based test)
             </span>
           </h1>
           {showBadge && (
@@ -45,9 +46,11 @@ export const SchoolBrandHeader: React.FC<SchoolBrandHeaderProps> = ({
             </span>
           )}
         </div>
-        <p className="text-xs font-normal text-slate-500 dark:text-slate-400 truncate mt-1">
-          {subtitle}
-        </p>
+        {subtitle && (
+          <p className="text-xs font-normal text-slate-500 dark:text-slate-400 truncate mt-1">
+            {subtitle}
+          </p>
+        )}
       </div>
     </div>
   );
