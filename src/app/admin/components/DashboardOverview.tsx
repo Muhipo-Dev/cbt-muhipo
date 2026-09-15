@@ -52,6 +52,8 @@ export function DashboardOverview({
     return name.replace(/\s*\([^)]*\)/g, '').trim() || 'Administrator'
   }
 
+  const isProktor = currentUser?.role === 'PROKTOR'
+
   const statCards = [
     {
       title: 'Total Peserta',
@@ -59,7 +61,7 @@ export function DashboardOverview({
       sub: `${stats.totalKelas} Rombel/Group`,
       icon: Users,
       color: 'from-blue-600 to-indigo-600',
-      tab: 'peserta_daftar',
+      tab: isProktor ? 'tes_daftar' : 'peserta_daftar',
     },
     {
       title: 'Topik & Bank Soal',
@@ -87,6 +89,26 @@ export function DashboardOverview({
     },
   ]
 
+  const quickNavItems = isProktor
+    ? [
+        { label: 'Topik & Mapel', tab: 'modul_topik', icon: BookOpen, color: 'text-blue-500' },
+        { label: 'Input Soal', tab: 'modul_soal', icon: Plus, color: 'text-emerald-500' },
+        { label: 'Import Soal', tab: 'modul_import', icon: FileSpreadsheet, color: 'text-purple-500' },
+        { label: 'Daftar Ujian / Tes', tab: 'tes_daftar', icon: MonitorPlay, color: 'text-rose-500' },
+        { label: 'Pengawasan Live', tab: 'proktor_live', icon: ShieldCheck, color: 'text-cyan-500' },
+        { label: 'Evaluasi Tes', tab: 'tes_evaluasi', icon: Clock, color: 'text-amber-500' },
+        { label: 'Rekap Nilai', tab: 'tes_rekap', icon: CheckCircle2, color: 'text-indigo-500' },
+      ]
+    : [
+        { label: 'Topik & Mapel', tab: 'modul_topik', icon: BookOpen, color: 'text-blue-500' },
+        { label: 'Input Soal', tab: 'modul_soal', icon: Plus, color: 'text-emerald-500' },
+        { label: 'Import Soal', tab: 'modul_import', icon: FileSpreadsheet, color: 'text-purple-500' },
+        { label: 'Daftar Peserta', tab: 'peserta_daftar', icon: Users, color: 'text-cyan-500' },
+        { label: 'Import Peserta', tab: 'peserta_import', icon: FileSpreadsheet, color: 'text-amber-500' },
+        { label: 'Rekap Nilai', tab: 'tes_rekap', icon: CheckCircle2, color: 'text-rose-500' },
+        { label: 'Backup & Ekspor', tab: 'backup_data', icon: Database, color: 'text-indigo-500' },
+      ]
+
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
@@ -96,17 +118,28 @@ export function DashboardOverview({
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs font-bold text-blue-200">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Sistem CBT Aktif</span>
+              <span>{isProktor ? 'Portal Proktor CBT Aktif' : 'Sistem CBT Aktif'}</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
               Selamat Datang, {cleanName(currentUser?.name)}!
             </h2>
             <p className="text-sm text-blue-100 max-w-2xl leading-relaxed">
-              Sistem Computer Based Test (CBT) {settings.schoolName || 'SMA Muhammadiyah 1 Ponorogo'}. Kelola data modul, peserta, dan tes pelaksanaan ujian.
+              {isProktor
+                ? `Portal Pengawas & Proktor CBT ${settings.schoolName || 'SMA Muhammadiyah 1 Ponorogo'}. Kelola bank soal, jadwal ujian, serta monitoring pelaksanaan tes peserta secara realtime.`
+                : `Sistem Computer Based Test (CBT) ${settings.schoolName || 'SMA Muhammadiyah 1 Ponorogo'}. Kelola data modul, peserta, dan tes pelaksanaan ujian.`}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {isProktor && (
+              <button
+                onClick={() => onNavigate('proktor_live')}
+                className="px-4 py-2.5 rounded-2xl bg-blue-600/60 hover:bg-blue-600 text-white font-bold text-xs border border-white/20 shadow-lg transition flex items-center gap-2 cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-300" />
+                <span>Pengawasan Live</span>
+              </button>
+            )}
             <button
               onClick={() => onNavigate('tes_tambah')}
               className="px-4 py-2.5 rounded-2xl bg-white text-blue-900 font-bold text-xs hover:bg-blue-50 shadow-lg hover:shadow-xl transition flex items-center gap-2 cursor-pointer"
@@ -153,15 +186,7 @@ export function DashboardOverview({
       <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-3xl p-6 shadow-sm dark:shadow-xl backdrop-blur-xl">
         <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Akses Cepat Fitur CBT</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-          {[
-            { label: 'Topik & Mapel', tab: 'modul_topik', icon: BookOpen, color: 'text-blue-500' },
-            { label: 'Input Soal', tab: 'modul_soal', icon: Plus, color: 'text-emerald-500' },
-            { label: 'Import Soal', tab: 'modul_import', icon: FileSpreadsheet, color: 'text-purple-500' },
-            { label: 'Daftar Peserta', tab: 'peserta_daftar', icon: Users, color: 'text-cyan-500' },
-            { label: 'Import Peserta', tab: 'peserta_import', icon: FileSpreadsheet, color: 'text-amber-500' },
-            { label: 'Rekap Nilai', tab: 'tes_rekap', icon: CheckCircle2, color: 'text-rose-500' },
-            { label: 'Backup & Ekspor', tab: 'backup_data', icon: Database, color: 'text-indigo-500' },
-          ].map((item, idx) => {
+          {quickNavItems.map((item, idx) => {
             const Icon = item.icon
             return (
               <button

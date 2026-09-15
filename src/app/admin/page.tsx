@@ -156,9 +156,6 @@ export default function ComprehensiveAdminDashboard() {
         return
       }
       setCurrentUser(authData.user)
-      if (authData.user.role === 'PROKTOR' && activeTab === 'dashboard') {
-        setActiveTab('modul_soal')
-      }
 
       // 2. Admin & Master Data
       const adminRes = await fetch('/api/admin')
@@ -379,6 +376,11 @@ export default function ComprehensiveAdminDashboard() {
   const sidebarNavItems: NavTabItem[] = useMemo(() => {
     if (currentUser?.role === 'PROKTOR') {
       return [
+        {
+          id: 'dashboard',
+          name: 'Dashboard',
+          icon: LayoutDashboard,
+        },
         {
           id: 'data_modul',
           name: 'Data Modul (Soal)',

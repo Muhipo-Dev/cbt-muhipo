@@ -217,14 +217,14 @@ export function CetakDokumenView({
                   <div className="grid grid-cols-3 gap-1.5 py-1">
                     <span className="text-slate-600">Nama:</span>
                     <span className="col-span-2 font-bold uppercase truncate">{s.name}</span>
+                    <span className="text-slate-600">No. Peserta:</span>
+                    <span className="col-span-2 font-mono">{s.nomorPeserta || s.username}</span>
                     <span className="text-slate-600">Username:</span>
                     <span className="col-span-2 font-mono font-bold text-blue-800">{s.username}</span>
                     <span className="text-slate-600">Password:</span>
                     <span className="col-span-2 font-mono font-semibold">
                       {s.plainPassword || (s.password && !s.password.startsWith('$2') ? s.password : '123456')}
                     </span>
-                    <span className="text-slate-600">No. Peserta:</span>
-                    <span className="col-span-2 font-mono">{s.nomorPeserta || s.username}</span>
                   </div>
                 </div>
               ))}
