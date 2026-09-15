@@ -4,7 +4,7 @@ param(
 
 # ==============================================================================
 #   CBT MUHIPO - Script Manajemen & Server CBT Standalone
-#   SMA Muhammadiyah 1 Ponorogo (C) 2026 - Muhipo Dev
+#   Muhipo Dev (C) 2026
 #   
 #   PORT CBT STANDALONE:
 #   - CBT Web App & API  : Port Mutlak 80 (Port Utama HTTP)

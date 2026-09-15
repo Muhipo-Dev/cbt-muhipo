@@ -101,7 +101,7 @@ app.prepare().then(async () => {
     const localIps = getLocalIpAddresses();
     console.log('\n================================================================');
     console.log('       CBT MUHIPO SECURE HTTPS SERVER BERHASIL AKTIF');
-    console.log('       SMA Muhammadiyah 1 Ponorogo (C) 2026');
+    console.log('       Muhipo Dev (C) 2026');
     console.log('================================================================');
     console.log(`\n  [HTTPS] Server Utama Aman: https://localhost${HTTPS_PORT === 443 ? '' : ':' + HTTPS_PORT}`);
     console.log('\n  [JARINGAN LOKAL] Alamat Akses Peserta Ujian / Siswa:');

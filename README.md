@@ -212,6 +212,6 @@ cbt-muhipo/
 
 ---
 
-## 📄 Lisensi
+## 📄 Lisensi & Hak Cipta
 
-Dikembangkan dengan bangga untuk lingkungan pendidikan **SMA Muhammadiyah 1 Ponorogo (MUHIPO)**. Hak Cipta dilindungi.
+Copyright &copy; 2026 **MUHIPO DEV**. Hak Cipta dilindungi undang-undang (*All rights reserved*). Dilindungi di bawah lisensi [MIT License](LICENSE).

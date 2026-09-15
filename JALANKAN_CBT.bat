@@ -1,6 +1,6 @@
 @echo off
 :: ============================================================
-::   CBT Launcher - SMA Muhammadiyah 1 Ponorogo (C) 2026
+::   CBT Launcher - Muhipo Dev (C) 2026
 ::   Portal CBT Ujian Berbasis Komputer Modern (Muhipo Dev)
 ::   Klik dua kali file ini untuk membuka menu launcher CBT
 :: ============================================================

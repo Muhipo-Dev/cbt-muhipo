@@ -67,7 +67,7 @@ if defined SERVER_PID (
 
 echo ==============================================================================
 echo            CBT MUHIPO - SECURE HTTPS SERVER CONTROLLER
-echo            SMA Muhammadiyah 1 Ponorogo (C) 2026
+echo            Muhipo Dev (C) 2026
 echo ==============================================================================
 echo.
 
