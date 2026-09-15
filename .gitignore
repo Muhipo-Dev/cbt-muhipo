@@ -43,3 +43,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sql
+

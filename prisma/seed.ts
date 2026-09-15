@@ -1,5 +1,40 @@
-import { PrismaClient, Role, TipeSoal, StatusUjian, StatusPeserta } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+
+type RoleType = 'SUPERADMIN' | 'ADMIN' | 'GURU' | 'PROKTOR' | 'SISWA';
+type TipeSoalType = 'PG' | 'PG_KOMPLEKS' | 'BENAR_SALAH' | 'MENJODOHKAN' | 'ISIAN' | 'ESAI';
+type StatusUjianType = 'DIJADWALKAN' | 'SEDANG_BERJALAN' | 'SELESAI' | 'NONAKTIF';
+type StatusPesertaType = 'BELUM_MULAI' | 'SEDANG_MENGERJAKAN' | 'SELESAI' | 'TERKUNCI' | 'RESET_LOGIN';
+
+const Role: Record<string, RoleType> = {
+  SUPERADMIN: 'SUPERADMIN',
+  ADMIN: 'ADMIN',
+  GURU: 'GURU',
+  PROKTOR: 'PROKTOR',
+  SISWA: 'SISWA',
+};
+
+const TipeSoal: Record<string, TipeSoalType> = {
+  PG: 'PG',
+  PG_KOMPLEKS: 'PG_KOMPLEKS',
+  BENAR_SALAH: 'BENAR_SALAH',
+  MENJODOHKAN: 'MENJODOHKAN',
+  ISIAN: 'ISIAN',
+  ESAI: 'ESAI',
+};
+
+const StatusUjian: Record<string, StatusUjianType> = {
+  DIJADWALKAN: 'DIJADWALKAN',
+  SEDANG_BERJALAN: 'SEDANG_BERJALAN',
+  SELESAI: 'SELESAI',
+  NONAKTIF: 'NONAKTIF',
+};
+
+const StatusPeserta: Record<string, StatusPesertaType> = {
+  BELUM_MULAI: 'BELUM_MULAI',
+  SEDANG_MENGERJAKAN: 'SEDANG_MENGERJAKAN',
+  SELESAI: 'SELESAI',
+};
 
 const prisma = new PrismaClient();
 
@@ -12,8 +47,8 @@ async function main() {
   await prisma.pesertaUjian.deleteMany();
   await prisma.opsiJawaban.deleteMany();
   await prisma.soal.deleteMany();
+  await prisma.ujianKelas.deleteMany();
   await prisma.ujian.deleteMany();
-  await prisma.bankSoal.deleteMany();
   await prisma.guruMataPelajaran.deleteMany();
   await prisma.mataPelajaran.deleteMany();
   await prisma.user.deleteMany();
@@ -34,8 +69,18 @@ async function main() {
     data: { nama: 'XII-F1 (MIPA)', tingkat: 12, jurusan: 'MIPA' },
   });
 
-  // 4. Buat Akun Admin & Proktor
-  const admin = await prisma.user.create({
+  // 4. Buat Akun Super Admin, Admin & Proktor
+  await prisma.user.create({
+    data: {
+      username: 'nailar',
+      password: adminPassword,
+      name: 'Nailar (Super Administrator)',
+      role: Role.SUPERADMIN,
+      nip: '199001012015011001',
+    },
+  });
+
+  await prisma.user.create({
     data: {
       username: 'admin',
       password: adminPassword,
@@ -45,7 +90,7 @@ async function main() {
     },
   });
 
-  const proktor = await prisma.user.create({
+  await prisma.user.create({
     data: {
       username: 'proktor1',
       password: hashedPassword,
@@ -55,17 +100,7 @@ async function main() {
     },
   });
 
-  // 5. Buat Akun Guru & Mapel
-  const mapelMtk = await prisma.mataPelajaran.create({
-    data: { kode: 'MTK-XII', nama: 'Matematika Peminatan XII' },
-  });
-  const mapelBing = await prisma.mataPelajaran.create({
-    data: { kode: 'BING-XII', nama: 'Bahasa Inggris XII' },
-  });
-  const mapelAi = await prisma.mataPelajaran.create({
-    data: { kode: 'AIK-XII', nama: 'Al-Islam & Kemuhammadiyahan XII' },
-  });
-
+  // 5. Buat Akun Guru & Topik / Mata Pelajaran
   const guruMtk = await prisma.user.create({
     data: {
       username: 'guru_mtk',
@@ -73,10 +108,29 @@ async function main() {
       name: 'Drs. H. Ahmad Dahlan, M.Pd',
       role: Role.GURU,
       nip: '197505122000031002',
-      mataPelajaran: {
-        create: { mataPelajaranId: mapelMtk.id },
+    },
+  });
+
+  const mapelMtk = await prisma.mataPelajaran.create({
+    data: {
+      kode: 'MTK-XII',
+      nama: 'Matematika Peminatan XII',
+      tingkat: 12,
+      jurusan: 'MIPA',
+      durasiMenit: 90,
+      kkm: 75.0,
+      pembuatId: guruMtk.id,
+      gurus: {
+        create: { guruId: guruMtk.id },
       },
     },
+  });
+
+  await prisma.mataPelajaran.create({
+    data: { kode: 'BING-XII', nama: 'Bahasa Inggris XII', tingkat: 12, jurusan: 'UMUM' },
+  });
+  await prisma.mataPelajaran.create({
+    data: { kode: 'AIK-XII', nama: 'Al-Islam & Kemuhammadiyahan XII', tingkat: 12, jurusan: 'UMUM' },
   });
 
   // 6. Buat Akun Siswa Demo
@@ -86,7 +140,6 @@ async function main() {
       password: hashedPassword,
       name: 'Muhammad Farhan Ramadhan',
       role: Role.SISWA,
-      nisn: '0061234567',
       nomorPeserta: 'MHP-2026-001',
       jenisKelamin: 'L',
       kelasId: kelas12A.id,
@@ -101,7 +154,6 @@ async function main() {
       password: hashedPassword,
       name: 'Aisyah Putri Azzahra',
       role: Role.SISWA,
-      nisn: '0067654321',
       nomorPeserta: 'MHP-2026-002',
       jenisKelamin: 'P',
       kelasId: kelas12A.id,
@@ -110,23 +162,11 @@ async function main() {
     },
   });
 
-  // 7. Buat Bank Soal Matematika
-  const bankSoalMtk = await prisma.bankSoal.create({
-    data: {
-      kodeBank: 'BS-MTK-XII-PAS-2026',
-      nama: 'Bank Soal PAS Matematika Kelas XII',
-      tingkat: 12,
-      jurusan: 'MIPA',
-      mataPelajaranId: mapelMtk.id,
-      pembuatId: guruMtk.id,
-    },
-  });
-
-  // 8. Buat Soal-soal Demo Beragam Tipe (PG, PG Kompleks, KaTeX Math, Esai, dsb)
+  // 7. Buat Soal-soal Demo Beragam Tipe Langsung di dalam Topik / Mata Pelajaran
   // Soal 1: PG KaTeX Matematika
   await prisma.soal.create({
     data: {
-      bankSoalId: bankSoalMtk.id,
+      mataPelajaranId: mapelMtk.id,
       nomorUrut: 1,
       tipeSoal: TipeSoal.PG,
       pertanyaan: 'Nilai dari limit trigonometri berikut adalah:<br/><br/>$$\\lim_{x \\to 0} \\frac{\\sin(6x)}{2x} = \\dots$$',
@@ -146,7 +186,7 @@ async function main() {
   // Soal 2: PG KaTeX Turunan
   await prisma.soal.create({
     data: {
-      bankSoalId: bankSoalMtk.id,
+      mataPelajaranId: mapelMtk.id,
       nomorUrut: 2,
       tipeSoal: TipeSoal.PG,
       pertanyaan: 'Jika $f(x) = 3x^3 - 4x^2 + 5x - 7$, maka turunan pertama $f\'(x)$ pada saat $x = 2$ adalah...',
@@ -163,10 +203,10 @@ async function main() {
     },
   });
 
-  // Soal 3: PG Konsep Sekolah & Kemuhammadiyahan / Umum
+  // Soal 3: PG Konsep Sekolah & Kemuhammadiyahan / Transformasi
   await prisma.soal.create({
     data: {
-      bankSoalId: bankSoalMtk.id,
+      mataPelajaranId: mapelMtk.id,
       nomorUrut: 3,
       tipeSoal: TipeSoal.PG,
       pertanyaan: 'SMA Muhammadiyah 1 Ponorogo memiliki visi utama dalam mewujudkan generasi yang berakhlak mulia, unggul dalam prestasi, dan berkemajuan. Matriks transformasi pendidikan yang mencerminkan sifat refleksi terhadap sumbu-$y$ memiliki matriks operasi...',
@@ -183,10 +223,10 @@ async function main() {
     },
   });
 
-  // Soal 4: PG Kompleks (Centang lebih dari 1)
+  // Soal 4: PG Kompleks
   await prisma.soal.create({
     data: {
-      bankSoalId: bankSoalMtk.id,
+      mataPelajaranId: mapelMtk.id,
       nomorUrut: 4,
       tipeSoal: TipeSoal.PG_KOMPLEKS,
       pertanyaan: 'Pilihlah seluruh pernyataan yang <b>BENAR</b> terkait sifat-sifat integral tentu $\\int_{a}^{b} f(x)\\,dx$ berikut ini! *(Pilihan ganda kompleks: dapat memilih lebih dari satu)*',
@@ -205,7 +245,7 @@ async function main() {
   // Soal 5: Benar / Salah
   await prisma.soal.create({
     data: {
-      bankSoalId: bankSoalMtk.id,
+      mataPelajaranId: mapelMtk.id,
       nomorUrut: 5,
       tipeSoal: TipeSoal.BENAR_SALAH,
       pertanyaan: 'Pernyataan: "Nilai dari $\\sin(90^\\circ) + \\cos(0^\\circ) = 2$". Apakah pernyataan ini Benar atau Salah?',
@@ -222,7 +262,7 @@ async function main() {
   // Soal 6: Isian Singkat
   await prisma.soal.create({
     data: {
-      bankSoalId: bankSoalMtk.id,
+      mataPelajaranId: mapelMtk.id,
       nomorUrut: 6,
       tipeSoal: TipeSoal.ISIAN,
       pertanyaan: 'Diketahui suku ke-3 barisan aritmatika adalah 11 dan suku ke-8 adalah 31. Tentukan beda ($b$) dari barisan tersebut! <i>(Ketikkan angka saja)</i>',
@@ -234,7 +274,7 @@ async function main() {
   // Soal 7: Soal Essay / Uraian
   await prisma.soal.create({
     data: {
-      bankSoalId: bankSoalMtk.id,
+      mataPelajaranId: mapelMtk.id,
       nomorUrut: 7,
       tipeSoal: TipeSoal.ESAI,
       pertanyaan: 'Sebuah taman sekolah di SMA Muhammadiyah 1 Ponorogo berbentuk persegi panjang dengan keliling $80\\text{ meter}$. Tentukan ukuran panjang dan lebar taman tersebut agar menghasilkan luas taman yang maksimum! Tuliskan langkah-langkah perhitungannya secara lengkap.',
@@ -243,13 +283,13 @@ async function main() {
     },
   });
 
-  // 9. Buat Jadwal Ujian Aktif
+  // 8. Buat Jadwal Ujian Aktif Langsung dari Topik / Mata Pelajaran
   const ujianMtk = await prisma.ujian.create({
     data: {
       kodeUjian: 'PAS-2026-MTK-12',
       judul: 'Penilaian Akhir Semester Ganjil 2026/2027 - Matematika XII',
       deskripsi: 'Ujian Matematika Wajib Kelas XII MIPA/IPS.',
-      bankSoalId: bankSoalMtk.id,
+      mataPelajaranId: mapelMtk.id,
       durasiMenit: 90,
       waktuMulai: new Date(),
       waktuSelesai: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -261,7 +301,7 @@ async function main() {
     },
   });
 
-  // 10. Daftarkan Peserta Ujian
+  // 9. Daftarkan Peserta Ujian
   await prisma.pesertaUjian.create({
     data: {
       ujianId: ujianMtk.id,
@@ -279,13 +319,13 @@ async function main() {
   });
 
   console.log('✅ Seeding berhasil selesai!');
-  console.log('--- AKUN DEFAULT UNTUK TESTING ---');
-  console.log('Admin   : username=admin, password=admin123');
-  console.log('Proktor : username=proktor1, password=123456');
-  console.log('Guru    : username=guru_mtk, password=123456');
-  console.log('Siswa 1 : username=siswa01 (NISN: 0061234567, No: MHP-2026-001), password=123456');
-  console.log('Siswa 2 : username=siswa02 (NISN: 0067654321, No: MHP-2026-002), password=123456');
-  console.log('Token Ujian: MUHIPO');
+  console.log('--- AKUN DEFAULT UNTUK TESTING & PRODUKSI ---');
+  console.log('Super Admin: username=nailar, password=admin123 (Hak Akses Penuh & Manajemen Pengguna)');
+  console.log('Admin Master: username=admin, password=admin123');
+  console.log('Proktor    : username=proktor1, password=123456 (Pengawasan Ujian & Reset Siswa)');
+  console.log('Guru       : username=guru_mtk, password=123456');
+  console.log('Siswa 1    : username=siswa01, password=123456');
+  console.log('Siswa 2    : username=siswa02, password=123456');
 }
 
 main()

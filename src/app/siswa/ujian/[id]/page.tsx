@@ -510,7 +510,7 @@ export default function LembarUjianPage({
             ctx.fillStyle = '#ef4444';
             ctx.font = 'bold 12px monospace';
             ctx.fillText(
-              `[PELANGGARAN CBT] ${new Date().toLocaleString('id-ID')} | NIS: ${ujianInfo?.nomorPeserta || 'Siswa'}`,
+              `[PELANGGARAN CBT] ${new Date().toLocaleString('id-ID')} | Peserta: ${ujianInfo?.nomorPeserta || 'Siswa'}`,
               20,
               canvas.height - 20
             );
@@ -619,9 +619,18 @@ export default function LembarUjianPage({
         body: JSON.stringify({ pesertaUjianId, aktivitas, detail, fotoBukti }),
       });
       const resJson = await res.json();
+      const currentViolation = resJson.data?.totalPelanggaran ?? 0;
+      setViolationCount(currentViolation);
+
       if (resJson.data?.isLocked) {
-        alert('Akun ujian Anda telah otomatis terkunci karena melebihi batas pelanggaran keamanan.');
+        alert(
+          `AKUN UJIAN ANDA TERKUNCI!\n\nAnda telah mencapai batas maksimal 3 kali pelanggaran keamanan (keluar halaman ujian / berpindah tab). Silakan hubungi Pengawas / Proktor Ruang untuk membuka kunci ujian Anda.`
+        );
         router.push('/siswa');
+      } else if (currentViolation > 0) {
+        setCheatWarning(
+          `Peringatan Pelanggaran (${currentViolation}/3): Dilarang keluar dari halaman ujian! Akun akan terkunci otomatis pada pelanggaran ke-3.`
+        );
       }
     } catch (e) {
       // silent
@@ -1165,7 +1174,7 @@ export default function LembarUjianPage({
           )}
         </div>
 
-        {/* Bottom Navigation Toolbar (Sticky di Mobile agar sangat nyaman & ZyaCBT / Candy CBT Layout) */}
+        {/* Bottom Navigation Toolbar (Sticky di Mobile agar sangat responsif & nyaman) */}
         <div className="fixed sm:static bottom-0 left-0 right-0 z-20 sm:mt-6 flex items-center justify-between gap-2 sm:gap-3 bg-white/95 dark:bg-slate-900/95 sm:bg-white sm:dark:bg-slate-900 border-t sm:border border-slate-200/90 dark:border-white/10 p-3 sm:p-4 sm:rounded-3xl shadow-lg sm:shadow-xs dark:shadow-xl backdrop-blur-md">
           {/* Tombol Sebelumnya */}
           <button

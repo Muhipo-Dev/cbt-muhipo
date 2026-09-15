@@ -7,7 +7,7 @@ interface LiveScreenFeed {
   pesertaUjianId: string;
   siswaId: string;
   nama: string;
-  nis: string;
+  username: string;
   browser: string;
   device: string;
   screenImage: string; // Base64 JPEG frame
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       pesertaUjianId,
       siswaId: user.userId,
       nama: user.name,
-      nis: user.username,
+      username: user.username,
       browser: browser || 'Unknown',
       device: device || 'Mobile/Desktop',
       screenImage,

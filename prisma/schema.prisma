@@ -3,40 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
-}
-
-enum Role {
-  ADMIN
-  GURU
-  PROKTOR
-  SISWA
-}
-
-enum TipeSoal {
-  PG           // Pilihan Ganda Tunggal
-  PG_KOMPLEKS  // Pilihan Ganda Lebih dari 1 jawaban
-  BENAR_SALAH  // Pernyataan Benar/Salah
-  MENJODOHKAN  // Pasangan Premis & Respon
-  ISIAN        // Isian Singkat
-  ESAI         // Uraian
-}
-
-enum StatusUjian {
-  DRAFT
-  DIJADWALKAN
-  SEDANG_BERJALAN
-  SELESAI
-  NONAKTIF
-}
-
-enum StatusPeserta {
-  BELUM_MULAI
-  SEDANG_MENGERJAKAN
-  SELESAI
-  TERKUNCI
-  RESET_LOGIN
 }
 
 model User {
@@ -44,9 +12,7 @@ model User {
   username      String    @unique
   password      String
   name          String
-  role          Role      @default(SISWA)
-  nis           String?   @unique
-  nisn          String?   @unique
+  role          String    @default("SISWA") // SUPERADMIN, ADMIN, GURU, PROKTOR, SISWA
   nip           String?   @unique
   jenisKelamin  String?   // L / P
   foto          String?
@@ -61,7 +27,7 @@ model User {
   // Relasi Guru
   mataPelajaran GuruMataPelajaran[]
   guruKelas     GuruKelas[]
-  bankSoalList  BankSoal[]
+  topikDibuat   MataPelajaran[] @relation("PembuatTopik")
   
   // Relasi Peserta Ujian
   pesertaUjian  PesertaUjian[]
@@ -107,14 +73,29 @@ model UjianKelas {
   @@unique([ujianId, kelasId])
 }
 
+// Topik Pembelajaran / Mata Pelajaran (Kontainer Utama Butir Soal)
 model MataPelajaran {
-  id           String              @id @default(cuid())
-  kode         String              @unique // Contoh: MTK-10, BIND-12
-  nama         String              // Matematika, Bahasa Indonesia
-  gurus        GuruMataPelajaran[]
-  bankSoalList BankSoal[]
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  id            String              @id @default(cuid())
+  kode          String              @unique // Contoh: MTK-10, BIND-12
+  nama          String              // Matematika, Bahasa Indonesia
+  tingkat       Int?                @default(10) // 10, 11, 12
+  jurusan       String?             @default("UMUM")
+  durasiMenit   Int                 @default(90) // Durasi standar pengerjaan (menit)
+  
+  // Nilai Standar Topik / Mapel
+  kkm           Float               @default(75.0) // Kriteria Ketuntasan Minimal
+  nilaiMinimal  Float               @default(0.0)
+  nilaiMaksimal Float               @default(100.0)
+
+  pembuatId     String?
+  pembuat       User?               @relation("PembuatTopik", fields: [pembuatId], references: [id])
+
+  gurus         GuruMataPelajaran[]
+  soalList      Soal[]
+  ujianList     Ujian[]
+  
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
 }
 
 model GuruMataPelajaran {
@@ -127,57 +108,31 @@ model GuruMataPelajaran {
   @@unique([guruId, mataPelajaranId])
 }
 
-model BankSoal {
-  id              String        @id @default(cuid())
-  kodeBank        String        @unique // Contoh: BS-MTK-X-PAS
-  nama            String        // Bank Soal PAS Matematika Kelas X
-  tingkat         Int           // 10, 11, 12
-  jurusan         String?
-  durasiMenit     Int           @default(90) // Durasi standar pengerjaan (menit)
-  
-  // Nilai Standar Bank Soal
-  kkm             Float         @default(75.0) // Kriteria Ketuntasan Minimal
-  nilaiMinimal    Float         @default(0.0)  // Nilai minimum (biasanya 0)
-  nilaiMaksimal   Float         @default(100.0) // Nilai maksimum (biasanya 100)
-  
-  mataPelajaranId String
-  mataPelajaran   MataPelajaran @relation(fields: [mataPelajaranId], references: [id])
-  
-  pembuatId       String
-  pembuat         User          @relation(fields: [pembuatId], references: [id])
-  
-  soalList        Soal[]
-  ujianList       Ujian[]
-  
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-}
-
 model Soal {
-  id           String           @id @default(cuid())
-  bankSoalId   String
-  bankSoal     BankSoal         @relation(fields: [bankSoalId], references: [id], onDelete: Cascade)
+  id              String           @id @default(cuid())
+  mataPelajaranId String
+  mataPelajaran   MataPelajaran    @relation(fields: [mataPelajaranId], references: [id], onDelete: Cascade)
   
-  nomorUrut    Int              @default(1)
-  tipeSoal     TipeSoal         @default(PG)
-  pertanyaan   String           @db.Text
-  mediaAudio   String?          // URL atau path audio untuk listening
-  mediaGambar  String?          // URL atau path gambar ilustrasi
-  bobot        Float            @default(1.0) // Poin / bobot per butir soal
+  nomorUrut       Int              @default(1)
+  tipeSoal        String           @default("PG") // PG, PG_KOMPLEKS, BENAR_SALAH, MENJODOHKAN, ISIAN, ESAI
+  pertanyaan      String
+  mediaAudio      String?          // URL atau path audio untuk listening
+  mediaGambar     String?          // URL atau path gambar ilustrasi
+  bobot           Float            @default(1.0) // Poin / bobot per butir soal
   
   // Opsi untuk PG & PG Kompleks / Pernyataan Benar Salah
-  opsiJawaban  OpsiJawaban[]
+  opsiJawaban     OpsiJawaban[]
   
   // Jawaban untuk Isian Singkat & Essay (Kunci teks / rubrik)
-  kunciJawabanTeks String?      @db.Text
+  kunciJawabanTeks String?
   
   // Pasangan Menjodohkan (JSON string: [{ left: "...", right: "..." }])
-  matchingData     String?      @db.Text
+  matchingData     String?
 
   jawabanPeserta   JawabanPeserta[]
   
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 }
 
 model OpsiJawaban {
@@ -185,7 +140,7 @@ model OpsiJawaban {
   soalId      String
   soal        Soal     @relation(fields: [soalId], references: [id], onDelete: Cascade)
   label       String   // A, B, C, D, E atau 1, 2, 3
-  konten      String   @db.Text
+  konten      String
   gambar      String?
   isBenar     Boolean  @default(false)
   
@@ -197,10 +152,10 @@ model Ujian {
   id                String         @id @default(cuid())
   kodeUjian         String         @unique // Contoh: PAS-2026-MTK
   judul             String         // Penilaian Akhir Semester Ganjil 2026/2027
-  deskripsi         String?        @db.Text
+  deskripsi         String?
   
-  bankSoalId        String
-  bankSoal          BankSoal       @relation(fields: [bankSoalId], references: [id])
+  mataPelajaranId   String
+  mataPelajaran     MataPelajaran  @relation(fields: [mataPelajaranId], references: [id])
   
   durasiMenit       Int            // Contoh: 90 Menit
   waktuMulai        DateTime       // Jadwal mulai dibuka
@@ -210,8 +165,9 @@ model Ujian {
   acakOpsi          Boolean        @default(true)
   tampilkanHasil    Boolean        @default(false)
   lockBrowser       Boolean        @default(true) // Mode anti cheat fullscreen
+  token             String?        @default("ABCDEF") // Token ujian CBT (opsional)
   
-  status            StatusUjian    @default(DIJADWALKAN)
+  status            String         @default("DIJADWALKAN") // DRAFT, DIJADWALKAN, SEDANG_BERJALAN, SELESAI, NONAKTIF
   
   ujianKelas        UjianKelas[]
   pesertaUjian      PesertaUjian[]
@@ -228,7 +184,7 @@ model PesertaUjian {
   siswaId         String
   siswa           User             @relation(fields: [siswaId], references: [id], onDelete: Cascade)
   
-  status          StatusPeserta    @default(BELUM_MULAI)
+  status          String           @default("BELUM_MULAI") // BELUM_MULAI, SEDANG_MENGERJAKAN, SELESAI, TERKUNCI, RESET_LOGIN
   waktuMulai      DateTime?
   waktuSelesai    DateTime?
   sisaDetik       Int?             // Sync timer
@@ -243,7 +199,7 @@ model PesertaUjian {
   userAgent       String?
   
   // Urutan soal teracak khusus untuk peserta ini (JSON Array ID Soal)
-  urutanSoalIds   String?          @db.Text
+  urutanSoalIds   String?
   
   jawabanPeserta  JawabanPeserta[]
   logs            LogAktivitasUjian[]
@@ -263,12 +219,12 @@ model JawabanPeserta {
   soal            Soal           @relation(fields: [soalId], references: [id], onDelete: Cascade)
   
   // Jawaban yang dipilih (ID Opsi / Array ID Opsi JSON / Teks Jawaban / JSON Menjodohkan)
-  jawabanDipilih  String?        @db.Text
+  jawabanDipilih  String?
   raguRagu        Boolean        @default(false)
   
   isBenar         Boolean?
   skor            Float          @default(0.0)
-  catatanKoreksi  String?        @db.Text
+  catatanKoreksi  String?
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -285,8 +241,8 @@ model LogAktivitasUjian {
   user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   aktivitas       String         // Contoh: "LOGIN", "MULAI_UJIAN", "TAB_SWITCH_ALERT", "FULLSCREEN_EXIT", "SELESAI_UJIAN"
-  detail          String?        @db.Text
-  fotoBukti       String?        @db.Text // Base64 screenshot snapshot saat pelanggaran terjadi
+  detail          String?
+  fotoBukti       String?        // Base64 screenshot snapshot saat pelanggaran terjadi
   
   createdAt       DateTime       @default(now())
 }
@@ -304,4 +260,3 @@ model PengaturanSistem {
   timeSyncOffsetMs Int           @default(0) // Koreksi offset milidetik sinkronisasi waktu
   updatedAt       DateTime       @updatedAt
 }
-

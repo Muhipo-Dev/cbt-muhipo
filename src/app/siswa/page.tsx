@@ -195,7 +195,13 @@ export default function SiswaPortalPage() {
                 {siswa?.name || 'Memuat Data Siswa...'}
               </h1>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                <span>NIS: <b className="text-blue-600 dark:text-blue-400 font-mono font-bold">{siswa?.username || siswa?.nisn || '-'}</b></span>
+                <span>ID: <b className="text-blue-600 dark:text-blue-400 font-mono font-bold">{siswa?.username || '-'}</b></span>
+                {siswa?.nomorPeserta && (
+                  <>
+                    <span>•</span>
+                    <span>No. Peserta: <b className="text-blue-600 dark:text-blue-400 font-mono font-bold">{siswa?.nomorPeserta}</b></span>
+                  </>
+                )}
                 <span>•</span>
                 <span>Kelas: <b className="text-slate-800 dark:text-slate-200 font-semibold">{siswa?.kelas?.nama || siswa?.kelas || '-'}</b></span>
               </div>

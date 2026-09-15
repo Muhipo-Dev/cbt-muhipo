@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { StatusPeserta, TipeSoal } from '@prisma/client';
+import { StatusPeserta, TipeSoal } from '@/lib/enums';
 
 export async function POST(
   request: NextRequest,
@@ -25,7 +25,7 @@ export async function POST(
       include: {
         ujian: {
           include: {
-            bankSoal: {
+            mataPelajaran: {
               include: {
                 soalList: {
                   include: {
@@ -44,8 +44,8 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'Data peserta tidak ditemukan' }, { status: 404 });
     }
 
-    // Auto-Grading Soal Objektif (PG, PG Kompleks, Benar/Salah, Menjodohkan) & Isian
-    const soalList = pesertaUjian.ujian.bankSoal.soalList;
+    // Auto-Grading Soal Objektif & Isian Langsung dari Topik / Mata Pelajaran
+    const soalList = pesertaUjian.ujian.mataPelajaran.soalList;
     const jawabanMap = new Map(pesertaUjian.jawabanPeserta.map((j) => [j.soalId, j]));
 
     let totalNilaiPG = 0;
@@ -73,7 +73,6 @@ export async function POST(
         }
       } else if (soal.tipeSoal === TipeSoal.PG_KOMPLEKS) {
         maxNilaiObjektif += bobot;
-        // Check array IDs
         let chosenIds: string[] = [];
         try {
           if (jawaban?.jawabanDipilih) {
@@ -84,7 +83,6 @@ export async function POST(
         }
 
         const correctOpsiIds = soal.opsiJawaban.filter((o) => o.isBenar).map((o) => o.id);
-        // Cek jika pilihan identik
         const isIdentical =
           chosenIds.length === correctOpsiIds.length &&
           chosenIds.every((id) => correctOpsiIds.includes(id));
@@ -117,11 +115,9 @@ export async function POST(
         let totalPairs = 0;
 
         try {
-          // Format matchingData kunci: [{ left: "...", right: "..." }]
           const keyPairs: { left: string; right: string }[] = JSON.parse(soal.matchingData || '[]');
           totalPairs = keyPairs.length;
 
-          // Jawaban siswa: { [left]: right } atau [{ left: "...", right: "..." }]
           let userAnswers: Record<string, string> = {};
           if (jawaban?.jawabanDipilih) {
             const parsed = JSON.parse(jawaban.jawabanDipilih);
@@ -166,11 +162,10 @@ export async function POST(
       }
     }
 
-    const bankSoal = pesertaUjian.ujian.bankSoal;
-    const maxNilai = bankSoal.nilaiMaksimal ?? 100.0;
-    const minNilai = bankSoal.nilaiMinimal ?? 0.0;
+    const mapel = pesertaUjian.ujian.mataPelajaran;
+    const maxNilai = mapel.nilaiMaksimal ?? 100.0;
+    const minNilai = mapel.nilaiMinimal ?? 0.0;
 
-    // Pastikan nilai tidak melebihi nilai maksimal dan di-round 2 digit desimal
     const rawTotalPG = Number(totalNilaiPG.toFixed(2));
     const rawTotalEsai = Number(totalNilaiEsai.toFixed(2));
     const finalNilaiPG = Math.min(maxNilai, Math.max(minNilai, rawTotalPG));
@@ -178,7 +173,6 @@ export async function POST(
     const rawTotal = Number((finalNilaiPG + finalNilaiEsai).toFixed(2));
     const nilaiTotal = Math.min(maxNilai, Math.max(minNilai, rawTotal));
 
-    // Update status peserta Ujian
     await prisma.pesertaUjian.update({
       where: { id: pesertaUjian.id },
       data: {
@@ -188,11 +182,10 @@ export async function POST(
         nilaiPG: finalNilaiPG,
         nilaiEsai: finalNilaiEsai,
         nilaiTotal,
-        isKoreksiSelesai: !adaSoalEsai, // Jika tidak ada soal essay manual, koreksi selesai
+        isKoreksiSelesai: !adaSoalEsai,
       },
     });
 
-    // Log selesai ujian
     await prisma.logAktivitasUjian.create({
       data: {
         userId: user.userId,

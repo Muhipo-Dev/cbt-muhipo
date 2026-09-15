@@ -10,41 +10,9 @@ export interface TokenPayload {
   userId: string;
   username: string;
   name: string;
-  role: 'ADMIN' | 'GURU' | 'PROKTOR' | 'SISWA';
+  role: 'SUPERADMIN' | 'ADMIN' | 'GURU' | 'PROKTOR' | 'SISWA';
   nomorPeserta?: string | null;
-  nisn?: string | null;
   kelasNama?: string | null;
-}
-
-export function mapSimasmuhRoleToCbt(simasmuhRole?: string | null): 'ADMIN' | 'GURU' | 'PROKTOR' | 'SISWA' {
-  if (!simasmuhRole) return 'SISWA';
-  const role = String(simasmuhRole).toUpperCase().trim();
-
-  // Semua role admin di SIMASMUH (superadmin, admin IT, admin TU/pegawai, kepala sekolah) mendapatkan role ADMIN di CBT
-  if (
-    role === 'SUPERADMIN' ||
-    role === 'SUPER_ADMIN' ||
-    role.includes('ADMIN') ||
-    role === 'PEGAWAI' ||
-    role === 'TU' ||
-    role === 'KEPALA_SEKOLAH' ||
-    role === 'KEPSEK'
-  ) {
-    return 'ADMIN';
-  }
-
-  // Role Guru di SIMASMUH mendapatkan role GURU di CBT
-  if (role === 'GURU' || role === 'TEACHER' || role.includes('GURU')) {
-    return 'GURU';
-  }
-
-  // Role Proktor
-  if (role === 'PROKTOR' || role.includes('PROKTOR')) {
-    return 'PROKTOR';
-  }
-
-  // Siswa
-  return 'SISWA';
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -52,8 +20,16 @@ export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, salt);
 }
 
-export async function comparePassword(password: string, hashed: string): Promise<boolean> {
-  return bcrypt.compare(password, hashed);
+export async function comparePassword(password: string, hashedOrPlain: string): Promise<boolean> {
+  if (!password || !hashedOrPlain) return false;
+  // If stored password matches directly
+  if (password === hashedOrPlain) return true;
+  // If stored password is a bcrypt hash
+  try {
+    return await bcrypt.compare(password, hashedOrPlain);
+  } catch {
+    return false;
+  }
 }
 
 export async function signToken(payload: TokenPayload): Promise<string> {
@@ -79,3 +55,4 @@ export async function getSessionUser(): Promise<TokenPayload | null> {
   if (!token) return null;
   return verifyToken(token);
 }
+

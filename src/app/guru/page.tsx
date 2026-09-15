@@ -448,6 +448,7 @@ export default function GuruDashboardPage() {
         { key: 'col3', width: 10 },  // Tipe
         { key: 'col4', width: 68 },  // Isi Soal / Jawaban
         { key: 'col5', width: 22 },  // Status Jawaban
+        { key: 'col6', width: 14 },  // Kesulitan
       ];
 
       // Border Thin Helper
@@ -466,7 +467,7 @@ export default function GuruDashboardPage() {
       };
 
       // Baris 1: Judul Utama
-      ws.mergeCells('A1:E1');
+      ws.mergeCells('A1:F1');
       const titleCell = ws.getCell('A1');
       titleCell.value = 'TEMPLATE IMPORT SOAL CBT';
       titleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -479,7 +480,7 @@ export default function GuruDashboardPage() {
       ws.getRow(1).height = 28;
 
       // Baris 2: Sub-judul / Keterangan Tipe
-      ws.mergeCells('A2:E2');
+      ws.mergeCells('A2:F2');
       const subCell = ws.getCell('A2');
       subCell.value = 'Tipe: Q (Pilihan Ganda), Q2 (Esai), Q3 (Jawaban Singkat), Q4 (PG Kompleks), Q5 (Benar/Salah), Q6 (Menjodohkan)';
       subCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF1E293B' } };
@@ -497,7 +498,7 @@ export default function GuruDashboardPage() {
 
       // Baris 5: Table Header
       const headerRow = ws.getRow(5);
-      headerRow.values = ['No.', 'Keterangan', 'Tipe', 'Isi Soal / Jawaban', 'Status Jawaban'];
+      headerRow.values = ['No.', 'Keterangan', 'Tipe', 'Isi Soal / Jawaban', 'Status Jawaban', 'Kesulitan'];
       headerRow.height = 26;
       headerRow.eachCell((cell, colNumber) => {
         cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -513,27 +514,27 @@ export default function GuruDashboardPage() {
       // Data Baris Soal & Jawaban beserta Styling Warna
       const rowsData = [
         // No 1: PG
-        { row: [1, 'Soal Pilihan Ganda', 'Q', 'Ibu kota negara Indonesia adalah...', ''], bg: 'FFE0E7FF', isBold: true },
-        { row: ['', 'Jawaban Benar', 'A', 'Jakarta', 1], bg: 'FFDCFCE7', isBold: false }, // Hijau muda (benar)
-        { row: ['', '', 'A', 'Surabaya', 0], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', '', 'A', 'Bandung', 0], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', '', 'A', 'Yogyakarta', 0], bg: 'FFFFFFFF', isBold: false },
+        { row: [1, 'Soal Pilihan Ganda', 'Q', 'Ibu kota negara Indonesia adalah...', '', 2], bg: 'FFE0E7FF', isBold: true },
+        { row: ['', 'Jawaban Benar', 'A', 'Jakarta', 1, ''], bg: 'FFDCFCE7', isBold: false }, // Hijau muda (benar)
+        { row: ['', '', 'A', 'Surabaya', 0, ''], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', '', 'A', 'Bandung', 0, ''], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', '', 'A', 'Yogyakarta', 0, ''], bg: 'FFFFFFFF', isBold: false },
         // No 2: Esai
-        { row: [2, 'Soal Esai', 'Q2', 'Jelaskan pengertian Pancasila sebagai dasar negara Indonesia!', ''], bg: 'FFE0F2FE', isBold: true }, // Sky Blue
+        { row: [2, 'Soal Esai', 'Q2', 'Jelaskan pengertian Pancasila sebagai dasar negara Indonesia!', '', 3], bg: 'FFE0F2FE', isBold: true }, // Sky Blue
         // No 3: Jawaban Singkat
-        { row: [3, 'Jawaban Singkat', 'Q3', 'Sebutkan 3 pulau terbesar di Indonesia!', ''], bg: 'FFFEF3C7', isBold: true }, // Amber / Kuning
+        { row: [3, 'Jawaban Singkat', 'Q3', 'Sebutkan 3 pulau terbesar di Indonesia!', '', 1], bg: 'FFFEF3C7', isBold: true }, // Amber / Kuning
         // No 4: PG Kompleks
-        { row: [4, 'Soal PG Kompleks', 'Q4', 'Manakah yang termasuk organ pernapasan pada manusia?', ''], bg: 'FFFCE7F3', isBold: true }, // Pink
-        { row: ['', 'Jawaban Benar', 'A', 'Hidung', 1], bg: 'FFDCFCE7', isBold: false },
-        { row: ['', '', 'A', 'Lambung', 0], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', 'Jawaban Benar', 'A', 'Paru-paru', 1], bg: 'FFDCFCE7', isBold: false },
+        { row: [4, 'Soal PG Kompleks', 'Q4', 'Manakah yang termasuk organ pernapasan pada manusia?', '', 3], bg: 'FFFCE7F3', isBold: true }, // Pink
+        { row: ['', 'Jawaban Benar', 'A', 'Hidung', 1, ''], bg: 'FFDCFCE7', isBold: false },
+        { row: ['', '', 'A', 'Lambung', 0, ''], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', 'Jawaban Benar', 'A', 'Paru-paru', 1, ''], bg: 'FFDCFCE7', isBold: false },
         // No 5: Benar/Salah
-        { row: [5, 'Soal Benar/Salah', 'Q5', 'Fotosintesis terjadi di dalam kloroplas tumbuhan', ''], bg: 'FFFFE4E6', isBold: true }, // Rose muda
-        { row: ['', 'Pernyataan BENAR', 'A', 'Benar', 1], bg: 'FFDCFCE7', isBold: false },
+        { row: [5, 'Soal Benar/Salah', 'Q5', 'Fotosintesis terjadi di dalam kloroplas tumbuhan', '', 2], bg: 'FFFFE4E6', isBold: true }, // Rose muda
+        { row: ['', 'Pernyataan BENAR', 'A', 'Benar', 1, ''], bg: 'FFDCFCE7', isBold: false },
         // No 6: Menjodohkan
-        { row: [6, 'Soal Menjodohkan', 'Q6', 'Pasangkan negara dengan ibu kotanya!', ''], bg: 'FFF3E8FF', isBold: true }, // Purple muda
-        { row: ['', 'Premis -> Respons', 'A', 'Indonesia', 'Jakarta'], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', 'Premis -> Respons', 'A', 'Malaysia', 'Kuala Lumpur'], bg: 'FFFFFFFF', isBold: false },
+        { row: [6, 'Soal Menjodohkan', 'Q6', 'Pasangkan negara dengan ibu kotanya!', '', 2], bg: 'FFF3E8FF', isBold: true }, // Purple muda
+        { row: ['', 'Premis -> Respons', 'A', 'Indonesia', 'Jakarta', ''], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', 'Premis -> Respons', 'A', 'Malaysia', 'Kuala Lumpur', ''], bg: 'FFFFFFFF', isBold: false },
       ];
 
       rowsData.forEach((item, idx) => {
@@ -1104,8 +1105,8 @@ export default function GuruDashboardPage() {
       const matchSearch =
         !searchQuery.trim() ||
         p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.nis?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.nomorPeserta?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.kelas?.toLowerCase().includes(searchQuery.toLowerCase());
       return matchKelas && matchSearch;
     });
@@ -1131,8 +1132,8 @@ export default function GuruDashboardPage() {
       const matchSearch =
         !searchQuery.trim() ||
         p.siswa?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.siswa?.nis?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.siswa?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.siswa?.nomorPeserta?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         kelasNama?.toLowerCase().includes(searchQuery.toLowerCase());
       return matchKelas && matchSearch;
     });
@@ -1155,8 +1156,8 @@ export default function GuruDashboardPage() {
 
       return {
         No: idx + 1,
-        NIS: p.siswa.nis || p.siswa.username,
-        NISN: p.siswa.nisn || '-',
+        Username: p.siswa.username,
+        'Nomor Peserta': p.siswa.nomorPeserta || p.siswa.username,
         'Nama Siswa': p.siswa.name,
         Kelas: p.siswa.kelas?.nama || '-',
         'Nilai PG/Pilihan': nilaiPGFormatted,
@@ -1337,7 +1338,7 @@ export default function GuruDashboardPage() {
                 </div>
               </div>
 
-              {/* CARD PANDUAN ALUR KERJA CEPAT GURU (USER-FRIENDLY & LEBIH CANGGIH DARI ZYACBT) */}
+              {/* CARD PANDUAN ALUR KERJA CEPAT GURU (USER-FRIENDLY & LENGKAP) */}
               <div className="bg-white/90 dark:bg-slate-900/90 border border-blue-500/30 dark:border-blue-500/30 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-white/10">
                   <div className="flex items-center gap-2.5">
@@ -1690,7 +1691,7 @@ export default function GuruDashboardPage() {
                   <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap sm:whitespace-normal">
                     <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-white/10">
                       <tr>
-                        <th className="py-3 px-4">NIS</th>
+                        <th className="py-3 px-4">Username / ID</th>
                         <th className="py-3 px-4">Nama Siswa</th>
                         <th className="py-3 px-4">Kelas</th>
                         <th className="py-3 px-4">Status & Keamanan</th>
@@ -1708,7 +1709,7 @@ export default function GuruDashboardPage() {
                       ) : (
                         filteredProktorPeserta.map((p: any) => (
                           <tr key={p.pesertaUjianId} className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition ${p.jumlahPelanggaran > 0 ? 'bg-rose-50/30 dark:bg-rose-950/20' : ''}`}>
-                            <td className="py-3 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">{p.nis || p.nomorPeserta || p.username}</td>
+                            <td className="py-3 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">{p.username}</td>
                             <td className="py-3 px-4">
                               <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                                 <span>{p.name}</span>
@@ -2953,7 +2954,7 @@ export default function GuruDashboardPage() {
                             <tr className="bg-slate-50/80 dark:bg-slate-950/80 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-white/10">
                               <th className="py-3 px-4 w-12 text-center">No</th>
                               <th className="py-3 px-4">Nama Siswa</th>
-                              <th className="py-3 px-4">NIS / Username</th>
+                              <th className="py-3 px-4">Username / ID</th>
                               <th className="py-3 px-4">Kelas</th>
                               <th className="py-3 px-4 text-center">Nilai PG</th>
                               <th className="py-3 px-4 text-center">Nilai Isian/Esai</th>
@@ -2985,7 +2986,7 @@ export default function GuruDashboardPage() {
                                       {p.siswa?.name}
                                     </td>
                                     <td className="py-3 px-4 font-mono text-slate-500">
-                                      {p.siswa?.nis || p.siswa?.username}
+                                      {p.siswa?.username}
                                     </td>
                                     <td className="py-3 px-4 font-semibold text-blue-600 dark:text-blue-400">
                                       {p.siswa?.kelas?.nama || '-'}
@@ -3075,7 +3076,7 @@ export default function GuruDashboardPage() {
                                     </span>
                                   </div>
                                   <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
-                                    NIS: <b className="text-slate-700 dark:text-slate-200">{peserta.siswa?.nis || peserta.siswa?.username}</b> • Kelas: <b className="text-blue-600 dark:text-blue-400">{peserta.siswa?.kelas?.nama || '-'}</b>
+                                    User: <b className="text-slate-700 dark:text-slate-200">{peserta.siswa?.username}</b> • Kelas: <b className="text-blue-600 dark:text-blue-400">{peserta.siswa?.kelas?.nama || '-'}</b>
                                   </p>
                                 </div>
                               </div>
@@ -4000,7 +4001,7 @@ export default function GuruDashboardPage() {
                     )}
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    NIS: <b>{violationScreenModal.nis || violationScreenModal.username}</b> • Kelas: <b>{violationScreenModal.kelas}</b> • Status: <b>{violationScreenModal.status}</b>
+                    User: <b>{violationScreenModal.username}</b> • Kelas: <b>{violationScreenModal.kelas}</b> • Status: <b>{violationScreenModal.status}</b>
                   </p>
                 </div>
               </div>
@@ -4259,7 +4260,7 @@ export default function GuruDashboardPage() {
               <div className="space-y-3">
                 <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>3. Ragam Tipe Soal (Jauh Lebih Lengkap dari ZYACBT)</span>
+                  <span>3. Ragam Tipe Soal Lengkap</span>
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
                   <div className="p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-500/20">

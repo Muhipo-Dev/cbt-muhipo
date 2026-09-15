@@ -93,8 +93,41 @@ export async function GET() {
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return response;
   } catch (error: any) {
-    console.error('Settings GET API error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error('Settings GET fallback error:', error?.message);
+    const serverNow = new Date();
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: 'default-settings',
+        schoolName: 'SMA Muhammadiyah 1 Ponorogo',
+        appTitle: 'CBT MUHIPO',
+        academicYear: '2026/2027',
+        semester: 'Ganjil',
+        timezone: 'Asia/Jakarta',
+        serverLocation: 'Ponorogo, Jawa Timur',
+        logoUrl: '/pic_logo.png',
+        backgroundUrl: '/muhipo-front.jpg',
+        timeSyncOffsetMs: 0,
+      },
+      serverTime: {
+        timestamp: serverNow.getTime(),
+        iso: serverNow.toISOString(),
+        timeString: serverNow.toLocaleTimeString('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+          timeZone: 'Asia/Jakarta',
+        }),
+        dateString: serverNow.toLocaleDateString('id-ID', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+          timeZone: 'Asia/Jakarta',
+        }),
+      },
+    });
   }
 }
 

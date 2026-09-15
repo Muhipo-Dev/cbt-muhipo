@@ -12,22 +12,20 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const ujianId = searchParams.get('ujianId');
 
-    // Filter ujian:
-    // ATURAN: GURU HANYA melihat jadwal ujian yang dibuat dari bank soal miliknya sendiri
-    // Satu guru tidak dapat melihat jadwal ujian, bank soal, dan nilai mapel milik guru lain
     const ujianWhereClause: any = {};
     if (user.role === 'GURU') {
-      ujianWhereClause.bankSoal = {
-        pembuatId: user.userId,
+      ujianWhereClause.mataPelajaran = {
+        OR: [
+          { pembuatId: user.userId },
+          { gurus: { some: { guruId: user.userId } } },
+        ],
       };
     }
 
     const ujianList = await prisma.ujian.findMany({
       where: ujianWhereClause,
       include: {
-        bankSoal: {
-          include: { mataPelajaran: true },
-        },
+        mataPelajaran: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -37,20 +35,21 @@ export async function GET(request: NextRequest) {
     let activeUjian: any = null;
 
     if (activeUjianId) {
-      // Pastikan guru berhak mengakses ujian ini (Hanya jika dibuat oleh guru login)
       const singleUjianWhere: any = { id: activeUjianId };
       if (user.role === 'GURU') {
-        singleUjianWhere.bankSoal = {
-          pembuatId: user.userId,
+        singleUjianWhere.mataPelajaran = {
+          OR: [
+            { pembuatId: user.userId },
+            { gurus: { some: { guruId: user.userId } } },
+          ],
         };
       }
 
       activeUjian = await prisma.ujian.findFirst({
         where: singleUjianWhere,
         include: {
-          bankSoal: {
+          mataPelajaran: {
             include: {
-              mataPelajaran: true,
               soalList: {
                 where: { tipeSoal: { in: ['ESAI', 'ISIAN'] } },
               },
@@ -120,7 +119,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Hitung ulang total nilai untuk peserta ujian ini
     if (pesertaUjianId) {
       const allJawaban = await prisma.jawabanPeserta.findMany({
         where: { pesertaUjianId },

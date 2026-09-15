@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { StatusPeserta } from '@prisma/client';
+import { StatusPeserta } from '@/lib/enums';
 
 // API Autosave Jawaban Siswa
 export async function POST(

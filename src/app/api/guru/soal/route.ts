@@ -1,20 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { TipeSoal } from '@prisma/client';
+import { TipeSoal } from '@/lib/enums';
 
-// Engine Perhitungan Bobot CBT MUHIPO
-
-// Helper untuk kalkulasi otomatis poin butir soal secara seimbang dan proporsional:
-// ATURAN: Isian Singkat > Pilihan Ganda, dan Esai > Isian Singkat.
-// Rasio bobot standar (Weighted Ratio):
-// - PG / PG_KOMPLEKS / BENAR_SALAH = 1.0x (Dasar)
-// - ISIAN (Isian Singkat)           = 2.0x (Lebih tinggi dari PG)
-// - ESAI (Uraian / Esai)            = 4.0x (Lebih tinggi dari Isian Singkat)
-async function recalculateBankSoalPoints(bankSoalId: string) {
+// Helper untuk kalkulasi otomatis poin butir soal secara seimbang dan proporsional dalam sebuah Topik / Mata Pelajaran
+async function recalculateTopikPoints(mataPelajaranId: string) {
   try {
-    const bank: any = await prisma.bankSoal.findUnique({
-      where: { id: bankSoalId },
+    const mapel = await prisma.mataPelajaran.findUnique({
+      where: { id: mataPelajaranId },
       include: {
         soalList: {
           select: { id: true, nomorUrut: true, tipeSoal: true },
@@ -23,36 +16,28 @@ async function recalculateBankSoalPoints(bankSoalId: string) {
       },
     });
 
-    if (!bank || !bank.soalList || bank.soalList.length === 0) return;
+    if (!mapel || !mapel.soalList || mapel.soalList.length === 0) return;
 
-    const soalList = bank.soalList;
-    const maxScore = Number(bank?.nilaiMaksimal) || 100.0;
+    const soalList = mapel.soalList;
+    const maxScore = Number(mapel?.nilaiMaksimal) || 100.0;
 
-    // Tentukan pengali rasio bobot per tipe soal:
-    // ATURAN:
-    // - Esai = 4.0x (Paling tinggi)
-    // - Isian Singkat = 2.0x (Lebih tinggi dari PG)
-    // - PG Kompleks (Multiple Choice) = 1.5x (Di atas PG tunggal)
-    // - Pencocokan (MENJODOHKAN) = 1.0x (Bobot sama dengan Pilihan Ganda)
-    // - Pilihan Ganda (PG Tunggal / Benar-Salah) = 1.0x (Dasar)
     const getRatio = (tipe: string): number => {
       switch (tipe) {
         case 'ESAI':
-          return 4.0; // Esai tertinggi
+          return 4.0;
         case 'ISIAN':
-          return 2.0; // Isian lebih tinggi dari PG
+          return 2.0;
         case 'PG_KOMPLEKS':
-          return 1.5; // Multiple Choice di atas PG tunggal
+          return 1.5;
         case 'MENJODOHKAN':
-          return 1.0; // Bobot soal pencocokan sama dengan pilihan ganda
+          return 1.0;
         case 'PG':
         case 'BENAR_SALAH':
         default:
-          return 1.0; // Pilihan ganda dasar
+          return 1.0;
       }
     };
 
-    // Hitung total unit bobot
     let totalWeightUnits = 0;
     for (const s of soalList) {
       totalWeightUnits += getRatio(s.tipeSoal);
@@ -60,10 +45,7 @@ async function recalculateBankSoalPoints(bankSoalId: string) {
 
     if (totalWeightUnits === 0) totalWeightUnits = soalList.length;
 
-    // Nilai per unit bobot
     const unitValue = maxScore / totalWeightUnits;
-
-    // Kalkulasi bobot individual dan selaraskan pembulatan agar total poin pas = maxScore
     let accumulatedScore = 0;
     const updates: { id: string; bobot: number }[] = [];
 
@@ -77,14 +59,12 @@ async function recalculateBankSoalPoints(bankSoalId: string) {
         accumulatedScore += roundedPoint;
         updates.push({ id: s.id, bobot: roundedPoint });
       } else {
-        // Soal terakhir menyerap selisih desimal agar total persis sama dengan nilaiMaksimal
         const remainingPoint = Number((maxScore - accumulatedScore).toFixed(2));
         const finalPoint = remainingPoint > 0 ? remainingPoint : Number((getRatio(s.tipeSoal) * unitValue).toFixed(2));
         updates.push({ id: s.id, bobot: finalPoint });
       }
     }
 
-    // Update setiap butir soal secara paralel
     await Promise.all(
       updates.map((item) =>
         prisma.soal.update({
@@ -94,39 +74,36 @@ async function recalculateBankSoalPoints(bankSoalId: string) {
       )
     );
   } catch (err) {
-    console.error('Recalculate bank soal points error:', err);
+    console.error('Recalculate topik points error:', err);
   }
 }
 
-// GET: Ambil Bank Soal & Soal-soal
+// GET: Ambil Data Topik / Mata Pelajaran & Soal-soal di dalamnya
 export async function GET(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !['GURU', 'ADMIN'].includes(user.role)) {
+    if (!user || !['GURU', 'ADMIN', 'SUPERADMIN'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
-    const bankSoalId = searchParams.get('bankSoalId');
+    const mataPelajaranId = searchParams.get('mataPelajaranId') || searchParams.get('topikId') || searchParams.get('bankSoalId');
 
-    if (bankSoalId) {
-      // Filter kepemilikan jika role adalah GURU:
-      // ATURAN: Guru HANYA berhak mengakses jika ia adalah pembuat/pengimpor langsung bank soal tersebut
-      const whereClause: any = { id: bankSoalId };
+    if (mataPelajaranId) {
+      const whereClause: any = { id: mataPelajaranId };
       if (user.role === 'GURU') {
-        whereClause.pembuatId = user.userId;
+        whereClause.OR = [
+          { pembuatId: user.userId },
+          { gurus: { some: { guruId: user.userId } } },
+        ];
       }
 
-      const bankSoal = await prisma.bankSoal.findFirst({
+      const mapel = await prisma.mataPelajaran.findFirst({
         where: whereClause,
         include: {
-          mataPelajaran: {
+          gurus: {
             include: {
-              gurus: {
-                include: {
-                  guru: { select: { id: true, name: true, username: true } },
-                },
-              },
+              guru: { select: { id: true, name: true, username: true } },
             },
           },
           pembuat: { select: { id: true, name: true, username: true } },
@@ -139,70 +116,48 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      if (!bankSoal) {
+      if (!mapel) {
         return NextResponse.json({
           success: false,
-          message: 'Bank Soal tidak ditemukan atau Anda tidak memiliki hak akses.',
+          message: 'Topik / Mata Pelajaran tidak ditemukan atau Anda tidak memiliki hak akses.',
         }, { status: 404 });
       }
 
-      return NextResponse.json({ success: true, data: bankSoal });
+      return NextResponse.json({
+        success: true,
+        data: {
+          ...mapel,
+          bankSoalList: [mapel],
+        },
+      });
     }
 
-    // Filter list bank soal:
-    // ATURAN: Guru HANYA melihat bank buatannya/diimpornya sendiri (pembuatId: user.userId). Admin melihat semua.
-    const bankWhereClause =
+    const mapelWhereClause =
       user.role === 'GURU'
         ? {
-            pembuatId: user.userId,
+            OR: [
+              { pembuatId: user.userId },
+              { gurus: { some: { guruId: user.userId } } },
+            ],
           }
         : {};
 
-    const list = await prisma.bankSoal.findMany({
-      where: bankWhereClause,
+    const list = await prisma.mataPelajaran.findMany({
+      where: mapelWhereClause,
       include: {
-        mataPelajaran: {
+        gurus: {
           include: {
-            gurus: {
-              include: {
-                guru: { select: { id: true, name: true, username: true } },
-              },
-            },
+            guru: { select: { id: true, name: true, username: true } },
           },
         },
         pembuat: { select: { id: true, name: true, username: true, role: true } },
         _count: {
-          select: { soalList: true },
+          select: { soalList: true, gurus: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { nama: 'asc' },
     });
 
-    // Filter mata pelajaran:
-    // ATURAN: Guru HANYA melihat mata pelajaran yang diampunya
-    let mapelList: any[] = [];
-    if (user.role === 'GURU') {
-      const guruMapelAssigned = await prisma.guruMataPelajaran.findMany({
-        where: { guruId: user.userId },
-        include: { mataPelajaran: true },
-      });
-
-      mapelList = guruMapelAssigned.map((gm) => gm.mataPelajaran);
-    } else {
-      mapelList = await prisma.mataPelajaran.findMany({
-        include: {
-          gurus: {
-            include: {
-              guru: { select: { id: true, name: true, username: true } },
-            },
-          },
-        },
-        orderBy: { nama: 'asc' },
-      });
-    }
-
-    // Filter rombel kelas:
-    // ATURAN: Guru HANYA melihat kelas yang diampunya (dari tabel GuruKelas yang tersinkron dari SIMASMUH)
     let kelasList: any[] = [];
     if (user.role === 'GURU') {
       const guruKelasAssigned = await prisma.guruKelas.findMany({
@@ -215,7 +170,6 @@ export async function GET(request: NextRequest) {
           .map((gk: { kelas: any }) => gk.kelas)
           .sort((a: { nama: string }, b: { nama: string }) => a.nama.localeCompare(b.nama));
       } else {
-        // Fallback jika belum ada jadwal spesifik, tampilkan kelas dari database agar tidak blank
         kelasList = await prisma.kelas.findMany({ orderBy: { nama: 'asc' } });
       }
     } else {
@@ -225,190 +179,170 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        bankSoalList: list,
-        mapelList,
+        mapelList: list,
+        topikList: list,
+        bankSoalList: list, // Alias kompatibilitas
         kelasList,
       },
     });
   } catch (error: any) {
-    console.error('Guru bank soal get error:', error);
+    console.error('Guru topik & soal get error:', error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
 }
 
-// POST: Buat Bank Soal Baru / Tambah Soal Baru
+// POST: Buat Topik / Simpan Butir Soal / Import Soal
 export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !['GURU', 'ADMIN'].includes(user.role)) {
+    if (!user || !['GURU', 'ADMIN', 'SUPERADMIN'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
     const { action } = body;
 
-    // 1. Buat Bank Soal Baru
-    if (action === 'CREATE_BANK_SOAL') {
-      const { kodeBank, nama, tingkat, jurusan, mataPelajaranId, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal, guruPengampuId } = body;
-      
-      let finalPembuatId = user.userId;
-
-      // Cari guru pengampu dari relasi GuruMataPelajaran (Tersinkron SIMASMUH)
-      let mapelPengampuGuruId: string | null = null;
-      if (mataPelajaranId) {
-        const firstPengampu = await prisma.guruMataPelajaran.findFirst({
-          where: { mataPelajaranId },
-          include: { guru: true },
-        });
-        if (firstPengampu?.guruId) {
-          mapelPengampuGuruId = firstPengampu.guruId;
-        }
+    // 1. Buat Topik / Mata Pelajaran Baru
+    if (action === 'CREATE_MAPEL' || action === 'CREATE_TOPIK' || action === 'CREATE_BANK_SOAL') {
+      const { kode, kodeBank, nama, tingkat, jurusan, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal, guruPengampuId } = body;
+      const cleanKode = (kode || kodeBank || '').trim().toUpperCase();
+      if (!cleanKode || !nama?.trim()) {
+        return NextResponse.json({ success: false, message: 'Kode dan Nama Topik / Mata Pelajaran wajib diisi' }, { status: 400 });
       }
 
-      // Jika yang membuat adalah ADMIN / GURU:
-      // Prioritaskan guruPengampuId spesifik, atau otomatis guru pengampu mapel SIMASMUH
-      if (guruPengampuId) {
-        finalPembuatId = guruPengampuId;
-      } else if (mapelPengampuGuruId) {
-        finalPembuatId = mapelPengampuGuruId;
+      const existing = await prisma.mataPelajaran.findUnique({ where: { kode: cleanKode } });
+      if (existing) {
+        return NextResponse.json({ success: false, message: `Kode '${cleanKode}' sudah digunakan` }, { status: 400 });
       }
 
-      const bankSoal = await prisma.bankSoal.create({
+      const finalPembuatId = guruPengampuId || user.userId;
+
+      const mapel = await prisma.mataPelajaran.create({
         data: {
-          kodeBank,
-          nama,
-          tingkat: Number(tingkat),
+          kode: cleanKode,
+          nama: nama.trim(),
+          tingkat: tingkat !== undefined ? Number(tingkat) : 10,
           jurusan: jurusan || 'UMUM',
           durasiMenit: Number(durasiMenit) || 90,
           kkm: kkm !== undefined ? Number(kkm) : 75.0,
           nilaiMinimal: nilaiMinimal !== undefined ? Number(nilaiMinimal) : 0.0,
           nilaiMaksimal: nilaiMaksimal !== undefined ? Number(nilaiMaksimal) : 100.0,
-          mataPelajaranId,
           pembuatId: finalPembuatId,
-        } as any,
+          ...(user.role === 'GURU'
+            ? {
+                gurus: {
+                  create: { guruId: user.userId },
+                },
+              }
+            : {}),
+        },
       });
 
-      return NextResponse.json({ success: true, data: bankSoal, message: 'Bank Soal berhasil dibuat' });
+      return NextResponse.json({ success: true, data: mapel, message: 'Topik / Mata Pelajaran berhasil dibuat' });
     }
 
-    // 1b. Update Bank Soal
-    if (action === 'UPDATE_BANK_SOAL') {
-      const { bankSoalId, kodeBank, nama, tingkat, jurusan, mataPelajaranId, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal, guruPengampuId } = body;
-      
-      const existingBank = await prisma.bankSoal.findUnique({
-        where: { id: bankSoalId },
-        include: { mataPelajaran: { include: { gurus: true } } },
+    // 1b. Update Topik / Mata Pelajaran
+    if (action === 'UPDATE_MAPEL' || action === 'UPDATE_TOPIK' || action === 'UPDATE_BANK_SOAL') {
+      const { id, mataPelajaranId, bankSoalId, kode, kodeBank, nama, tingkat, jurusan, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal } = body;
+      const targetId = id || mataPelajaranId || bankSoalId;
+
+      const existing = await prisma.mataPelajaran.findUnique({
+        where: { id: targetId },
+        include: { gurus: true },
       });
-      if (!existingBank) {
-        return NextResponse.json({ success: false, message: 'Bank Soal tidak ditemukan' }, { status: 404 });
+      if (!existing) {
+        return NextResponse.json({ success: false, message: 'Topik / Mata Pelajaran tidak ditemukan' }, { status: 404 });
       }
 
-      const isTeacherOfMapel = existingBank.mataPelajaran?.gurus?.some((g) => g.guruId === user.userId);
-      if (user.role === 'GURU' && existingBank.pembuatId !== user.userId && !isTeacherOfMapel) {
-        return NextResponse.json({ success: false, message: 'Akses ditolak. Anda bukan guru pengampu / pemilik bank soal ini.' }, { status: 403 });
+      const isTeacherOfMapel = existing.gurus?.some((g) => g.guruId === user.userId);
+      if (user.role === 'GURU' && existing.pembuatId !== user.userId && !isTeacherOfMapel) {
+        return NextResponse.json({ success: false, message: 'Akses ditolak. Anda bukan guru pengampu topik ini.' }, { status: 403 });
       }
 
-      // Tentukan pembuatId jika diubah / mapel berganti / admin mengedit bank soal
-      let targetPembuatId: string | undefined = undefined;
-      const targetMapelId = mataPelajaranId || existingBank.mataPelajaranId;
+      const cleanKode = (kode || kodeBank) ? (kode || kodeBank).trim().toUpperCase() : undefined;
 
-      if (guruPengampuId) {
-        targetPembuatId = guruPengampuId;
-      } else if (targetMapelId) {
-        const mapelPengampu = await prisma.guruMataPelajaran.findFirst({
-          where: { mataPelajaranId: targetMapelId },
-        });
-        if (mapelPengampu?.guruId) {
-          targetPembuatId = mapelPengampu.guruId;
-        }
-      }
-
-      const bankSoal = await prisma.bankSoal.update({
-        where: { id: bankSoalId },
+      const mapel = await prisma.mataPelajaran.update({
+        where: { id: targetId },
         data: {
-          kodeBank,
-          nama,
-          tingkat: Number(tingkat),
-          jurusan: jurusan || 'UMUM',
+          kode: cleanKode,
+          nama: nama ? nama.trim() : undefined,
+          tingkat: tingkat !== undefined ? Number(tingkat) : undefined,
+          jurusan: jurusan || undefined,
           durasiMenit: durasiMenit ? Number(durasiMenit) : undefined,
           kkm: kkm !== undefined ? Number(kkm) : undefined,
           nilaiMinimal: nilaiMinimal !== undefined ? Number(nilaiMinimal) : undefined,
           nilaiMaksimal: nilaiMaksimal !== undefined ? Number(nilaiMaksimal) : undefined,
-          mataPelajaranId,
-          pembuatId: targetPembuatId,
-        } as any,
+        },
       });
 
-      // Jika nilai maksimal berubah, kalkulasi ulang bobot tiap soal
-      await recalculateBankSoalPoints(bankSoalId);
+      await recalculateTopikPoints(targetId);
 
-      return NextResponse.json({ success: true, data: bankSoal, message: 'Bank Soal berhasil diperbarui' });
+      return NextResponse.json({ success: true, data: mapel, message: 'Topik / Mata Pelajaran berhasil diperbarui' });
     }
 
-    // 1c. Hapus Bank Soal
-    if (action === 'DELETE_BANK_SOAL') {
-      const { bankSoalId } = body;
+    // 1c. Hapus Topik / Mata Pelajaran
+    if (action === 'DELETE_MAPEL' || action === 'DELETE_TOPIK' || action === 'DELETE_BANK_SOAL') {
+      const { id, mataPelajaranId, bankSoalId } = body;
+      const targetId = id || mataPelajaranId || bankSoalId;
 
-      const existingBank = await prisma.bankSoal.findUnique({
-        where: { id: bankSoalId },
-        include: { mataPelajaran: { include: { gurus: true } } },
+      const existing = await prisma.mataPelajaran.findUnique({
+        where: { id: targetId },
+        include: { gurus: true },
       });
-      if (!existingBank) {
-        return NextResponse.json({ success: false, message: 'Bank Soal tidak ditemukan' }, { status: 404 });
+      if (!existing) {
+        return NextResponse.json({ success: false, message: 'Topik / Mata Pelajaran tidak ditemukan' }, { status: 404 });
       }
 
-      const isTeacherOfMapel = existingBank.mataPelajaran?.gurus?.some((g) => g.guruId === user.userId);
-      if (user.role === 'GURU' && existingBank.pembuatId !== user.userId && !isTeacherOfMapel) {
-        return NextResponse.json({ success: false, message: 'Akses ditolak. Anda bukan guru pengampu / pemilik bank soal ini.' }, { status: 403 });
-      }
-      
-      // 1. Hapus semua jawaban peserta dan log dari ujian yang terhubung ke bank soal ini
-      const relatedUjian = await prisma.ujian.findMany({ where: { bankSoalId } });
-      for (const u of relatedUjian) {
-        const peserta = await prisma.pesertaUjian.findMany({ where: { ujianId: u.id }, select: { id: true } });
-        const pesertaIds = peserta.map((p) => p.id);
-        
-        if (pesertaIds.length > 0) {
-          await prisma.jawabanPeserta.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
-          await prisma.logAktivitasUjian.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
-        }
-        await prisma.pesertaUjian.deleteMany({ where: { ujianId: u.id } });
-        await prisma.ujian.delete({ where: { id: u.id } });
+      const isTeacherOfMapel = existing.gurus?.some((g) => g.guruId === user.userId);
+      if (user.role === 'GURU' && existing.pembuatId !== user.userId && !isTeacherOfMapel) {
+        return NextResponse.json({ success: false, message: 'Akses ditolak.' }, { status: 403 });
       }
 
-      // 2. Hapus opsi & butir soal terkait
-      const soalList = await prisma.soal.findMany({ where: { bankSoalId }, select: { id: true } });
+      // Hapus soal & ujian terkait
+      const soalList = await prisma.soal.findMany({ where: { mataPelajaranId: targetId }, select: { id: true } });
       const soalIds = soalList.map((s) => s.id);
       if (soalIds.length > 0) {
         await prisma.jawabanPeserta.deleteMany({ where: { soalId: { in: soalIds } } });
         await prisma.opsiJawaban.deleteMany({ where: { soalId: { in: soalIds } } });
-        await prisma.soal.deleteMany({ where: { bankSoalId } });
+        await prisma.soal.deleteMany({ where: { mataPelajaranId: targetId } });
       }
 
-      // 3. Hapus Bank Soal
-      await prisma.bankSoal.delete({
-        where: { id: bankSoalId },
-      });
+      const relatedUjian = await prisma.ujian.findMany({ where: { mataPelajaranId: targetId } });
+      for (const u of relatedUjian) {
+        const peserta = await prisma.pesertaUjian.findMany({ where: { ujianId: u.id }, select: { id: true } });
+        const pesertaIds = peserta.map((p) => p.id);
+        if (pesertaIds.length > 0) {
+          await prisma.jawabanPeserta.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
+          await prisma.logAktivitasUjian.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
+          await prisma.pesertaUjian.deleteMany({ where: { ujianId: u.id } });
+        }
+        await prisma.ujianKelas.deleteMany({ where: { ujianId: u.id } });
+        await prisma.ujian.delete({ where: { id: u.id } });
+      }
 
-      return NextResponse.json({ success: true, message: 'Bank Soal & seluruh butir soal terkait berhasil dihapus' });
+      await prisma.guruMataPelajaran.deleteMany({ where: { mataPelajaranId: targetId } });
+      await prisma.mataPelajaran.delete({ where: { id: targetId } });
+
+      return NextResponse.json({ success: true, message: 'Topik / Mata Pelajaran beserta seluruh butir soalnya berhasil dihapus' });
     }
 
-    // 1d. Import Soal Massal (dari Excel/JSON Array)
+    // 1d. Import Soal Massal Langsung ke Topik / Mata Pelajaran
     if (action === 'IMPORT_SOAL') {
-      const { bankSoalId, soalItems, durasiMenit } = body;
-      if (!bankSoalId || !Array.isArray(soalItems) || soalItems.length === 0) {
-        return NextResponse.json({ success: false, message: 'Data soal import tidak valid atau kosong' }, { status: 400 });
+      const { mataPelajaranId, topikId, bankSoalId, soalItems, durasiMenit } = body;
+      const targetMapelId = mataPelajaranId || topikId || bankSoalId;
+
+      if (!targetMapelId || !Array.isArray(soalItems) || soalItems.length === 0) {
+        return NextResponse.json({ success: false, message: 'Pilih Topik tujuan dan data soal import yang valid' }, { status: 400 });
       }
 
-      // Update durasi bank soal bila dikirimkan saat import
       if (durasiMenit && Number(durasiMenit) > 0) {
-        await prisma.bankSoal.update({
-          where: { id: bankSoalId },
+        await prisma.mataPelajaran.update({
+          where: { id: targetMapelId },
           data: { durasiMenit: Number(durasiMenit) },
         });
       }
 
-      let startOrder = (await prisma.soal.count({ where: { bankSoalId } })) + 1;
+      let startOrder = (await prisma.soal.count({ where: { mataPelajaranId: targetMapelId } })) + 1;
       let importedCount = 0;
 
       for (const item of soalItems) {
@@ -443,7 +377,7 @@ export async function POST(request: NextRequest) {
 
         await prisma.soal.create({
           data: {
-            bankSoalId,
+            mataPelajaranId: targetMapelId,
             nomorUrut: startOrder++,
             tipeSoal: tipe as TipeSoal,
             pertanyaan,
@@ -458,19 +392,20 @@ export async function POST(request: NextRequest) {
         importedCount++;
       }
 
-      // Auto recalculate poin setiap soal dalam bank soal
-      await recalculateBankSoalPoints(bankSoalId);
+      await recalculateTopikPoints(targetMapelId);
 
       return NextResponse.json({
         success: true,
-        message: `Berhasil mengimport ${importedCount} butir soal ke dalam Bank Soal! Poin per soal otomatis dikalkulasi.`,
+        message: `Berhasil mengimport ${importedCount} butir soal ke dalam Topik / Mata Pelajaran!`,
         importedCount,
       });
     }
 
-    // 1e. Kirim / Jadwalkan Soal Langsung ke Kelas Tertentu
+    // 1e. Kirim / Jadwalkan Ujian Langsung dari Topik / Mata Pelajaran
     if (action === 'KIRIM_KE_KELAS') {
       const {
+        mataPelajaranId,
+        topikId,
         bankSoalId,
         kelasIds,
         judul,
@@ -483,30 +418,26 @@ export async function POST(request: NextRequest) {
         acakOpsi,
       } = body;
 
-      if (!bankSoalId || !kelasIds || !Array.isArray(kelasIds) || kelasIds.length === 0) {
-        return NextResponse.json({ success: false, message: 'Pilih minimal 1 kelas target tujuan' }, { status: 400 });
+      const targetMapelId = mataPelajaranId || topikId || bankSoalId;
+
+      if (!targetMapelId || !kelasIds || !Array.isArray(kelasIds) || kelasIds.length === 0) {
+        return NextResponse.json({ success: false, message: 'Pilih Topik dan minimal 1 group / kelas target tujuan' }, { status: 400 });
       }
 
-      const bankSoal = await prisma.bankSoal.findUnique({ where: { id: bankSoalId } });
-      if (!bankSoal) {
-        return NextResponse.json({ success: false, message: 'Bank Soal tidak ditemukan' }, { status: 404 });
+      const mapel = await prisma.mataPelajaran.findUnique({ where: { id: targetMapelId } });
+      if (!mapel) {
+        return NextResponse.json({ success: false, message: 'Topik / Mata Pelajaran tidak ditemukan' }, { status: 404 });
       }
 
-      // ATURAN: Guru HANYA dapat menjadwalkan bank soal yang dia buat / impor sendiri
-      if (user.role === 'GURU' && bankSoal.pembuatId !== user.userId) {
-        return NextResponse.json({ success: false, message: 'Akses ditolak. Anda hanya dapat menjadwalkan bank soal milik Anda sendiri.' }, { status: 403 });
-      }
+      const generatedKode = kodeUjian || `UJIAN-${mapel.kode}-${Date.now().toString().slice(-4)}`;
+      const examTitle = judul || `Ujian: ${mapel.nama}`;
+      const duration = Number(durasiMenit) || mapel.durasiMenit || 90;
 
-      const generatedKode = kodeUjian || `UJIAN-${bankSoal.kodeBank}-${Date.now().toString().slice(-4)}`;
-      const examTitle = judul || `Ujian: ${bankSoal.nama}`;
-      const duration = Number(durasiMenit) || bankSoal.durasiMenit || 90;
-
-      // Buat Jadwal Ujian
       const newUjian = await prisma.ujian.create({
         data: {
           kodeUjian: generatedKode,
           judul: examTitle,
-          bankSoalId,
+          mataPelajaranId: targetMapelId,
           durasiMenit: duration,
           waktuMulai: waktuMulai ? new Date(waktuMulai) : new Date(),
           waktuSelesai: waktuSelesai ? new Date(waktuSelesai) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -520,7 +451,6 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Ambil siswa pada kelas-kelas terpilih
       const targetSiswa = await prisma.user.findMany({
         where: {
           role: 'SISWA',
@@ -536,20 +466,20 @@ export async function POST(request: NextRequest) {
             status: 'BELUM_MULAI',
             sisaDetik: duration * 60,
           })),
-          skipDuplicates: true,
         });
       }
 
       return NextResponse.json({
         success: true,
-        message: `Ujian berhasil dibuat dan didistribusikan ke ${targetSiswa.length} siswa pada ${kelasIds.length} rombel kelas terpilih!`,
+        message: `Ujian berhasil dibuat dan didistribusikan ke ${targetSiswa.length} peserta pada ${kelasIds.length} rombel kelas!`,
         data: { ujian: newUjian, totalPeserta: targetSiswa.length },
       });
     }
 
-    // 2. Tambah / Simpan Soal
+    // 2. Tambah / Simpan Butir Soal
     if (action === 'SAVE_SOAL') {
-      const { bankSoalId, soalId, nomorUrut, tipeSoal, pertanyaan, bobot, opsiJawaban, kunciJawabanTeks, matchingData } = body;
+      const { mataPelajaranId, topikId, bankSoalId, soalId, nomorUrut, tipeSoal, pertanyaan, bobot, opsiJawaban, kunciJawabanTeks, matchingData, mediaGambar, mediaAudio } = body;
+      const targetMapelId = mataPelajaranId || topikId || bankSoalId;
 
       const rawMatchingString = matchingData
         ? typeof matchingData === 'string'
@@ -558,7 +488,6 @@ export async function POST(request: NextRequest) {
         : null;
 
       if (soalId) {
-        // Update Soal
         await prisma.soal.update({
           where: { id: soalId },
           data: {
@@ -566,12 +495,13 @@ export async function POST(request: NextRequest) {
             tipeSoal: tipeSoal as TipeSoal,
             pertanyaan,
             bobot: bobot !== undefined && Number(bobot) > 0 ? Number(bobot) : 1.0,
+            mediaGambar: mediaGambar || null,
+            mediaAudio: mediaAudio || null,
             kunciJawabanTeks,
             matchingData: rawMatchingString,
           },
         });
 
-        // Hapus & recreate opsi jawaban jika tipe soal adalah PG / PG_KOMPLEKS / BENAR_SALAH
         await prisma.opsiJawaban.deleteMany({ where: { soalId } });
         if (['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal) && opsiJawaban && Array.isArray(opsiJawaban)) {
           for (const o of opsiJawaban) {
@@ -586,23 +516,27 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Auto recalculate poin setiap butir soal
-        if (bankSoalId) {
-          await recalculateBankSoalPoints(bankSoalId);
+        if (targetMapelId) {
+          await recalculateTopikPoints(targetMapelId);
         }
 
-        return NextResponse.json({ success: true, message: 'Soal berhasil diupdate' });
+        return NextResponse.json({ success: true, message: 'Butir soal berhasil diperbarui' });
       } else {
-        // Create Soal Baru
+        if (!targetMapelId) {
+          return NextResponse.json({ success: false, message: 'Pilih Topik / Mata Pelajaran terlebih dahulu' }, { status: 400 });
+        }
+
         const isChoiceType = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal);
-        const count = await prisma.soal.count({ where: { bankSoalId } });
+        const count = await prisma.soal.count({ where: { mataPelajaranId: targetMapelId } });
         const newSoal = await prisma.soal.create({
           data: {
-            bankSoalId,
+            mataPelajaranId: targetMapelId,
             nomorUrut: count + 1,
             tipeSoal: tipeSoal as TipeSoal,
             pertanyaan,
             bobot: bobot !== undefined && Number(bobot) > 0 ? Number(bobot) : 1.0,
+            mediaGambar: mediaGambar || null,
+            mediaAudio: mediaAudio || null,
             kunciJawabanTeks,
             matchingData: rawMatchingString,
             opsiJawaban: isChoiceType
@@ -617,32 +551,31 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Auto recalculate poin setiap butir soal
-        await recalculateBankSoalPoints(bankSoalId);
+        await recalculateTopikPoints(targetMapelId);
 
-        return NextResponse.json({ success: true, data: newSoal });
+        return NextResponse.json({ success: true, data: newSoal, message: 'Butir soal baru berhasil disimpan' });
       }
     }
 
     // 3. Delete Soal
     if (action === 'DELETE_SOAL') {
-      const { soalId, bankSoalId } = body;
+      const { soalId, mataPelajaranId, topikId, bankSoalId } = body;
       
-      let targetBankId = bankSoalId;
-      if (!targetBankId && soalId) {
-        const foundSoal = await prisma.soal.findUnique({ where: { id: soalId }, select: { bankSoalId: true } });
-        targetBankId = foundSoal?.bankSoalId;
+      let targetMapelId = mataPelajaranId || topikId || bankSoalId;
+      if (!targetMapelId && soalId) {
+        const foundSoal = await prisma.soal.findUnique({ where: { id: soalId }, select: { mataPelajaranId: true } });
+        targetMapelId = foundSoal?.mataPelajaranId;
       }
 
       await prisma.jawabanPeserta.deleteMany({ where: { soalId } });
       await prisma.opsiJawaban.deleteMany({ where: { soalId } });
       await prisma.soal.delete({ where: { id: soalId } });
 
-      if (targetBankId) {
-        await recalculateBankSoalPoints(targetBankId);
+      if (targetMapelId) {
+        await recalculateTopikPoints(targetMapelId);
       }
 
-      return NextResponse.json({ success: true, message: 'Soal berhasil dihapus' });
+      return NextResponse.json({ success: true, message: 'Butir soal berhasil dihapus' });
     }
 
     // 4. Arsipkan Jadwal Ujian
@@ -654,12 +587,12 @@ export async function POST(request: NextRequest) {
       });
       return NextResponse.json({
         success: true,
-        message: 'Jadwal ujian berhasil diarsipkan! Histori nilai siswa dan pengerjaan tetap tersimpan aman.',
+        message: 'Jadwal ujian berhasil diarsipkan',
         data: updated,
       });
     }
 
-    // 5. Pulihkan / Aktifkan Kembali Jadwal Ujian dari Arsip
+    // 5. Pulihkan / Aktifkan Kembali Jadwal Ujian
     if (action === 'UNARCHIVE_UJIAN') {
       const { ujianId } = body;
       const updated = await prisma.ujian.update({
@@ -675,7 +608,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: false, message: 'Aksi tidak dikenali' }, { status: 400 });
   } catch (error: any) {
-    console.error('Guru bank soal post error:', error);
+    console.error('Guru topik & soal post error:', error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
 }

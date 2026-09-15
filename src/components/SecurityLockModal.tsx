@@ -106,9 +106,9 @@ export function SecurityLockModal({
           <div className="flex items-start gap-2 sm:gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <b className="text-slate-900 text-xs">Peringatan Suara & Alarm Anti-Curang:</b>
+              <b className="text-slate-900 text-xs">Peringatan Suara & Batas Pelanggaran (Maksimal 3x):</b>
               <span className="text-slate-500 block text-[11px] mt-0.5">
-                Jika terdeteksi keluar dari layar ujian, sistem membunyikan alarm peringatan dan mencatat aktivitas ke dashboard proktor secara real-time.
+                Jika terdeteksi keluar dari layar ujian atau membuka tab/aplikasi lain, sistem membunyikan alarm. Pada <b>pelanggaran ke-3</b>, akun ujian akan <b>otomatis terkunci</b> dan wajib dibuka oleh pengawas proktor.
               </span>
             </div>
           </div>

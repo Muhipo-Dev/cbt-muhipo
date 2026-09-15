@@ -34,8 +34,6 @@ export default function ProktorPage() {
   const [searchFilter, setSearchFilter] = useState('');
 
   // Modal actions
-  const [tokenModal, setTokenModal] = useState(false);
-  const [newToken, setNewToken] = useState('');
   const [extraTimeModal, setExtraTimeModal] = useState<any>(null);
   const [extraMinutes, setExtraMinutes] = useState(15);
   const [actionLoading, setActionLoading] = useState(false);
@@ -199,35 +197,6 @@ export default function ProktorPage() {
     );
   };
 
-  // Generate / Ganti Token Ujian Baru
-  const handleUpdateToken = async () => {
-    if (!newToken || !data?.activeUjian?.id) return;
-    setActionLoading(true);
-    try {
-      const res = await fetch('/api/proktor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'CHANGE_TOKEN',
-          ujianId: data.activeUjian.id,
-          newToken,
-        }),
-      });
-      const resJson = await res.json();
-      if (resJson.success) {
-        showNotification('Token Diperbarui', resJson.message, 'success');
-        setTokenModal(false);
-        fetchMonitorData(true);
-      } else {
-        showNotification('Gagal', resJson.message || 'Gagal update token', 'error');
-      }
-    } catch (e) {
-      showNotification('Error', 'Gagal update token', 'error');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   // Reset Login Semua Siswa
   const handleResetAllLogins = async () => {
     if (!data?.activeUjian?.id) return;
@@ -381,7 +350,6 @@ export default function ProktorPage() {
     const matchSearch =
       !q ||
       p.name?.toLowerCase().includes(q) ||
-      p.nis?.toLowerCase().includes(q) ||
       p.username?.toLowerCase().includes(q) ||
       (p.nomorPeserta && p.nomorPeserta.toLowerCase().includes(q)) ||
       (p.kelas && p.kelas.toLowerCase().includes(q));
@@ -442,28 +410,28 @@ export default function ProktorPage() {
 
       {/* Main Monitoring Section */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Top Controls & Active Exam Card */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Active Exam Selector & Details */}
-          <div className="lg:col-span-8 bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider block">
-                  Jadwal Ujian Terpilih
-                </span>
-                <h2 className="text-xl font-extrabold text-white">
-                  {data?.activeUjian?.judul || 'Pilih Jadwal Ujian'}
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Mata Pelajaran: <b>{data?.activeUjian?.bankSoal?.mataPelajaran?.nama}</b> • Durasi: <b>{data?.activeUjian?.durasiMenit} Menit</b>
-                </p>
+        {/* Exam Quick Status & Live Stats */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold mb-2">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                <span>Ujian Aktif Terpilih</span>
               </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                {data?.activeUjian?.judul || 'Tidak Ada Jadwal Ujian Aktif'}
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Mapel: <b>{data?.activeUjian?.bankSoal?.mataPelajaran?.nama || '-'}</b> • Durasi: <b>{data?.activeUjian?.durasiMenit || 0} Menit</b> • Kode: <span className="font-mono text-cyan-400">{data?.activeUjian?.kodeUjian || '-'}</span>
+              </p>
+            </div>
 
+            <div className="flex flex-wrap items-center gap-2.5">
               {/* Selector Kelas Rombel */}
               <select
                 value={selectedKelasFilter}
                 onChange={(e) => setSelectedKelasFilter(e.target.value)}
-                className="px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 cursor-pointer"
               >
                 <option value="ALL">Semua Kelas ({data?.pesertaList?.length || 0})</option>
                 {kelasOptions.map((k) => (
@@ -473,14 +441,13 @@ export default function ProktorPage() {
                 ))}
               </select>
 
-              {/* Selector Ujian */}
               <select
                 value={selectedUjianId}
                 onChange={(e) => {
                   setSelectedUjianId(e.target.value);
                   setSelectedKelasFilter('ALL');
                 }}
-                className="px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 cursor-pointer"
               >
                 {data?.ujianList?.map((u: any) => (
                   <option key={u.id} value={u.id}>
@@ -489,57 +456,26 @@ export default function ProktorPage() {
                 ))}
               </select>
             </div>
-
-            {/* Quick Live Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-800/80 text-xs">
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
-                <span className="text-slate-500 block">Total Peserta:</span>
-                <span className="text-lg font-black text-white">{totalPeserta}</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30">
-                <span className="text-amber-400 block">Mengerjakan:</span>
-                <span className="text-lg font-black text-amber-300">{countMengerjakan}</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
-                <span className="text-emerald-400 block">Selesai:</span>
-                <span className="text-lg font-black text-emerald-300">{countSelesai}</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
-                <span className="text-slate-500 block">Belum Login:</span>
-                <span className="text-lg font-black text-slate-400">{countBelum}</span>
-              </div>
-            </div>
           </div>
 
-          {/* Token Card (Khas Proktor Zya/Candy CBT) */}
-          <div className="lg:col-span-4 bg-gradient-to-br from-cyan-950/50 via-slate-900 to-slate-900 border border-cyan-800/40 rounded-3xl p-6 shadow-xl flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
-                  <KeyRound className="w-4 h-4" />
-                  TOKEN UJIAN AKTIF
-                </span>
-                <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded font-mono">
-                  RILIS
-                </span>
-              </div>
-              <div className="text-3xl sm:text-4xl font-black font-mono tracking-[0.2em] text-cyan-300 text-center py-4 bg-slate-950/80 rounded-2xl border border-cyan-900/60 shadow-inner my-2">
-                {data?.activeUjian?.token || '------'}
-              </div>
-              <p className="text-[11px] text-slate-400 text-center">
-                Sampaikan token ini kepada siswa di ruangan setelah seluruh peserta siap.
-              </p>
+          {/* Quick Live Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-800/80 text-xs">
+            <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+              <span className="text-slate-500 block text-[11px] font-semibold">Total Peserta:</span>
+              <span className="text-xl font-black text-white">{totalPeserta}</span>
             </div>
-
-            <button
-              onClick={() => {
-                setNewToken(data?.activeUjian?.token || '');
-                setTokenModal(true);
-              }}
-              className="w-full mt-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-700/30 transition cursor-pointer"
-            >
-              Generate / Ganti Token Baru
-            </button>
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+              <span className="text-amber-400 block text-[11px] font-semibold">Sedang Mengerjakan:</span>
+              <span className="text-xl font-black text-amber-300">{countMengerjakan}</span>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
+              <span className="text-emerald-400 block text-[11px] font-semibold">Selesai Ujian:</span>
+              <span className="text-xl font-black text-emerald-300">{countSelesai}</span>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+              <span className="text-slate-500 block text-[11px] font-semibold">Belum Memulai:</span>
+              <span className="text-xl font-black text-slate-400">{countBelum}</span>
+            </div>
           </div>
         </div>
 
@@ -578,7 +514,7 @@ export default function ProktorPage() {
                   type="text"
                   value={searchFilter}
                   onChange={(e) => setSearchFilter(e.target.value)}
-                  placeholder="Cari nama siswa / NIS..."
+                  placeholder="Cari nama siswa / ID..."
                   className="pl-10 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 w-full sm:w-64"
                 />
               </div>
@@ -622,7 +558,7 @@ export default function ProktorPage() {
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-950/80 text-slate-400 uppercase font-semibold border-b border-slate-800">
                 <tr>
-                  <th className="py-3 px-4">NIS</th>
+                  <th className="py-3 px-4">Username / ID</th>
                   <th className="py-3 px-4">Nama Siswa</th>
                   <th className="py-3 px-4">Kelas</th>
                   <th className="py-3 px-4">Status</th>
@@ -647,7 +583,7 @@ export default function ProktorPage() {
                     return (
                       <tr key={peserta.pesertaUjianId} className="hover:bg-slate-800/40 transition">
                         <td className="py-3 px-4 font-mono font-bold text-cyan-400">
-                          {peserta.nis || peserta.username || peserta.nomorPeserta}
+                          {peserta.username}
                         </td>
                         <td className="py-3 px-4">
                           <span className="font-bold text-white block">{peserta.name}</span>
@@ -762,43 +698,6 @@ export default function ProktorPage() {
         </div>
       </main>
 
-      {/* Token Modal */}
-      {tokenModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 className="text-base font-bold text-white">Ganti Token Ujian</h3>
-            <p className="text-xs text-slate-400">
-              Masukkan token baru 6 huruf kapital untuk jadwal ujian aktif ini:
-            </p>
-            <input
-              type="text"
-              maxLength={10}
-              value={newToken}
-              onChange={(e) => setNewToken(e.target.value.toUpperCase())}
-              placeholder="Contoh: MUHIPO / PAS2026"
-              className="w-full text-center tracking-[0.2em] font-mono text-xl font-bold py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 uppercase"
-            />
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setTokenModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-800 text-xs font-bold text-slate-300"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                disabled={actionLoading || !newToken}
-                onClick={handleUpdateToken}
-                className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white shadow-lg shadow-cyan-700/30"
-              >
-                {actionLoading ? 'Menyimpan...' : 'Simpan Token'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Extra Time Modal */}
       {extraTimeModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
@@ -867,8 +766,8 @@ export default function ProktorPage() {
                 <b className="text-white">{securityModalData.name}</b>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">NIS / Username:</span>
-                <span className="font-mono text-cyan-400">{securityModalData.nis}</span>
+                <span className="text-slate-400">Username / ID:</span>
+                <span className="font-mono text-cyan-400">{securityModalData.username}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Kelas:</span>
@@ -941,7 +840,7 @@ export default function ProktorPage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-black tracking-tight text-white">Panduan & SOP Pengawas Ruang / Proktor CBT</h3>
-                  <p className="text-xs text-slate-400">Petunjuk Pemantauan Live, Penanganan Kendala Peserta, & Token Ujian</p>
+                  <p className="text-xs text-slate-400">Petunjuk Pemantauan Live, Penanganan Kendala Peserta, & Reset Login Siswa</p>
                 </div>
               </div>
               <button
@@ -966,7 +865,7 @@ export default function ProktorPage() {
                     <span className="text-xs font-bold text-cyan-400 px-2 py-0.5 rounded bg-cyan-500/10 inline-block">1. Sebelum Ujian</span>
                     <p className="text-xs leading-relaxed text-slate-400">
                       • Pastikan siswa telah duduk di ruangan sesuai nomor peserta.<br/>
-                      • Rilis / Umumkan <b>Token Ujian</b> (Klik tombol Ganti Token bila perlu diacak ulang).
+                      • Siswa langsung dapat masuk & memulai ujian sesuai jadwal tanpa memerlukan token.
                     </p>
                   </div>
                   <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1.5">

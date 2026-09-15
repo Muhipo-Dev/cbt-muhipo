@@ -2,22 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
-import { Client } from 'pg';
 
-const SIMASMUH_PG_URL =
-  process.env.SIMASMUH_DATABASE_URL ||
-  'postgresql://postgres:postgres@127.0.0.1:54322/postgres?schema=public';
-
-async function getSimasmuhClient() {
-  const client = new Client({ connectionString: SIMASMUH_PG_URL });
-  await client.connect();
-  return client;
+function generateRandomToken(length = 6): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let token = '';
+  for (let i = 0; i < length; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
 }
 
 export async function GET(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'PROKTOR'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
@@ -33,7 +31,8 @@ export async function GET(request: NextRequest) {
         countSiswa,
         countGuru,
         countKelas,
-        countBankSoal,
+        countTopik,
+        countSoalTotal,
         countUjianTotal,
         countUjianHariIni,
         countPesertaMengerjakan,
@@ -49,7 +48,8 @@ export async function GET(request: NextRequest) {
           },
         }),
         prisma.kelas.count(),
-        prisma.bankSoal.count(),
+        prisma.mataPelajaran.count(),
+        prisma.soal.count(),
         prisma.ujian.count(),
         prisma.ujian.count({
           where: {
@@ -57,7 +57,6 @@ export async function GET(request: NextRequest) {
             waktuSelesai: { gte: startOfToday },
           },
         }),
-        // Live Peserta Sedang Mengerjakan Hari Ini
         prisma.pesertaUjian.count({
           where: {
             status: 'SEDANG_MENGERJAKAN',
@@ -67,7 +66,6 @@ export async function GET(request: NextRequest) {
             },
           },
         }),
-        // Live Peserta Selesai Hari Ini
         prisma.pesertaUjian.count({
           where: {
             status: 'SELESAI',
@@ -88,7 +86,11 @@ export async function GET(request: NextRequest) {
         take: 10,
         orderBy: [{ waktuMulai: 'desc' }, { createdAt: 'desc' }],
         include: {
-          bankSoal: { include: { mataPelajaran: true } },
+          mataPelajaran: {
+            include: {
+              _count: { select: { soalList: true } },
+            },
+          },
           _count: { select: { pesertaUjian: true } },
         },
       });
@@ -114,238 +116,174 @@ export async function GET(request: NextRequest) {
         include: { user: true },
       });
 
+      // Query Master Data CBT secara paralel
+      const [
+        mapelList,
+        kelasList,
+        siswaList,
+        ujianList,
+      ] = await Promise.all([
+        prisma.mataPelajaran.findMany({
+          include: {
+            gurus: { include: { guru: { select: { id: true, name: true, role: true } } } },
+            pembuat: { select: { id: true, name: true, role: true } },
+            _count: { select: { soalList: true, gurus: true } },
+          },
+          orderBy: { nama: 'asc' },
+        }),
+        prisma.kelas.findMany({
+          include: {
+            _count: { select: { users: true, ujianList: true } },
+          },
+          orderBy: { nama: 'asc' },
+        }),
+        prisma.user.findMany({
+          where: { role: 'SISWA' },
+          include: { kelas: true },
+          orderBy: [{ kelas: { nama: 'asc' } }, { name: 'asc' }],
+        }),
+        prisma.ujian.findMany({
+          include: {
+            mataPelajaran: {
+              include: {
+                _count: { select: { soalList: true } },
+              },
+            },
+            ujianKelas: { include: { kelas: true } },
+            _count: { select: { pesertaUjian: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+      ]);
+
       return NextResponse.json({
         success: true,
         data: {
-          counts: {
-            countSiswa,
-            countGuru,
-            countKelas,
-            countBankSoal,
-            countUjian: countUjianHariIni > 0 ? countUjianHariIni : countUjianTotal,
-            countUjianTotal,
-            countUjianHariIni,
-            countPesertaMengerjakan,
-            countPesertaSelesai,
+          dashboard: {
+            counts: {
+              countSiswa,
+              countGuru,
+              countKelas,
+              countTopik,
+              countSoalTotal,
+              countBankSoal: countTopik, // Alias kompatibilitas
+              countUjian: countUjianHariIni > 0 ? countUjianHariIni : countUjianTotal,
+              countUjianTotal,
+              countUjianHariIni,
+              countPesertaMengerjakan,
+              countPesertaSelesai,
+            },
+            recentUjian,
+            recentLogs,
+            serverDate: now.toISOString(),
           },
-          recentUjian,
-          recentLogs,
-          serverDate: now.toISOString(),
+          bankSoal: mapelList, // Alias agar komponen lama yang membaca bankSoal tetap jalan
+          mapel: mapelList,
+          kelas: kelasList,
+          siswa: { siswaList, kelasList },
+          jadwal: { ujianList, mapelList, bankSoalList: mapelList, kelasList },
         },
       });
     }
 
-    if (tab === 'siswa') {
-      try {
-        const client = await getSimasmuhClient();
-        try {
-          const studentsRes = await client.query(`
-            SELECT 
-              s.id, 
-              s.nisn, 
-              s.nis, 
-              s.name, 
-              s.gender, 
-              c.name as class_name, 
-              c.id as class_id,
-              c."gradeLevel" as tingkat,
-              COALESCE(u.username, s.nis) as username,
-              u.role
-            FROM "Student" s
-            LEFT JOIN "Class" c ON s."classId" = c.id
-            LEFT JOIN "User" u ON s."userId" = u.id OR s.nis = u.username
-            ORDER BY s.name ASC
-          `);
-          const classesRes = await client.query(`
-            SELECT id, name as nama, "gradeLevel" as tingkat FROM "Class" ORDER BY name ASC
-          `);
-
-          const siswaList = studentsRes.rows.map((row: any) => ({
-            id: row.id,
-            name: row.name,
-            username: row.username || row.nis,
-            nis: row.nis,
-            nisn: row.nisn,
-            nomorPeserta: row.nis,
-            jenisKelamin: row.gender === 'P' ? 'P' : 'L',
-            role: 'SISWA',
-            kelasId: row.class_id,
-            kelas: row.class_name ? { id: row.class_id, nama: row.class_name, tingkat: row.tingkat } : null,
-            ruangUjian: 'Lab Komputer 1',
-            sesiUjian: 1,
-          }));
-
-          return NextResponse.json({
-            success: true,
-            data: {
-              siswaList,
-              kelasList: classesRes.rows,
-            },
-          });
-        } finally {
-          await client.end();
-        }
-      } catch (err) {
-        // Fallback: ambil dari database CBT lokal jika SIMASMUH offline
-        const siswaList = await prisma.user.findMany({
-          where: { role: 'SISWA' },
-          include: { kelas: true },
-          orderBy: { name: 'asc' },
-        });
-        const kelasList = await prisma.kelas.findMany({ orderBy: { nama: 'asc' } });
-        return NextResponse.json({ success: true, data: { siswaList, kelasList } });
-      }
+    if (tab === 'siswa' || tab === 'peserta') {
+      const siswaList = await prisma.user.findMany({
+        where: { role: 'SISWA' },
+        include: { kelas: true },
+        orderBy: [{ kelas: { nama: 'asc' } }, { name: 'asc' }],
+      });
+      const kelasList = await prisma.kelas.findMany({
+        orderBy: { nama: 'asc' },
+        include: { _count: { select: { users: true } } },
+      });
+      return NextResponse.json({ success: true, data: { siswaList, kelasList } });
     }
 
     if (tab === 'guru') {
-      try {
-        const client = await getSimasmuhClient();
-        try {
-          const teachersRes = await client.query(`
-            SELECT 
-              u.id, 
-              u.username, 
-              u.name, 
-              u.role,
-              COALESCE(NULLIF(TRIM(tp.nip), ''), NULLIF(TRIM(u."nipNbm"), '')) as nip
-            FROM "User" u
-            LEFT JOIN "TeacherProfile" tp ON tp."userId" = u.id
-            WHERE u.role = 'GURU' 
-               OR u."subRole" = 'GURU'
-               OR EXISTS (SELECT 1 FROM "TeacherSubject" ts WHERE ts."teacherId" = tp.id)
-            ORDER BY u.name ASC
-          `);
-          const mapelsRes = await client.query(`
-            SELECT id, name as nama, code as kode FROM "Subject" ORDER BY name ASC
-          `);
-
-          const guruList = teachersRes.rows.map((row: any) => ({
-            id: row.id,
-            name: row.name,
-            username: row.username,
-            nip: row.nip,
-            role: 'GURU',
-            mataPelajaran: [],
-          }));
-
-          return NextResponse.json({
-            success: true,
-            data: {
-              guruList,
-              mapelList: mapelsRes.rows,
-            },
-          });
-        } finally {
-          await client.end();
-        }
-      } catch (err) {
-        const guruList = await prisma.user.findMany({
-          where: {
-            OR: [
-              { role: 'GURU' },
-              { mataPelajaran: { some: {} } },
-            ],
-          },
-          include: { mataPelajaran: { include: { mataPelajaran: true } } },
-          orderBy: { name: 'asc' },
-        });
-        const mapelList = await prisma.mataPelajaran.findMany({ orderBy: { nama: 'asc' } });
-        return NextResponse.json({ success: true, data: { guruList, mapelList } });
-      }
+      const guruList = await prisma.user.findMany({
+        where: {
+          OR: [
+            { role: 'GURU' },
+            { mataPelajaran: { some: {} } },
+          ],
+        },
+        include: {
+          mataPelajaran: { include: { mataPelajaran: true } },
+          guruKelas: { include: { kelas: true } },
+        },
+        orderBy: { name: 'asc' },
+      });
+      const mapelList = await prisma.mataPelajaran.findMany({ orderBy: { nama: 'asc' } });
+      const kelasList = await prisma.kelas.findMany({ orderBy: { nama: 'asc' } });
+      return NextResponse.json({ success: true, data: { guruList, mapelList, kelasList } });
     }
 
-    if (tab === 'kelas') {
-      try {
-        const client = await getSimasmuhClient();
-        try {
-          const classesRes = await client.query(`
-            SELECT 
-              c.id, 
-              c.name as nama, 
-              c."gradeLevel" as tingkat,
-              COALESCE((SELECT count(*) FROM "Student" s WHERE s."classId" = c.id), 0)::int as student_count
-            FROM "Class" c 
-            ORDER BY c.name ASC
-          `);
-          const kelasList = classesRes.rows.map((row: any) => ({
-            id: row.id,
-            nama: row.nama,
-            tingkat: row.tingkat,
-            jurusan: 'Reguler',
-            _count: { users: row.student_count },
-          }));
-          return NextResponse.json({ success: true, data: kelasList });
-        } finally {
-          await client.end();
-        }
-      } catch (err) {
-        const kelasList = await prisma.kelas.findMany({
-          include: { _count: { select: { users: true } } },
-          orderBy: { nama: 'asc' },
-        });
-        return NextResponse.json({ success: true, data: kelasList });
-      }
+    if (tab === 'kelas' || tab === 'group') {
+      const kelasList = await prisma.kelas.findMany({
+        include: {
+          _count: { select: { users: true, ujianList: true } },
+        },
+        orderBy: { nama: 'asc' },
+      });
+      return NextResponse.json({ success: true, data: kelasList });
     }
 
-    if (tab === 'mapel') {
-      try {
-        const client = await getSimasmuhClient();
-        try {
-          const subjectsRes = await client.query(`
-            SELECT id, name as nama, code as kode FROM "Subject" ORDER BY name ASC
-          `);
-          const mapelList = subjectsRes.rows.map((row: any) => ({
-            id: row.id,
-            kode: row.kode,
-            nama: row.nama,
-            _count: { bankSoalList: 0 },
-          }));
-          return NextResponse.json({ success: true, data: mapelList });
-        } finally {
-          await client.end();
-        }
-      } catch (err) {
-        const mapelList = await prisma.mataPelajaran.findMany({
-          include: { _count: { select: { bankSoalList: true } } },
-          orderBy: { nama: 'asc' },
-        });
-        return NextResponse.json({ success: true, data: mapelList });
-      }
+    if (tab === 'mapel' || tab === 'topik') {
+      const mapelList = await prisma.mataPelajaran.findMany({
+        include: {
+          gurus: { include: { guru: { select: { id: true, name: true, role: true } } } },
+          pembuat: { select: { id: true, name: true, role: true } },
+          _count: { select: { soalList: true, gurus: true } },
+        },
+        orderBy: { nama: 'asc' },
+      });
+      return NextResponse.json({ success: true, data: mapelList });
     }
 
-    if (tab === 'jadwal') {
+    if (tab === 'jadwal' || tab === 'tes') {
       const jadwalList = await prisma.ujian.findMany({
         include: {
-          bankSoal: {
+          mataPelajaran: {
             include: {
-              mataPelajaran: {
-                include: {
-                  gurus: {
-                    include: { guru: { select: { id: true, name: true } } },
-                  },
-                },
-              },
-              pembuat: { select: { id: true, name: true, role: true } },
+              _count: { select: { soalList: true } },
             },
           },
+          ujianKelas: { include: { kelas: true } },
           _count: { select: { pesertaUjian: true } },
         },
         orderBy: { createdAt: 'desc' },
       });
-      const bankSoalList = await prisma.bankSoal.findMany({
+      const mapelList = await prisma.mataPelajaran.findMany({
         include: {
-          mataPelajaran: {
-            include: {
-              gurus: {
-                include: { guru: { select: { id: true, name: true } } },
-              },
-            },
-          },
-          pembuat: { select: { id: true, name: true, role: true } },
+          _count: { select: { soalList: true } },
         },
+        orderBy: { nama: 'asc' },
       });
       const kelasList = await prisma.kelas.findMany({ orderBy: { nama: 'asc' } });
-      return NextResponse.json({ success: true, data: { jadwalList, bankSoalList, kelasList } });
+      return NextResponse.json({ success: true, data: { jadwalList, mapelList, bankSoalList: mapelList, kelasList } });
+    }
+
+    if (tab === 'users') {
+      const usersList = await prisma.user.findMany({
+        where: {
+          role: { in: ['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR'] },
+        },
+        select: {
+          id: true,
+          username: true,
+          name: true,
+          role: true,
+          nip: true,
+          ruangUjian: true,
+          sesiUjian: true,
+          jenisKelamin: true,
+          kelasId: true,
+          kelas: { select: { id: true, nama: true } },
+          createdAt: true,
+        },
+        orderBy: [{ role: 'asc' }, { name: 'asc' }],
+      });
+      return NextResponse.json({ success: true, data: usersList });
     }
 
     return NextResponse.json({ success: false, message: 'Tab invalid' }, { status: 400 });
@@ -358,109 +296,533 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'PROKTOR'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
     const { action } = body;
 
+    // --- 1. CRUD PESERTA & IMPORT EXCEL ---
     if (action === 'CREATE_SISWA') {
       const {
         username,
         password,
         name,
-        nis,
-        nisn,
         nomorPeserta,
         kelasId,
         ruangUjian,
         sesiUjian,
         jenisKelamin,
       } = body;
-      const cleanNis = nis || username;
-      const hashedPassword = await bcrypt.hash(password || '123456', 10);
+      const cleanUsername = (username || nomorPeserta || '').trim();
+      const hashedPassword = await bcrypt.hash(password || cleanUsername || '123456', 10);
+
       const newSiswa = await prisma.user.create({
         data: {
-          username: cleanNis,
+          username: cleanUsername,
           password: hashedPassword,
-          name,
+          name: name?.trim() || 'Peserta Ujian',
           role: 'SISWA',
-          nis: cleanNis,
-          nisn: nisn || null,
-          nomorPeserta: nomorPeserta || cleanNis,
+          nomorPeserta: nomorPeserta?.trim() || cleanUsername,
           kelasId: kelasId || null,
-          ruangUjian: ruangUjian || 'Lab 1',
+          ruangUjian: ruangUjian?.trim() || null,
           sesiUjian: Number(sesiUjian) || 1,
-          jenisKelamin: jenisKelamin || 'L',
+          jenisKelamin: jenisKelamin === 'P' ? 'P' : 'L',
         },
       });
-      return NextResponse.json({ success: true, message: 'Siswa berhasil ditambahkan', data: newSiswa });
+      return NextResponse.json({ success: true, message: 'Peserta berhasil ditambahkan', data: newSiswa });
     }
 
+    if (action === 'UPDATE_SISWA') {
+      const {
+        id,
+        username,
+        password,
+        name,
+        nomorPeserta,
+        kelasId,
+        ruangUjian,
+        sesiUjian,
+        jenisKelamin,
+      } = body;
+
+      const updateData: any = {
+        name: name?.trim(),
+        username: username?.trim(),
+        nomorPeserta: nomorPeserta?.trim() || null,
+        kelasId: kelasId || null,
+        ruangUjian: ruangUjian !== undefined ? (ruangUjian?.trim() || null) : undefined,
+        sesiUjian: sesiUjian !== undefined ? (Number(sesiUjian) || 1) : undefined,
+        jenisKelamin: jenisKelamin === 'P' ? 'P' : 'L',
+      };
+
+      if (password && password.trim() !== '') {
+        updateData.password = await bcrypt.hash(password.trim(), 10);
+      }
+
+      const updated = await prisma.user.update({
+        where: { id },
+        data: updateData,
+      });
+
+      return NextResponse.json({ success: true, message: 'Data peserta berhasil diperbarui', data: updated });
+    }
+
+    if (action === 'DELETE_SISWA') {
+      const { id } = body;
+      await prisma.user.delete({ where: { id } });
+      return NextResponse.json({ success: true, message: 'Peserta berhasil dihapus' });
+    }
+
+    // --- 1.1 CRUD PENGGUNA STAFF & HAK AKSES (SUPERADMIN, ADMIN, GURU, PROKTOR) ---
+    if (action === 'CREATE_USER') {
+      const {
+        username,
+        password,
+        name,
+        role,
+        nip,
+        ruangUjian,
+        sesiUjian,
+        jenisKelamin,
+      } = body;
+
+      const cleanUsername = (username || '').trim();
+      if (!cleanUsername) {
+        return NextResponse.json({ success: false, message: 'Username wajib diisi.' }, { status: 400 });
+      }
+
+      const existing = await prisma.user.findFirst({
+        where: { username: cleanUsername },
+      });
+      if (existing) {
+        return NextResponse.json({ success: false, message: `Username "${cleanUsername}" sudah digunakan.` }, { status: 400 });
+      }
+
+      const allowedRoles = ['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR', 'SISWA'];
+      const targetRole = allowedRoles.includes(role) ? role : 'ADMIN';
+      const rawPassword = (password || '123456').trim();
+      const hashedPassword = await bcrypt.hash(rawPassword, 10);
+
+      const newUser = await prisma.user.create({
+        data: {
+          username: cleanUsername,
+          password: hashedPassword,
+          name: name?.trim() || 'Pengguna Baru',
+          role: targetRole,
+          nip: nip?.trim() || null,
+          ruangUjian: ruangUjian?.trim() || null,
+          sesiUjian: Number(sesiUjian) || 1,
+          jenisKelamin: jenisKelamin === 'P' ? 'P' : 'L',
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Pengguna ${newUser.name} (${newUser.role}) berhasil ditambahkan.`,
+        data: newUser,
+      });
+    }
+
+    if (action === 'UPDATE_USER') {
+      const {
+        userId,
+        id,
+        username,
+        password,
+        name,
+        role,
+        nip,
+        ruangUjian,
+        sesiUjian,
+        jenisKelamin,
+      } = body;
+
+      const targetId = userId || id;
+      if (!targetId) {
+        return NextResponse.json({ success: false, message: 'ID pengguna tidak valid.' }, { status: 400 });
+      }
+
+      const existing = await prisma.user.findUnique({
+        where: { id: targetId },
+      });
+      if (!existing) {
+        return NextResponse.json({ success: false, message: 'Pengguna tidak ditemukan.' }, { status: 404 });
+      }
+
+      const cleanUsername = (username || existing.username).trim();
+      if (cleanUsername !== existing.username) {
+        const duplicate = await prisma.user.findFirst({
+          where: { username: cleanUsername, NOT: { id: targetId } },
+        });
+        if (duplicate) {
+          return NextResponse.json({ success: false, message: `Username "${cleanUsername}" sudah digunakan.` }, { status: 400 });
+        }
+      }
+
+      const updateData: any = {
+        name: name?.trim() || existing.name,
+        username: cleanUsername,
+        nip: nip !== undefined ? (nip?.trim() || null) : existing.nip,
+        ruangUjian: ruangUjian !== undefined ? (ruangUjian?.trim() || null) : existing.ruangUjian,
+        sesiUjian: sesiUjian !== undefined ? Number(sesiUjian) || 1 : existing.sesiUjian,
+        jenisKelamin: jenisKelamin ? (jenisKelamin === 'P' ? 'P' : 'L') : existing.jenisKelamin,
+      };
+
+      if (role && ['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR', 'SISWA'].includes(role)) {
+        updateData.role = role;
+      }
+
+      if (password && password.trim() !== '') {
+        updateData.password = await bcrypt.hash(password.trim(), 10);
+      }
+
+      const updated = await prisma.user.update({
+        where: { id: targetId },
+        data: updateData,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Data hak akses pengguna ${updated.name} berhasil diperbarui.`,
+        data: updated,
+      });
+    }
+
+    if (action === 'DELETE_USER') {
+      const { userId, id } = body;
+      const targetId = userId || id;
+      if (!targetId) {
+        return NextResponse.json({ success: false, message: 'ID pengguna tidak valid.' }, { status: 400 });
+      }
+
+      if (targetId === user.userId) {
+        return NextResponse.json({ success: false, message: 'Tidak dapat menghapus akun Anda sendiri yang sedang aktif digunakan.' }, { status: 400 });
+      }
+
+      await prisma.guruMataPelajaran.deleteMany({ where: { guruId: targetId } });
+      await prisma.guruKelas.deleteMany({ where: { guruId: targetId } });
+      await prisma.logAktivitasUjian.deleteMany({ where: { userId: targetId } });
+      await prisma.user.delete({ where: { id: targetId } });
+
+      return NextResponse.json({ success: true, message: 'Pengguna berhasil dihapus dari sistem.' });
+    }
+
+    if (action === 'RESET_PASSWORD') {
+      const { userId, id, newPassword } = body;
+      const targetId = userId || id;
+      const pass = (newPassword || '123456').trim();
+      if (!targetId) {
+        return NextResponse.json({ success: false, message: 'ID pengguna tidak valid.' }, { status: 400 });
+      }
+
+      const hashedPassword = await bcrypt.hash(pass, 10);
+      await prisma.user.update({
+        where: { id: targetId },
+        data: { password: hashedPassword },
+      });
+
+      return NextResponse.json({ success: true, message: `Kata sandi berhasil direset menjadi "${pass}".` });
+    }
+
+    if (action === 'IMPORT_PESERTA_EXCEL') {
+      const { rows } = body;
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return NextResponse.json({ success: false, message: 'Data baris Excel kosong.' }, { status: 400 });
+      }
+
+      let insertedCount = 0;
+      let updatedCount = 0;
+
+      const kelasCache = new Map<string, string>();
+      const existingKelas = await prisma.kelas.findMany();
+      existingKelas.forEach((k) => kelasCache.set(k.nama.toUpperCase().trim(), k.id));
+
+      for (const row of rows) {
+        const username = String(row.username || row.Username || row.id || row.ID || '').trim();
+        const rawPassword = String(row.password || row.Password || '123456').trim();
+        const name = String(row.name || row.Nama || row['Nama Peserta'] || row['Nama Siswa'] || row['Nama Lengkap'] || 'Peserta').trim();
+        const nomorPeserta = String(row.nomorPeserta || row['No Peserta'] || row['Nomor Peserta'] || username).trim();
+        const kelasNama = String(row.kelas || row.Group || row['Nama Kelas'] || row['Nama Group'] || 'Umum').trim();
+        const ruangUjian = row.ruang || row['Ruang Ujian'] || row.Ruang ? String(row.ruang || row['Ruang Ujian'] || row.Ruang).trim() : null;
+        const sesiUjian = Number(row.sesi || row['Sesi Ujian'] || row.Sesi || 1) || 1;
+        const jenisKelamin = String(row.gender || row['Jenis Kelamin'] || row.jk || 'L').toUpperCase().startsWith('P') ? 'P' : 'L';
+
+        if (!username) continue;
+
+        let kelasId = kelasCache.get(kelasNama.toUpperCase());
+        if (!kelasId) {
+          const matchTingkat = kelasNama.match(/\d+/);
+          const tingkatNum = matchTingkat ? parseInt(matchTingkat[0]) : 10;
+          const newKelas = await prisma.kelas.upsert({
+            where: { nama: kelasNama },
+            update: {},
+            create: {
+              nama: kelasNama,
+              tingkat: [10, 11, 12].includes(tingkatNum) ? tingkatNum : 10,
+              jurusan: kelasNama.toUpperCase().includes('IPS') ? 'IPS' : kelasNama.toUpperCase().includes('MIPA') ? 'MIPA' : 'Umum',
+            },
+          });
+          kelasId = newKelas.id;
+          kelasCache.set(kelasNama.toUpperCase(), kelasId);
+        }
+
+        const hashedPassword = await bcrypt.hash(rawPassword, 10);
+
+        const existingUser = await prisma.user.findFirst({
+          where: {
+            username,
+          },
+        });
+
+        if (existingUser) {
+          await prisma.user.update({
+            where: { id: existingUser.id },
+            data: {
+              name,
+              password: hashedPassword,
+              nomorPeserta: nomorPeserta || existingUser.nomorPeserta,
+              kelasId,
+              ruangUjian,
+              sesiUjian,
+              jenisKelamin,
+            },
+          });
+          updatedCount++;
+        } else {
+          await prisma.user.create({
+            data: {
+              username,
+              password: hashedPassword,
+              name,
+              role: 'SISWA',
+              nomorPeserta: nomorPeserta || null,
+              kelasId,
+              ruangUjian,
+              sesiUjian,
+              jenisKelamin,
+            },
+          });
+          insertedCount++;
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Import berhasil! ${insertedCount} peserta baru didaftarkan, ${updatedCount} peserta diperbarui.`,
+      });
+    }
+
+    // --- 2. CRUD GROUP / KELAS ---
+    if (action === 'CREATE_KELAS') {
+      const { nama, tingkat, jurusan } = body;
+      const newKelas = await prisma.kelas.create({
+        data: {
+          nama: nama.trim(),
+          tingkat: Number(tingkat) || 10,
+          jurusan: jurusan?.trim() || 'Umum',
+        },
+      });
+      return NextResponse.json({ success: true, message: 'Group/Kelas berhasil dibuat', data: newKelas });
+    }
+
+    if (action === 'UPDATE_KELAS') {
+      const { id, nama, tingkat, jurusan } = body;
+      const updated = await prisma.kelas.update({
+        where: { id },
+        data: {
+          nama: nama.trim(),
+          tingkat: Number(tingkat) || 10,
+          jurusan: jurusan?.trim() || 'Umum',
+        },
+      });
+      return NextResponse.json({ success: true, message: 'Group/Kelas berhasil diperbarui', data: updated });
+    }
+
+    if (action === 'DELETE_KELAS') {
+      const { id } = body;
+      await prisma.user.updateMany({ where: { kelasId: id }, data: { kelasId: null } });
+      await prisma.ujianKelas.deleteMany({ where: { kelasId: id } });
+      await prisma.kelas.delete({ where: { id } });
+      return NextResponse.json({ success: true, message: 'Group/Kelas berhasil dihapus' });
+    }
+
+    // --- 3. CRUD TOPIK / MATA PELAJARAN (KONTAINER UTAMA SOAL) ---
+    if (action === 'CREATE_MAPEL' || action === 'CREATE_TOPIK' || action === 'CREATE_BANK_SOAL') {
+      const { kode, kodeBank, nama, tingkat, jurusan, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal } = body;
+      const cleanKode = (kode || kodeBank || '').trim().toUpperCase();
+      if (!cleanKode || !nama?.trim()) {
+        return NextResponse.json({ success: false, message: 'Kode dan Nama Topik / Mata Pelajaran wajib diisi' }, { status: 400 });
+      }
+
+      const existing = await prisma.mataPelajaran.findUnique({ where: { kode: cleanKode } });
+      if (existing) {
+        return NextResponse.json({ success: false, message: `Kode '${cleanKode}' sudah digunakan` }, { status: 400 });
+      }
+
+      const newMapel = await prisma.mataPelajaran.create({
+        data: {
+          kode: cleanKode,
+          nama: nama.trim(),
+          tingkat: tingkat !== undefined ? Number(tingkat) : 10,
+          jurusan: jurusan || 'UMUM',
+          durasiMenit: Number(durasiMenit) || 90,
+          kkm: kkm !== undefined ? Number(kkm) : 75.0,
+          nilaiMinimal: nilaiMinimal !== undefined ? Number(nilaiMinimal) : 0.0,
+          nilaiMaksimal: nilaiMaksimal !== undefined ? Number(nilaiMaksimal) : 100.0,
+          pembuatId: user.userId,
+        },
+      });
+      return NextResponse.json({ success: true, message: 'Topik / Mata Pelajaran berhasil dibuat', data: newMapel });
+    }
+
+    if (action === 'UPDATE_MAPEL' || action === 'UPDATE_TOPIK' || action === 'UPDATE_BANK_SOAL') {
+      const { id, bankSoalId, mataPelajaranId, kode, kodeBank, nama, tingkat, jurusan, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal } = body;
+      const targetId = id || bankSoalId || mataPelajaranId;
+      if (!targetId) {
+        return NextResponse.json({ success: false, message: 'ID Topik / Mapel wajib disertakan' }, { status: 400 });
+      }
+
+      const cleanKode = (kode || kodeBank) ? (kode || kodeBank).trim().toUpperCase() : undefined;
+
+      const updated = await prisma.mataPelajaran.update({
+        where: { id: targetId },
+        data: {
+          kode: cleanKode,
+          nama: nama ? nama.trim() : undefined,
+          tingkat: tingkat !== undefined ? Number(tingkat) : undefined,
+          jurusan: jurusan || undefined,
+          durasiMenit: durasiMenit ? Number(durasiMenit) : undefined,
+          kkm: kkm !== undefined ? Number(kkm) : undefined,
+          nilaiMinimal: nilaiMinimal !== undefined ? Number(nilaiMinimal) : undefined,
+          nilaiMaksimal: nilaiMaksimal !== undefined ? Number(nilaiMaksimal) : undefined,
+        },
+      });
+      return NextResponse.json({ success: true, message: 'Topik / Mata Pelajaran berhasil diperbarui', data: updated });
+    }
+
+    if (action === 'DELETE_MAPEL' || action === 'DELETE_TOPIK' || action === 'DELETE_BANK_SOAL') {
+      const { id, bankSoalId, mataPelajaranId } = body;
+      const targetId = id || bankSoalId || mataPelajaranId;
+      if (!targetId) {
+        return NextResponse.json({ success: false, message: 'ID Topik / Mapel wajib disertakan' }, { status: 400 });
+      }
+
+      const soalList = await prisma.soal.findMany({ where: { mataPelajaranId: targetId }, select: { id: true } });
+      const soalIds = soalList.map((s) => s.id);
+      if (soalIds.length > 0) {
+        await prisma.jawabanPeserta.deleteMany({ where: { soalId: { in: soalIds } } });
+        await prisma.opsiJawaban.deleteMany({ where: { soalId: { in: soalIds } } });
+        await prisma.soal.deleteMany({ where: { mataPelajaranId: targetId } });
+      }
+
+      const ujianList = await prisma.ujian.findMany({ where: { mataPelajaranId: targetId }, select: { id: true } });
+      for (const u of ujianList) {
+        const peserta = await prisma.pesertaUjian.findMany({ where: { ujianId: u.id }, select: { id: true } });
+        const pesertaIds = peserta.map((p) => p.id);
+        if (pesertaIds.length > 0) {
+          await prisma.jawabanPeserta.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
+          await prisma.logAktivitasUjian.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
+          await prisma.pesertaUjian.deleteMany({ where: { ujianId: u.id } });
+        }
+        await prisma.ujianKelas.deleteMany({ where: { ujianId: u.id } });
+        await prisma.ujian.delete({ where: { id: u.id } });
+      }
+
+      await prisma.guruMataPelajaran.deleteMany({ where: { mataPelajaranId: targetId } });
+      await prisma.mataPelajaran.delete({ where: { id: targetId } });
+
+      return NextResponse.json({ success: true, message: 'Topik / Mata Pelajaran beserta seluruh butir soalnya berhasil dihapus' });
+    }
+
+    if (action === 'BULK_DELETE_MAPEL' || action === 'BULK_DELETE_TOPIK') {
+      const { ids } = body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return NextResponse.json({ success: false, message: 'Daftar ID Topik tidak boleh kosong' }, { status: 400 });
+      }
+
+      for (const targetId of ids) {
+        const soalList = await prisma.soal.findMany({ where: { mataPelajaranId: targetId }, select: { id: true } });
+        const soalIds = soalList.map((s) => s.id);
+        if (soalIds.length > 0) {
+          await prisma.jawabanPeserta.deleteMany({ where: { soalId: { in: soalIds } } });
+          await prisma.opsiJawaban.deleteMany({ where: { soalId: { in: soalIds } } });
+          await prisma.soal.deleteMany({ where: { mataPelajaranId: targetId } });
+        }
+
+        const ujianList = await prisma.ujian.findMany({ where: { mataPelajaranId: targetId }, select: { id: true } });
+        for (const u of ujianList) {
+          const peserta = await prisma.pesertaUjian.findMany({ where: { ujianId: u.id }, select: { id: true } });
+          const pesertaIds = peserta.map((p) => p.id);
+          if (pesertaIds.length > 0) {
+            await prisma.jawabanPeserta.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
+            await prisma.logAktivitasUjian.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
+            await prisma.pesertaUjian.deleteMany({ where: { ujianId: u.id } });
+          }
+          await prisma.ujianKelas.deleteMany({ where: { ujianId: u.id } });
+          await prisma.ujian.delete({ where: { id: u.id } });
+        }
+
+        await prisma.guruMataPelajaran.deleteMany({ where: { mataPelajaranId: targetId } });
+        await prisma.mataPelajaran.delete({ where: { id: targetId } });
+      }
+
+      return NextResponse.json({ success: true, message: `Berhasil menghapus ${ids.length} topik terpilih` });
+    }
+
+    // --- 4. CRUD GURU ---
     if (action === 'CREATE_GURU') {
       const { username, password, name, nip, mataPelajaranId } = body;
       const hashedPassword = await bcrypt.hash(password || '123456', 10);
       const newGuru = await prisma.user.create({
         data: {
-          username,
+          username: username.trim(),
           password: hashedPassword,
-          name,
+          name: name.trim(),
           role: 'GURU',
-          nip,
+          nip: nip?.trim() || null,
           mataPelajaran: mataPelajaranId
-            ? {
-                create: { mataPelajaranId },
-              }
+            ? { create: { mataPelajaranId } }
             : undefined,
         },
       });
       return NextResponse.json({ success: true, message: 'Guru berhasil ditambahkan', data: newGuru });
     }
 
-    if (action === 'CREATE_KELAS') {
-      const { nama, tingkat, jurusan } = body;
-      const newKelas = await prisma.kelas.create({
-        data: {
-          nama,
-          tingkat: Number(tingkat),
-          jurusan,
-        },
-      });
-      return NextResponse.json({ success: true, message: 'Kelas berhasil dibuat', data: newKelas });
-    }
-
-    if (action === 'CREATE_MAPEL') {
-      const { kode, nama } = body;
-      const newMapel = await prisma.mataPelajaran.create({
-        data: {
-          kode,
-          nama,
-        },
-      });
-      return NextResponse.json({ success: true, message: 'Mapel berhasil dibuat', data: newMapel });
-    }
-
+    // --- 5. CRUD TES / UJIAN (MENGACU LANGSUNG KE TOPIK / MAPEL) ---
     if (action === 'CREATE_UJIAN') {
       const {
         kodeUjian,
         judul,
-        bankSoalId,
+        deskripsi,
+        mataPelajaranId,
+        bankSoalId, // backward-compatibility
         durasiMenit,
         waktuMulai,
         waktuSelesai,
         lockBrowser,
         acakSoal,
         acakOpsi,
+        tampilkanHasil,
+        token,
         kelasIds,
       } = body;
 
+      const targetMapelId = mataPelajaranId || bankSoalId;
+      if (!targetMapelId) {
+        return NextResponse.json({ success: false, message: 'Pilih Topik / Mata Pelajaran untuk tes ini' }, { status: 400 });
+      }
+
+      const generatedToken = (token || generateRandomToken()).toUpperCase().trim();
+
       const newUjian = await prisma.ujian.create({
         data: {
-          kodeUjian,
-          judul,
-          bankSoalId,
-          durasiMenit: Number(durasiMenit),
+          kodeUjian: kodeUjian.trim(),
+          judul: judul.trim(),
+          deskripsi: deskripsi?.trim() || null,
+          mataPelajaranId: targetMapelId,
+          durasiMenit: Number(durasiMenit) || 90,
           waktuMulai: waktuMulai ? new Date(waktuMulai) : new Date(),
           waktuSelesai: waktuSelesai
             ? new Date(waktuSelesai)
@@ -468,6 +830,8 @@ export async function POST(request: NextRequest) {
           lockBrowser: lockBrowser !== false,
           acakSoal: acakSoal !== false,
           acakOpsi: acakOpsi !== false,
+          tampilkanHasil: tampilkanHasil === true,
+          token: generatedToken,
           status: 'DIJADWALKAN',
           ...(kelasIds && Array.isArray(kelasIds) && kelasIds.length > 0
             ? {
@@ -479,7 +843,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Daftarkan siswa dari kelas terkait secara otomatis
+      // Daftarkan siswa dari group/kelas terkait secara otomatis
       if (kelasIds && Array.isArray(kelasIds) && kelasIds.length > 0) {
         const siswaInKelas = await prisma.user.findMany({
           where: { role: 'SISWA', kelasId: { in: kelasIds } },
@@ -491,42 +855,88 @@ export async function POST(request: NextRequest) {
               ujianId: newUjian.id,
               siswaId: s.id,
               status: 'BELUM_MULAI',
-              sisaDetik: Number(durasiMenit) * 60,
+              sisaDetik: Number(durasiMenit || 90) * 60,
             })),
-            skipDuplicates: true,
           });
         }
       }
 
       return NextResponse.json({
         success: true,
-        message: 'Jadwal Ujian berhasil dibuat dan didistribusikan ke peserta!',
+        message: 'Tes baru berhasil dibuat dan didistribusikan ke peserta!',
         data: newUjian,
       });
     }
 
-    if (action === 'ARCHIVE_UJIAN') {
-      const { ujianId, status = 'NONAKTIF' } = body;
-      const updated = await prisma.ujian.update({
-        where: { id: ujianId },
-        data: { status: status as any },
-      });
-      return NextResponse.json({
-        success: true,
-        message: 'Jadwal Ujian berhasil diarsipkan! Seluruh riwayat nilai siswa, jawaban, dan audit pelanggaran tetap tersimpan aman.',
-        data: updated,
-      });
-    }
+    if (action === 'UPDATE_UJIAN') {
+      const {
+        ujianId,
+        kodeUjian,
+        judul,
+        deskripsi,
+        mataPelajaranId,
+        bankSoalId,
+        durasiMenit,
+        waktuMulai,
+        waktuSelesai,
+        lockBrowser,
+        acakSoal,
+        acakOpsi,
+        tampilkanHasil,
+        token,
+        status,
+        kelasIds,
+      } = body;
 
-    if (action === 'UNARCHIVE_UJIAN') {
-      const { ujianId } = body;
+      const targetMapelId = mataPelajaranId || bankSoalId;
+
       const updated = await prisma.ujian.update({
         where: { id: ujianId },
-        data: { status: 'DIJADWALKAN' },
+        data: {
+          kodeUjian: kodeUjian?.trim(),
+          judul: judul?.trim(),
+          deskripsi: deskripsi?.trim() || null,
+          mataPelajaranId: targetMapelId || undefined,
+          durasiMenit: durasiMenit ? Number(durasiMenit) : undefined,
+          waktuMulai: waktuMulai ? new Date(waktuMulai) : undefined,
+          waktuSelesai: waktuSelesai ? new Date(waktuSelesai) : undefined,
+          lockBrowser: lockBrowser !== undefined ? lockBrowser : undefined,
+          acakSoal: acakSoal !== undefined ? acakSoal : undefined,
+          acakOpsi: acakOpsi !== undefined ? acakOpsi : undefined,
+          tampilkanHasil: tampilkanHasil !== undefined ? tampilkanHasil : undefined,
+          token: token ? token.toUpperCase().trim() : undefined,
+          status: status || undefined,
+        },
       });
+
+      if (kelasIds && Array.isArray(kelasIds)) {
+        await prisma.ujianKelas.deleteMany({ where: { ujianId } });
+        if (kelasIds.length > 0) {
+          await prisma.ujianKelas.createMany({
+            data: kelasIds.map((kId: string) => ({ ujianId, kelasId: kId })),
+          });
+          const siswaInKelas = await prisma.user.findMany({
+            where: { role: 'SISWA', kelasId: { in: kelasIds } },
+          });
+          if (siswaInKelas.length > 0) {
+            await prisma.pesertaUjian.deleteMany({
+              where: { ujianId, status: 'BELUM_MULAI' },
+            });
+            await prisma.pesertaUjian.createMany({
+              data: siswaInKelas.map((s) => ({
+                ujianId,
+                siswaId: s.id,
+                status: 'BELUM_MULAI',
+                sisaDetik: (updated.durasiMenit || 90) * 60,
+              })),
+            });
+          }
+        }
+      }
+
       return NextResponse.json({
         success: true,
-        message: 'Jadwal Ujian berhasil dipulihkan / diaktifkan kembali dari arsip.',
+        message: 'Pengaturan Tes berhasil diperbarui!',
         data: updated,
       });
     }
@@ -541,24 +951,202 @@ export async function POST(request: NextRequest) {
         await prisma.logAktivitasUjian.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
         await prisma.pesertaUjian.deleteMany({ where: { ujianId } });
       }
+      await prisma.ujianKelas.deleteMany({ where: { ujianId } });
       await prisma.ujian.delete({ where: { id: ujianId } });
 
       return NextResponse.json({
         success: true,
-        message: 'Jadwal Ujian berhasil dihapus permanen',
+        message: 'Data Tes berhasil dihapus permanen',
       });
     }
 
+    if (action === 'ARCHIVE_UJIAN') {
+      const { ujianId, status = 'NONAKTIF' } = body;
+      const updated = await prisma.ujian.update({
+        where: { id: ujianId },
+        data: { status: status as any },
+      });
+      return NextResponse.json({
+        success: true,
+        message: 'Tes berhasil diarsipkan',
+        data: updated,
+      });
+    }
+
+    if (action === 'UNARCHIVE_UJIAN') {
+      const { ujianId } = body;
+      const updated = await prisma.ujian.update({
+        where: { id: ujianId },
+        data: { status: 'DIJADWALKAN' },
+      });
+      return NextResponse.json({
+        success: true,
+        message: 'Tes berhasil diaktifkan kembali',
+        data: updated,
+      });
+    }
+
+    // --- 6. RESET PASSWORD & STATUS PESERTA ---
     if (action === 'RESET_PASSWORD') {
-      const { userId } = body;
-      const defaultPassword = await bcrypt.hash('123456', 10);
+      const { userId, newPassword } = body;
+      const pass = newPassword || '123456';
+      const defaultPassword = await bcrypt.hash(pass, 10);
       await prisma.user.update({
         where: { id: userId },
         data: { password: defaultPassword },
       });
       return NextResponse.json({
         success: true,
-        message: 'Password user berhasil direset ke default (123456)',
+        message: `Password user berhasil direset ke '${pass}'`,
+      });
+    }
+
+    if (action === 'RESET_PESERTA_UJIAN') {
+      const { pesertaUjianId } = body;
+      await prisma.jawabanPeserta.deleteMany({ where: { pesertaUjianId } });
+      await prisma.pesertaUjian.update({
+        where: { id: pesertaUjianId },
+        data: {
+          status: 'BELUM_MULAI',
+          waktuMulai: null,
+          waktuSelesai: null,
+          nilaiPG: 0,
+          nilaiEsai: 0,
+          nilaiTotal: 0,
+          isKoreksiSelesai: false,
+        },
+      });
+      return NextResponse.json({
+        success: true,
+        message: 'Status ujian peserta berhasil direset ke awal (Belum Mulai).',
+      });
+    }
+
+    // --- 7. MANAJEMEN HAK AKSES PENGGUNA (SUPER ADMIN) ---
+    if (action === 'CREATE_USER') {
+      const { username, password, name, role, nip, ruangUjian, sesiUjian, jenisKelamin } = body;
+      const cleanUsername = username?.trim();
+      if (!cleanUsername) {
+        return NextResponse.json({ success: false, message: 'Username wajib diisi' }, { status: 400 });
+      }
+
+      const allowedRoles = ['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR'];
+      const targetRole = role || 'ADMIN';
+      if (!allowedRoles.includes(targetRole)) {
+        return NextResponse.json({
+          success: false,
+          message: 'Role tidak valid untuk menu Hak Akses. Pengelolaan data peserta (siswa) dilakukan melalui menu Data Peserta.',
+        }, { status: 400 });
+      }
+
+      if ((targetRole === 'SUPERADMIN' || targetRole === 'ADMIN') && user.role !== 'SUPERADMIN') {
+        return NextResponse.json({ success: false, message: 'Hanya Super Admin yang berhak membuat akun Super Admin atau Admin' }, { status: 403 });
+      }
+
+      const existing = await prisma.user.findUnique({ where: { username: cleanUsername } });
+      if (existing) {
+        return NextResponse.json({ success: false, message: `Username '${cleanUsername}' sudah digunakan!` }, { status: 400 });
+      }
+
+      const hashedPassword = await bcrypt.hash(password || '123456', 10);
+      const newUser = await prisma.user.create({
+        data: {
+          username: cleanUsername,
+          password: hashedPassword,
+          name: name?.trim() || cleanUsername,
+          role: targetRole,
+          nip: nip?.trim() || null,
+          ruangUjian: ruangUjian?.trim() || null,
+          sesiUjian: sesiUjian ? Number(sesiUjian) : 1,
+          jenisKelamin: jenisKelamin || null,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Pengguna '${newUser.name}' (${newUser.role}) berhasil ditambahkan!`,
+        data: newUser,
+      });
+    }
+
+    if (action === 'UPDATE_USER') {
+      const { userId, username, password, name, role, nip, ruangUjian, sesiUjian, jenisKelamin } = body;
+      if (!userId) {
+        return NextResponse.json({ success: false, message: 'User ID wajib disertakan' }, { status: 400 });
+      }
+
+      const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+      if (!targetUser) {
+        return NextResponse.json({ success: false, message: 'Pengguna tidak ditemukan' }, { status: 404 });
+      }
+
+      const allowedRoles = ['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR'];
+      if (role && !allowedRoles.includes(role)) {
+        return NextResponse.json({
+          success: false,
+          message: 'Role tidak valid untuk menu Hak Akses. Pengelolaan data peserta (siswa) dilakukan melalui menu Data Peserta.',
+        }, { status: 400 });
+      }
+
+      if ((targetUser.role === 'SUPERADMIN' || role === 'SUPERADMIN' || role === 'ADMIN') && user.role !== 'SUPERADMIN') {
+        return NextResponse.json({ success: false, message: 'Hanya Super Admin yang berhak mengubah hak akses Admin/Super Admin' }, { status: 403 });
+      }
+
+      const updateData: any = {
+        username: username?.trim() || targetUser.username,
+        name: name?.trim() || targetUser.name,
+        role: role || targetUser.role,
+        nip: nip?.trim() || null,
+        ruangUjian: ruangUjian?.trim() || null,
+        sesiUjian: sesiUjian ? Number(sesiUjian) : targetUser.sesiUjian,
+        jenisKelamin: jenisKelamin || targetUser.jenisKelamin,
+      };
+
+      if (password && password.trim()) {
+        updateData.password = await bcrypt.hash(password.trim(), 10);
+      }
+
+      const updated = await prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Data dan hak akses pengguna '${updated.name}' (${updated.role}) berhasil diperbarui!`,
+        data: updated,
+      });
+    }
+
+    if (action === 'DELETE_USER') {
+      const { userId } = body;
+      if (!userId) {
+        return NextResponse.json({ success: false, message: 'User ID wajib disertakan' }, { status: 400 });
+      }
+
+      if (userId === user.userId) {
+        return NextResponse.json({ success: false, message: 'Anda tidak dapat menghapus akun Anda sendiri yang sedang digunakan!' }, { status: 400 });
+      }
+
+      const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+      if (!targetUser) {
+        return NextResponse.json({ success: false, message: 'Pengguna tidak ditemukan' }, { status: 404 });
+      }
+
+      if (targetUser.role === 'SUPERADMIN' && user.role !== 'SUPERADMIN') {
+        return NextResponse.json({ success: false, message: 'Hanya Super Admin yang berhak menghapus akun Super Admin' }, { status: 403 });
+      }
+
+      await prisma.jawabanPeserta.deleteMany({ where: { pesertaUjian: { siswaId: userId } } });
+      await prisma.pesertaUjian.deleteMany({ where: { siswaId: userId } });
+      await prisma.guruKelas.deleteMany({ where: { guruId: userId } });
+      await prisma.guruMataPelajaran.deleteMany({ where: { guruId: userId } });
+      await prisma.logAktivitasUjian.deleteMany({ where: { userId } });
+      await prisma.user.delete({ where: { id: userId } });
+
+      return NextResponse.json({
+        success: true,
+        message: `Pengguna '${targetUser.name}' (${targetUser.role}) berhasil dihapus dari sistem!`,
       });
     }
 

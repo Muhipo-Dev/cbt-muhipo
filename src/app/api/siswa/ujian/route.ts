@@ -9,7 +9,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    // Ambil data user lengkap
     const dbUser = await prisma.user.findUnique({
       where: { id: user.userId },
       include: {
@@ -18,7 +17,7 @@ export async function GET(request: NextRequest) {
           where: {
             ujian: {
               OR: [
-                { ujianKelas: { none: {} } }, // Ujian umum jika tidak dibatasi kelas
+                { ujianKelas: { none: {} } },
                 ...(user.kelasNama ? [{ ujianKelas: { some: { kelas: { nama: user.kelasNama } } } }] : []),
               ],
             },
@@ -26,14 +25,10 @@ export async function GET(request: NextRequest) {
           include: {
             ujian: {
               include: {
-                bankSoal: {
+                mataPelajaran: {
                   include: {
-                    mataPelajaran: {
-                      include: {
-                        gurus: {
-                          include: { guru: { select: { id: true, name: true } } },
-                        },
-                      },
+                    gurus: {
+                      include: { guru: { select: { id: true, name: true } } },
                     },
                     pembuat: { select: { id: true, name: true, role: true } },
                     soalList: {
@@ -55,7 +50,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'User tidak ditemukan' }, { status: 404 });
     }
 
-    // Format list ujian yang tersedia untuk siswa berdasarkan tanggal pelaksanaan hari ini
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -65,7 +59,6 @@ export async function GET(request: NextRequest) {
       const scheduledStart = p.ujian.waktuMulai ? new Date(p.ujian.waktuMulai) : null;
       const scheduledEnd = p.ujian.waktuSelesai ? new Date(p.ujian.waktuSelesai) : null;
 
-      // Jika belum selesai dan ada jadwal mulai
       if (p.status !== 'SELESAI' && scheduledStart) {
         const totalMaxDetik = p.ujian.durasiMenit * 60;
         const scheduledEndFromDuration = new Date(scheduledStart.getTime() + totalMaxDetik * 1000);
@@ -79,16 +72,15 @@ export async function GET(request: NextRequest) {
       }
 
       const guruPengampuNama =
-        p.ujian.bankSoal.mataPelajaran?.gurus?.[0]?.guru?.name ||
-        (p.ujian.bankSoal.pembuat?.role === 'GURU' ? p.ujian.bankSoal.pembuat?.name : 'Guru Pengampu');
+        p.ujian.mataPelajaran.gurus?.[0]?.guru?.name ||
+        (p.ujian.mataPelajaran.pembuat?.role === 'GURU' ? p.ujian.mataPelajaran.pembuat?.name : 'Guru Pengampu');
 
-      const allSoal = p.ujian.bankSoal.soalList || [];
+      const allSoal = p.ujian.mataPelajaran.soalList || [];
       const totalSoal = allSoal.length;
       const soalEsaiCount = allSoal.filter((s) => s.tipeSoal === 'ESAI' || s.tipeSoal === 'ISIAN').length;
       const soalPgObjektifCount = totalSoal - soalEsaiCount;
       const isHanyaPG = totalSoal > 0 && soalEsaiCount === 0;
 
-      // Status pelaksanaan berdasarkan tanggal hari ini dan status arsip
       const isArchived = p.ujian.status === 'NONAKTIF';
       const isMulaiHariIni = scheduledStart ? scheduledStart >= startOfToday && scheduledStart <= endOfToday : false;
       const isToday = isMulaiHariIni && !isArchived;
@@ -101,7 +93,7 @@ export async function GET(request: NextRequest) {
         kodeUjian: p.ujian.kodeUjian,
         judul: p.ujian.judul,
         deskripsi: p.ujian.deskripsi,
-        mataPelajaran: p.ujian.bankSoal.mataPelajaran.nama,
+        mataPelajaran: p.ujian.mataPelajaran.nama,
         guruPengampu: guruPengampuNama,
         durasiMenit: p.ujian.durasiMenit,
         jumlahSoal: totalSoal,
@@ -125,9 +117,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Ujian aktif hari ini (hanya yang dijadwalkan di hari ini)
     const ujianListHariIni = formattedList.filter((item) => item.isToday);
-    // Arsip ujian (ujian dari hari sebelumnya yang sudah lewat tanggalnya)
     const arsipList = formattedList.filter((item) => item.isArsip);
 
     return NextResponse.json({
@@ -137,7 +127,6 @@ export async function GET(request: NextRequest) {
           id: dbUser.id,
           name: dbUser.name,
           username: dbUser.username,
-          nisn: dbUser.nisn,
           nomorPeserta: dbUser.nomorPeserta,
           kelas: dbUser.kelas?.nama,
           ruangUjian: dbUser.ruangUjian,
