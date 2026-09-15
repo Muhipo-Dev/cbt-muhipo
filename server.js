@@ -6,6 +6,9 @@ const os = require('os');
 const next = require('next');
 const selfsigned = require('selfsigned');
 
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'production';
+}
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev, dir: __dirname });
 const handle = app.getRequestHandler();
