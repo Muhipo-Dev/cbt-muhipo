@@ -42,6 +42,7 @@ export function TesDaftarView({
   const itemsMapel = mapelList && mapelList.length > 0 ? mapelList : (bankSoalList || [])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('ALL')
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingUjian, setEditingUjian] = useState<any>(null)
   const [editForm, setEditForm] = useState({
@@ -115,8 +116,8 @@ export function TesDaftarView({
     const action = isArchived ? 'UNARCHIVE_UJIAN' : 'ARCHIVE_UJIAN'
     const title = isArchived ? 'Aktifkan Kembali Tes?' : 'Arsipkan Jadwal Tes?'
     const message = isArchived
-      ? `Aktifkan kembali tes "${ujian.judul}"?`
-      : `Arsipkan tes "${ujian.judul}"? Data nilai dan pengerjaan tetap aman.`
+      ? `Aktifkan kembali tes "${ujian.judul}"? Tes akan kembali dijadwalkan untuk siswa.`
+      : `Arsipkan tes "${ujian.judul}"? Jadwal tes akan dipindahkan ke arsip, namun data nilai dan jawaban peserta tetap aman.`
 
     showConfirm(title, message, async () => {
       try {
@@ -163,6 +164,117 @@ export function TesDaftarView({
     )
   }
 
+  // Toggle selection for a row
+  const toggleSelectRow = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter((item) => item !== id))
+    } else {
+      setSelectedIds([...selectedIds, id])
+    }
+  }
+
+  // Select all or deselect all
+  const handleToggleSelectAll = () => {
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(filtered.map((item) => item.id))
+    }
+  }
+
+  // Bulk Archive Tests
+  const handleBulkArchive = () => {
+    if (selectedIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 jadwal tes untuk diarsipkan', 'warning')
+      return
+    }
+
+    showConfirm(
+      'Arsipkan Jadwal Tes Terpilih?',
+      `Apakah Anda yakin ingin mengarsipkan ${selectedIds.length} tes terpilih? Data nilai peserta tetap tersimpan rapi.`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'BULK_ARCHIVE_UJIAN', ids: selectedIds }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', json.message || 'Jadwal tes terpilih berhasil diarsipkan', 'success')
+            setSelectedIds([])
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal mengarsipkan tes', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        }
+      }
+    )
+  }
+
+  // Bulk Unarchive Tests
+  const handleBulkUnarchive = () => {
+    if (selectedIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 jadwal tes untuk diaktifkan kembali', 'warning')
+      return
+    }
+
+    showConfirm(
+      'Aktifkan Kembali Jadwal Tes Terpilih?',
+      `Apakah Anda yakin ingin mengaktifkan kembali ${selectedIds.length} tes terpilih?`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'BULK_UNARCHIVE_UJIAN', ids: selectedIds }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', json.message || 'Jadwal tes terpilih berhasil diaktifkan kembali', 'success')
+            setSelectedIds([])
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal mengaktifkan tes', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        }
+      }
+    )
+  }
+
+  // Bulk Delete Tests
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 jadwal tes untuk dihapus', 'warning')
+      return
+    }
+
+    showConfirm(
+      'Hapus Jadwal Tes Terpilih?',
+      `PERINGATAN: Apakah Anda yakin ingin menghapus ${selectedIds.length} jadwal tes terpilih secara permanen beserta seluruh jawaban siswa?`,
+      async () => {
+        try {
+          for (const uId of selectedIds) {
+            await fetch('/api/admin', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'DELETE_UJIAN', ujianId: uId }),
+            })
+          }
+          showNotification('Berhasil', `Berhasil menghapus ${selectedIds.length} jadwal tes.`, 'success')
+          setSelectedIds([])
+          onRefresh()
+        } catch (err: any) {
+          showNotification('Error', 'Gagal menghapus: ' + err.message, 'error')
+        }
+      }
+    )
+  }
+
   const filtered = (jadwalList || []).filter((u) => {
     const mapelName = u.mataPelajaran?.nama || u.bankSoal?.nama || ''
     const matchSearch =
@@ -170,7 +282,15 @@ export function TesDaftarView({
       u.kodeUjian?.toLowerCase().includes(search.toLowerCase()) ||
       mapelName.toLowerCase().includes(search.toLowerCase())
 
-    const matchStatus = filterStatus === 'ALL' || u.status === filterStatus
+    let matchStatus = true
+    if (filterStatus === 'AKTIF') {
+      matchStatus = u.status !== 'NONAKTIF'
+    } else if (filterStatus === 'NONAKTIF') {
+      matchStatus = u.status === 'NONAKTIF'
+    } else if (filterStatus !== 'ALL') {
+      matchStatus = u.status === filterStatus
+    }
+
     return matchSearch && matchStatus
   })
 
@@ -181,10 +301,10 @@ export function TesDaftarView({
         <div>
           <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
             <Calendar className="w-5 h-5 text-blue-500" />
-            <span>Daftar Jadwal Tes Ujian Aktif</span>
+            <span>Daftar Jadwal & Arsip Tes Ujian</span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Daftar seluruh pelaksanaan tes CBT berdasarkan Topik / Mata Pelajaran.
+            Daftar seluruh pelaksanaan tes CBT aktif maupun riwayat arsip tes berdasarkan Topik Mapel.
           </p>
         </div>
 
@@ -217,10 +337,11 @@ export function TesDaftarView({
             onChange={(e) => setFilterStatus(e.target.value)}
             className="w-full px-3.5 py-2.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
           >
-            <option value="ALL">Semua Status Jadwal</option>
-            <option value="DIJADWALKAN">Dijadwalkan</option>
-            <option value="SEDANG_BERJALAN">Sedang Berjalan</option>
-            <option value="NONAKTIF">Diarsipkan (Nonaktif)</option>
+            <option value="ALL">Semua Jadwal (Aktif & Arsip)</option>
+            <option value="AKTIF">Hanya Jadwal Aktif</option>
+            <option value="DIJADWALKAN">Status: Dijadwalkan</option>
+            <option value="SEDANG_BERJALAN">Status: Sedang Berjalan</option>
+            <option value="NONAKTIF">Status: Diarsipkan (Nonaktif)</option>
           </select>
         </div>
       </div>
@@ -231,6 +352,14 @@ export function TesDaftarView({
           <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
             <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-white/10 font-bold uppercase tracking-wider text-[11px]">
               <tr>
+                <th className="py-3.5 px-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === filtered.length && filtered.length > 0}
+                    onChange={handleToggleSelectAll}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-3.5 h-3.5"
+                  />
+                </th>
                 <th className="py-3.5 px-4">Kode Ujian</th>
                 <th className="py-3.5 px-4">Judul Tes Ujian</th>
                 <th className="py-3.5 px-4">Topik / Mapel</th>
@@ -243,7 +372,7 @@ export function TesDaftarView({
             <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-slate-400 font-medium">
+                  <td colSpan={8} className="text-center py-12 text-slate-400 font-medium">
                     Tidak ada jadwal tes yang sesuai filter.
                   </td>
                 </tr>
@@ -251,13 +380,35 @@ export function TesDaftarView({
                 filtered.map((u) => {
                   const mapelObj = u.mataPelajaran || u.bankSoal
                   const isArchived = u.status === 'NONAKTIF'
+                  const isSelected = selectedIds.includes(u.id)
+
                   return (
-                    <tr key={u.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                    <tr
+                      key={u.id}
+                      className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition ${
+                        isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''
+                      } ${isArchived ? 'opacity-80 bg-slate-50/30 dark:bg-slate-900/30' : ''}`}
+                    >
+                      <td className="py-3.5 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectRow(u.id)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-3.5 h-3.5"
+                        />
+                      </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">
                         {u.kodeUjian}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        {u.judul}
+                        <div className="flex items-center gap-1.5">
+                          <span>{u.judul}</span>
+                          {isArchived && (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-mono font-semibold">
+                              (Arsip)
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4 font-medium text-slate-600 dark:text-slate-300">
                         {mapelObj?.nama || '-'}
@@ -286,7 +437,7 @@ export function TesDaftarView({
                               : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                           }`}
                         >
-                          {isArchived ? 'Nonaktif / Arsip' : u.status}
+                          {isArchived ? 'Diarsipkan (Nonaktif)' : u.status}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-right">
@@ -303,7 +454,7 @@ export function TesDaftarView({
                             type="button"
                             onClick={() => handleArchive(u)}
                             className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition cursor-pointer"
-                            title={isArchived ? 'Aktifkan Kembali' : 'Arsipkan Tes'}
+                            title={isArchived ? 'Aktifkan Kembali Tes' : 'Arsipkan Tes'}
                           >
                             {isArchived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
                           </button>
@@ -323,6 +474,50 @@ export function TesDaftarView({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Table Bottom Bulk Actions */}
+        <div className="p-3 bg-slate-50/80 dark:bg-slate-950/60 border-t border-slate-200/80 dark:border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={selectedIds.length === 0}
+              className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40"
+            >
+              Hapus ({selectedIds.length}) Terpilih
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBulkArchive}
+              disabled={selectedIds.length === 0}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span>Arsipkan ({selectedIds.length}) Terpilih</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBulkUnarchive}
+              disabled={selectedIds.length === 0}
+              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1"
+            >
+              <ArchiveRestore className="w-3.5 h-3.5" />
+              <span>Aktifkan ({selectedIds.length}) Terpilih</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleToggleSelectAll}
+            className="px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-white/15 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
+          >
+            {selectedIds.length === filtered.length && filtered.length > 0
+              ? 'Batal Pilih Semua'
+              : 'Pilih Semua'}
+          </button>
         </div>
       </div>
 

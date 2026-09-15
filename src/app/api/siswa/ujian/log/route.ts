@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
           aktivitas: {
             in: [
               'TAB_SWITCH_ALERT',
+              'APP_SWITCH_ALERT',
               'WINDOW_BLUR',
               'FULLSCREEN_EXIT',
               'SCREEN_SHARE_STOPPED',
@@ -43,8 +44,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Jika pelanggaran fatal (mencapai batas maksimal 3 kali), kunci ujian otomatis
-      if (totalPelanggaran >= 3) {
+      // Jika pelanggaran fatal (mencapai batas maksimal 5 kali), kunci ujian otomatis
+      if (totalPelanggaran >= 5) {
         await prisma.pesertaUjian.update({
           where: { id: pesertaUjianId },
           data: { status: 'TERKUNCI' },

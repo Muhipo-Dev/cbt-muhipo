@@ -23,7 +23,14 @@ export function TesTambahView({
   onSuccess,
   showNotification,
 }: TesTambahViewProps) {
-  const items = mapelList && mapelList.length > 0 ? mapelList : (bankSoalList || [])
+  const rawItems = mapelList && mapelList.length > 0 ? mapelList : (bankSoalList || [])
+  // Urutkan topik aktif di atas dan tandai yang terarsip
+  const items = [...rawItems].sort((a, b) => {
+    if (a.status === 'NONAKTIF' && b.status !== 'NONAKTIF') return 1
+    if (a.status !== 'NONAKTIF' && b.status === 'NONAKTIF') return -1
+    return (a.nama || '').localeCompare(b.nama || '')
+  })
+  const defaultSelectedId = items.find((it) => it.status !== 'NONAKTIF')?.id || items[0]?.id || ''
   const now = new Date()
   const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
@@ -31,7 +38,7 @@ export function TesTambahView({
     kodeUjian: `TES-${Date.now().toString().slice(-4)}`,
     judul: '',
     deskripsi: '',
-    mataPelajaranId: items[0]?.id || '',
+    mataPelajaranId: defaultSelectedId,
     durasiMenit: 90,
     waktuMulai: formatLocalDatetime(now),
     waktuSelesai: formatLocalDatetime(nextWeek),
@@ -141,11 +148,14 @@ export function TesTambahView({
               }}
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
             >
-              {items.map((bs) => (
-                <option key={bs.id} value={bs.id}>
-                  [{bs.kode || bs.kodeBank}] {bs.nama} - {bs._count?.soalList ?? 0} Butir Soal (Kls {bs.tingkat || 10})
-                </option>
-              ))}
+              {items.map((bs) => {
+                const isArchived = bs.status === 'NONAKTIF'
+                return (
+                  <option key={bs.id} value={bs.id}>
+                    {isArchived ? '[ARSIP] ' : ''}[{bs.kode || bs.kodeBank}] {bs.nama} - {bs._count?.soalList ?? 0} Butir Soal (Kls {bs.tingkat || 10})
+                  </option>
+                )
+              })}
             </select>
           </div>
         </div>

@@ -17,6 +17,7 @@ import {
   Clock,
   KeyRound,
   FileText,
+  Database,
 } from 'lucide-react'
 
 interface DashboardOverviewProps {
@@ -34,13 +35,21 @@ export function DashboardOverview({
   onNavigate,
   onRefresh,
 }: DashboardOverviewProps) {
-  const stats = dashboardData?.stats || {
-    totalSiswa: 0,
-    totalKelas: 0,
-    totalMapel: 0,
-    totalBankSoal: 0,
-    totalSoal: 0,
-    totalUjianAktif: 0,
+  const counts = dashboardData?.counts || {}
+  const rawStats = dashboardData?.stats || {}
+
+  const stats = {
+    totalSiswa: rawStats.totalSiswa ?? counts.countSiswa ?? 0,
+    totalKelas: rawStats.totalKelas ?? counts.countKelas ?? 0,
+    totalMapel: rawStats.totalMapel ?? counts.countTopik ?? 0,
+    totalBankSoal: rawStats.totalBankSoal ?? counts.countBankSoal ?? counts.countTopik ?? 0,
+    totalSoal: rawStats.totalSoal ?? counts.countSoalTotal ?? 0,
+    totalUjianAktif: rawStats.totalUjianAktif ?? counts.countUjian ?? counts.countUjianHariIni ?? 0,
+  }
+
+  const cleanName = (name?: string) => {
+    if (!name) return 'Administrator'
+    return name.replace(/\s*\([^)]*\)/g, '').trim() || 'Administrator'
   }
 
   const statCards = [
@@ -90,7 +99,7 @@ export function DashboardOverview({
               <span>CBT Mandiri Aktif</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-              Selamat Datang, {currentUser?.name || 'Administrator'}!
+              Selamat Datang, {cleanName(currentUser?.name)}!
             </h2>
             <p className="text-sm text-blue-100 max-w-2xl leading-relaxed">
               Sistem Computer Based Test (CBT) mandiri {settings.schoolName || 'SMA Muhammadiyah 1 Ponorogo'}. Kelola data modul, peserta, dan tes ujian secara mandiri tanpa ketergantungan eksternal.
@@ -143,14 +152,15 @@ export function DashboardOverview({
       {/* Quick Nav Shortcut Buttons */}
       <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-3xl p-6 shadow-sm dark:shadow-xl backdrop-blur-xl">
         <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Akses Cepat Fitur CBT</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           {[
             { label: 'Topik & Mapel', tab: 'modul_topik', icon: BookOpen, color: 'text-blue-500' },
             { label: 'Input Soal', tab: 'modul_soal', icon: Plus, color: 'text-emerald-500' },
-            { label: 'Import Soal Excel', tab: 'modul_import', icon: FileSpreadsheet, color: 'text-purple-500' },
+            { label: 'Import Soal', tab: 'modul_import', icon: FileSpreadsheet, color: 'text-purple-500' },
             { label: 'Daftar Peserta', tab: 'peserta_daftar', icon: Users, color: 'text-cyan-500' },
             { label: 'Import Peserta', tab: 'peserta_import', icon: FileSpreadsheet, color: 'text-amber-500' },
-            { label: 'Hasil & Rekap', tab: 'tes_hasil', icon: CheckCircle2, color: 'text-rose-500' },
+            { label: 'Rekap Nilai', tab: 'tes_rekap', icon: CheckCircle2, color: 'text-rose-500' },
+            { label: 'Backup & Ekspor', tab: 'backup_data', icon: Database, color: 'text-indigo-500' },
           ].map((item, idx) => {
             const Icon = item.icon
             return (

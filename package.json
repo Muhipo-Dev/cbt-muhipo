@@ -3,9 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0 -p 3010",
+    "dev": "next dev -H 0.0.0.0 -p 80",
+    "dev:https": "node server.js",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p 3010",
+    "start": "node server.js",
+    "start:http": "next start -H 0.0.0.0 -p 80",
     "lint": "eslint",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
@@ -29,6 +31,7 @@
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "selfsigned": "^5.5.0",
     "tailwind-merge": "^3.6.0",
     "xlsx": "^0.18.5"
   },

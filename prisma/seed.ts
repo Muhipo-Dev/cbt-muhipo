@@ -74,7 +74,7 @@ async function main() {
     data: {
       username: 'nailar',
       password: nailarPassword,
-      name: 'Nailar (Administrator CBT)',
+      name: 'Nailar',
       role: Role.SUPERADMIN,
       nip: '199001012015011001',
     },
@@ -84,7 +84,7 @@ async function main() {
     data: {
       username: 'niam',
       password: niamPassword,
-      name: 'Niam (Proktor CBT)',
+      name: 'Niam',
       role: Role.PROKTOR,
       ruangUjian: 'Lab Komputer 1',
     },

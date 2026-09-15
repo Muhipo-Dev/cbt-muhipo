@@ -13,7 +13,7 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 export async function GET(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !['ADMIN', 'GURU', 'PROKTOR'].includes(user.role)) {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !['ADMIN', 'GURU', 'PROKTOR'].includes(user.role)) {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !['ADMIN', 'GURU', 'PROKTOR'].includes(user.role)) {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 

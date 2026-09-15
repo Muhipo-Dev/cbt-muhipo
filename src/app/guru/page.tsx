@@ -7,6 +7,7 @@ import { AppNavbar } from '@/components/layout/AppNavbar';
 import { AppSidebar, NavTabItem } from '@/components/layout/AppSidebar';
 import { AppFooter } from '@/components/layout/AppFooter';
 import { MathRenderer } from '@/components/MathRenderer';
+import { convertEquationToKatex } from '@/lib/katexConverter';
 import {
   LayoutDashboard,
   BookOpen,
@@ -441,14 +442,13 @@ export default function GuruDashboardPage() {
         views: [{ showGridLines: true }]
       });
 
-      // Definisikan Lebar Kolom
+      // Definisikan Lebar Kolom (5 Kolom Tanpa Kesulitan)
       ws.columns = [
         { key: 'col1', width: 8 },   // No.
         { key: 'col2', width: 24 },  // Keterangan
         { key: 'col3', width: 10 },  // Tipe
         { key: 'col4', width: 68 },  // Isi Soal / Jawaban
         { key: 'col5', width: 22 },  // Status Jawaban
-        { key: 'col6', width: 14 },  // Kesulitan
       ];
 
       // Border Thin Helper
@@ -467,7 +467,7 @@ export default function GuruDashboardPage() {
       };
 
       // Baris 1: Judul Utama
-      ws.mergeCells('A1:F1');
+      ws.mergeCells('A1:E1');
       const titleCell = ws.getCell('A1');
       titleCell.value = 'TEMPLATE IMPORT SOAL CBT';
       titleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -480,7 +480,7 @@ export default function GuruDashboardPage() {
       ws.getRow(1).height = 28;
 
       // Baris 2: Sub-judul / Keterangan Tipe
-      ws.mergeCells('A2:F2');
+      ws.mergeCells('A2:E2');
       const subCell = ws.getCell('A2');
       subCell.value = 'Tipe: Q (Pilihan Ganda), Q2 (Esai), Q3 (Jawaban Singkat), Q4 (PG Kompleks), Q5 (Benar/Salah), Q6 (Menjodohkan)';
       subCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF1E293B' } };
@@ -498,7 +498,7 @@ export default function GuruDashboardPage() {
 
       // Baris 5: Table Header
       const headerRow = ws.getRow(5);
-      headerRow.values = ['No.', 'Keterangan', 'Tipe', 'Isi Soal / Jawaban', 'Status Jawaban', 'Kesulitan'];
+      headerRow.values = ['No.', 'Keterangan', 'Tipe', 'Isi Soal / Jawaban', 'Status Jawaban'];
       headerRow.height = 26;
       headerRow.eachCell((cell, colNumber) => {
         cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -511,30 +511,31 @@ export default function GuruDashboardPage() {
         cell.border = tableBorder;
       });
 
-      // Data Baris Soal & Jawaban beserta Styling Warna
+      // Data Baris Soal & Jawaban beserta Styling Warna (Format Menurun)
       const rowsData = [
-        // No 1: PG
-        { row: [1, 'Soal Pilihan Ganda', 'Q', 'Ibu kota negara Indonesia adalah...', '', 2], bg: 'FFE0E7FF', isBold: true },
-        { row: ['', 'Jawaban Benar', 'A', 'Jakarta', 1, ''], bg: 'FFDCFCE7', isBold: false }, // Hijau muda (benar)
-        { row: ['', '', 'A', 'Surabaya', 0, ''], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', '', 'A', 'Bandung', 0, ''], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', '', 'A', 'Yogyakarta', 0, ''], bg: 'FFFFFFFF', isBold: false },
-        // No 2: Esai
-        { row: [2, 'Soal Esai', 'Q2', 'Jelaskan pengertian Pancasila sebagai dasar negara Indonesia!', '', 3], bg: 'FFE0F2FE', isBold: true }, // Sky Blue
-        // No 3: Jawaban Singkat
-        { row: [3, 'Jawaban Singkat', 'Q3', 'Sebutkan 3 pulau terbesar di Indonesia!', '', 1], bg: 'FFFEF3C7', isBold: true }, // Amber / Kuning
+        // No 1: PG (Contoh Matematika / Formula KaTeX)
+        { row: [1, 'Soal Pilihan Ganda (Matematika)', 'Q', 'Tentukan himpunan penyelesaian dari persamaan kuadrat x² - 5x + 6 = 0 !', ''], bg: 'FFE0E7FF', isBold: true },
+        { row: ['', 'Jawaban Benar', 'A', '$x = 2$ atau $x = 3$', 1], bg: 'FFDCFCE7', isBold: false }, // Hijau muda (benar)
+        { row: ['', '', 'A', '$x = -2$ atau $x = -3$', 0], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', '', 'A', '$x = 1$ atau $x = 6$', 0], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', '', 'A', '$x = -1$ atau $x = -6$', 0], bg: 'FFFFFFFF', isBold: false },
+        // No 2: Esai (Fisika / KaTeX)
+        { row: [2, 'Soal Esai (Fisika/Rumus)', 'Q2', 'Tuliskan rumus energi kinetik $E_k = \\frac{1}{2} m v^2$ dan jelaskan setiap variabelnya!', ''], bg: 'FFE0F2FE', isBold: true }, // Sky Blue
+        // No 3: Jawaban Singkat (Kimia / KaTeX)
+        { row: [3, 'Jawaban Singkat (Kimia)', 'Q3', 'Tuliskan rumus kimia untuk asam sulfat (H₂SO₄)!', 'H2SO4'], bg: 'FFFEF3C7', isBold: true }, // Amber / Kuning
         // No 4: PG Kompleks
-        { row: [4, 'Soal PG Kompleks', 'Q4', 'Manakah yang termasuk organ pernapasan pada manusia?', '', 3], bg: 'FFFCE7F3', isBold: true }, // Pink
-        { row: ['', 'Jawaban Benar', 'A', 'Hidung', 1, ''], bg: 'FFDCFCE7', isBold: false },
-        { row: ['', '', 'A', 'Lambung', 0, ''], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', 'Jawaban Benar', 'A', 'Paru-paru', 1, ''], bg: 'FFDCFCE7', isBold: false },
+        { row: [4, 'Soal PG Kompleks', 'Q4', 'Manakah pernyataan yang benar mengenai segitiga siku-siku dengan sisi a, b, dan c (hipotenusa)?', ''], bg: 'FFFCE7F3', isBold: true }, // Pink
+        { row: ['', 'Jawaban Benar', 'A', '$a^2 + b^2 = c^2$', 1], bg: 'FFDCFCE7', isBold: false },
+        { row: ['', '', 'A', '$a + b > c$', 1], bg: 'FFDCFCE7', isBold: false },
+        { row: ['', '', 'A', '$c = \\sqrt{a^2 - b^2}$', 0], bg: 'FFFFFFFF', isBold: false },
         // No 5: Benar/Salah
-        { row: [5, 'Soal Benar/Salah', 'Q5', 'Fotosintesis terjadi di dalam kloroplas tumbuhan', '', 2], bg: 'FFFFE4E6', isBold: true }, // Rose muda
-        { row: ['', 'Pernyataan BENAR', 'A', 'Benar', 1, ''], bg: 'FFDCFCE7', isBold: false },
+        { row: [5, 'Soal Benar/Salah', 'Q5', 'Nilai dari $\\sqrt{144} + 2^3 = 20$', ''], bg: 'FFFFE4E6', isBold: true }, // Rose muda
+        { row: ['', 'Pernyataan BENAR', 'A', 'Benar', 1], bg: 'FFDCFCE7', isBold: false },
         // No 6: Menjodohkan
-        { row: [6, 'Soal Menjodohkan', 'Q6', 'Pasangkan negara dengan ibu kotanya!', '', 2], bg: 'FFF3E8FF', isBold: true }, // Purple muda
-        { row: ['', 'Premis -> Respons', 'A', 'Indonesia', 'Jakarta', ''], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', 'Premis -> Respons', 'A', 'Malaysia', 'Kuala Lumpur', ''], bg: 'FFFFFFFF', isBold: false },
+        { row: [6, 'Soal Menjodohkan', 'Q6', 'Pasangkan operasi matematika berikut dengan hasil yang tepat!', ''], bg: 'FFF3E8FF', isBold: true }, // Purple muda
+        { row: ['', 'Premis -> Respons', 'A', '$\\sqrt{64} \\times 2$', '16'], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', 'Premis -> Respons', 'A', '$\\frac{3}{4} + \\frac{1}{4}$', '1'], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', 'Premis -> Respons', 'A', '$2^4$', '16'], bg: 'FFFFFFFF', isBold: false },
       ];
 
       rowsData.forEach((item, idx) => {
@@ -625,7 +626,7 @@ export default function GuruDashboardPage() {
           // ================= FORMAT BARU VERTIKAL (Q, Q2..Q6, A logika 1/0) =================
           for (const row of rawRows) {
             const rawTipe = String(row['Tipe'] || row['TIPE'] || row['tipe'] || row['Type'] || '').trim().toUpperCase();
-            const rawContent = String(row['Isi Soal / Jawaban'] || row['Isi Soal'] || row['Pertanyaan / Soal'] || row['Soal'] || row['Konten'] || '').trim();
+            const rawContent = convertEquationToKatex(String(row['Isi Soal / Jawaban'] || row['Isi Soal'] || row['Pertanyaan / Soal'] || row['Soal'] || row['Konten'] || '').trim());
             const rawStatus = row['Status Jawaban'] !== undefined ? row['Status Jawaban'] : row['Status'];
             const rawBobot = row['Kesulitan'] !== undefined && row['Kesulitan'] !== '' ? Number(row['Kesulitan']) : (row['Bobot'] ? Number(row['Bobot']) : null);
 
@@ -656,13 +657,13 @@ export default function GuruDashboardPage() {
 
               // Jika ada kunci/rubrik langsung di baris Q
               if (rawStatus && String(rawStatus).trim()) {
-                currentSoal.kunciJawabanTeks = String(rawStatus).trim();
+                currentSoal.kunciJawabanTeks = convertEquationToKatex(String(rawStatus).trim());
               }
             } else if (rawTipe === 'A' && currentSoal) {
               // Deteksi baris Jawaban / Opsi untuk soal yang sedang aktif
               if (currentSoal.tipeSoal === 'MENJODOHKAN') {
                 const left = rawContent;
-                const right = String(rawStatus || '').trim();
+                const right = convertEquationToKatex(String(rawStatus || '').trim());
                 if (left && right) {
                   currentSoal.rawMatchingPairs.push({ left, right });
                 }
@@ -713,10 +714,10 @@ export default function GuruDashboardPage() {
           // ================= KOMPATIBILITAS FORMAT HORIZONTAL LAMA =================
           for (const row of rawRows) {
             const tipe = (row['Tipe Soal'] || 'PG').toUpperCase();
-            const pertanyaan = row['Pertanyaan / Soal'] || row['Pertanyaan'] || row['Soal'] || '';
+            const pertanyaan = convertEquationToKatex(String(row['Pertanyaan / Soal'] || row['Pertanyaan'] || row['Soal'] || '').trim());
             const bobot = Number(row['Bobot'] || row['Kesulitan']) || 2.0;
             const kunci = String(row['Kunci Jawaban (A/B/C/D/E)'] || row['Kunci'] || '').trim().toUpperCase();
-            const kunciTeks = row['Kunci Teks/Rubrik Essay'] || row['Kunci Essay'] || '';
+            const kunciTeks = convertEquationToKatex(String(row['Kunci Teks/Rubrik Essay'] || row['Kunci Essay'] || '').trim());
 
             let matchingData: string | undefined = undefined;
             if (tipe === 'MENJODOHKAN') {
@@ -727,7 +728,10 @@ export default function GuruDashboardPage() {
                   const [left, ...rest] = val.split('=');
                   const right = rest.join('=').trim();
                   if (left.trim() && right) {
-                    pairs.push({ left: left.trim(), right });
+                    pairs.push({
+                      left: convertEquationToKatex(left.trim()),
+                      right: convertEquationToKatex(right),
+                    });
                   }
                 }
               });
@@ -741,7 +745,7 @@ export default function GuruDashboardPage() {
                 const konten = row[`Pilihan ${lbl}`] || row[`Opsi ${lbl}`] || row[lbl] || '';
                 return {
                   label: lbl,
-                  konten: String(konten || '').trim(),
+                  konten: convertEquationToKatex(String(konten || '').trim()),
                   isBenar: kunci.includes(lbl),
                 };
               })
@@ -2315,6 +2319,23 @@ export default function GuruDashboardPage() {
                                     className="flex-1 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs"
                                   />
 
+                                  {/* Tombol Sisip KaTeX Opsi */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const formula = prompt(`Masukkan rumus KaTeX untuk Pilihan ${op.label} (contoh: \\frac{1}{2} atau \\sqrt{x}):`);
+                                      if (formula) {
+                                        const next = [...soalForm.opsiJawaban];
+                                        next[idx].konten = next[idx].konten ? `${next[idx].konten} $${formula.trim()}$` : `$${formula.trim()}$`;
+                                        setSoalForm({ ...soalForm, opsiJawaban: next });
+                                      }
+                                    }}
+                                    className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold flex items-center justify-center cursor-pointer transition shrink-0"
+                                    title={`Sisipkan Rumus KaTeX pada Pilihan ${op.label}`}
+                                  >
+                                    <span className="font-serif italic font-bold text-xs">∑</span>
+                                  </button>
+
                                   {/* Tombol Sisip Gambar Opsi */}
                                   <label
                                     className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold flex items-center justify-center cursor-pointer transition shrink-0"
@@ -2333,8 +2354,8 @@ export default function GuruDashboardPage() {
                                             const base64 = reader.result as string;
                                             const next = [...soalForm.opsiJawaban];
                                             next[idx].konten = next[idx].konten
-                                              ? `${next[idx].konten} <img src="${base64}" class="inline-block max-h-24 rounded border my-1" />`
-                                              : `<img src="${base64}" class="inline-block max-h-24 rounded border my-1" />`;
+                                              ? `${next[idx].konten} ![${file.name}](${base64})`
+                                              : `![${file.name}](${base64})`;
                                             setSoalForm({ ...soalForm, opsiJawaban: next });
                                           };
                                           reader.readAsDataURL(file);
@@ -2409,6 +2430,31 @@ export default function GuruDashboardPage() {
                                   </button>
                                 </div>
 
+                                {/* Quick KaTeX Snippets */}
+                                <div className="flex flex-wrap items-center gap-1 pl-8">
+                                  <span className="text-[10px] text-slate-400">KaTeX:</span>
+                                  {[
+                                    { label: '½', snippet: '$\\frac{a}{b}$' },
+                                    { label: '√x', snippet: '$\\sqrt{x}$' },
+                                    { label: 'x²', snippet: '$x^{2}$' },
+                                    { label: '×', snippet: '$\\times$' },
+                                    { label: '±', snippet: '$\\pm$' },
+                                  ].map((chip, cIdx) => (
+                                    <button
+                                      key={cIdx}
+                                      type="button"
+                                      onClick={() => {
+                                        const next = [...soalForm.opsiJawaban];
+                                        next[idx].konten = next[idx].konten ? `${next[idx].konten} ${chip.snippet}` : chip.snippet;
+                                        setSoalForm({ ...soalForm, opsiJawaban: next });
+                                      }}
+                                      className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-700 dark:text-slate-300 hover:bg-indigo-50"
+                                    >
+                                      {chip.label}
+                                    </button>
+                                  ))}
+                                </div>
+
                                 {op.konten && (
                                   <div className="pl-8 text-[11px] text-slate-600 dark:text-slate-300">
                                     <MathRenderer content={op.konten} />
@@ -2475,16 +2521,16 @@ export default function GuruDashboardPage() {
                                   Pasangan Kotak Pencocokan (Kiri & Kanan):
                                 </label>
                                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                  Isi premis di kotak kiri dan pasangannya di kotak kanan (sekitar 4 sampai 7 kotak).
+                                  Isi premis di kotak kiri dan pasangannya di kotak kanan (mendukung KaTeX $...$ dan Gambar).
                                 </p>
                               </div>
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"
-                                  disabled={(soalForm.matchingPairs || []).length >= 7}
+                                  disabled={(soalForm.matchingPairs || []).length >= 10}
                                   onClick={() => {
                                     const current = soalForm.matchingPairs || [];
-                                    if (current.length < 7) {
+                                    if (current.length < 10) {
                                       setSoalForm({
                                         ...soalForm,
                                         matchingPairs: [...current, { left: '', right: '' }],
@@ -2493,62 +2539,154 @@ export default function GuruDashboardPage() {
                                   }}
                                   className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-bold text-[11px] hover:bg-blue-100 disabled:opacity-40 cursor-pointer"
                                 >
-                                  + Tambah Baris ({((soalForm.matchingPairs || []).length)}/7)
+                                  + Tambah Baris ({((soalForm.matchingPairs || []).length)}/10)
                                 </button>
                               </div>
                             </div>
 
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                               {(soalForm.matchingPairs || []).map((pair: any, pIdx: number) => (
-                                <div key={pIdx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-white/10">
-                                  <span className="w-5 h-5 rounded-md bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px] shrink-0">
-                                    {pIdx + 1}
-                                  </span>
-                                  {/* Kotak Kiri */}
-                                  <div className="flex-1">
-                                    <input
-                                      type="text"
-                                      value={pair.left || ''}
-                                      onChange={(e) => {
-                                        const next = [...(soalForm.matchingPairs || [])];
-                                        next[pIdx].left = e.target.value;
-                                        setSoalForm({ ...soalForm, matchingPairs: next });
-                                      }}
-                                      placeholder={`Kotak Kiri #${pIdx + 1} (Premis/Istilah)...`}
-                                      className="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs"
-                                    />
+                                <div key={pIdx} className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-white/10 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="w-5 h-5 rounded-md bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px] shrink-0">
+                                      #{pIdx + 1}
+                                    </span>
+                                    {(soalForm.matchingPairs || []).length > 2 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const next = (soalForm.matchingPairs || []).filter((_: any, i: number) => i !== pIdx);
+                                          setSoalForm({ ...soalForm, matchingPairs: next });
+                                        }}
+                                        className="text-xs text-rose-500 hover:text-rose-700 cursor-pointer"
+                                        title="Hapus baris pasangan ini"
+                                      >
+                                        ✕ Hapus
+                                      </button>
+                                    )}
                                   </div>
 
-                                  <span className="text-slate-400 font-bold text-xs shrink-0">➔</span>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    {/* Kotak Kiri */}
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-bold text-slate-500">Kotak Kiri #{pIdx + 1}:</span>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const formula = prompt(`Rumus KaTeX Kotak Kiri #${pIdx + 1}:`);
+                                              if (formula) {
+                                                const next = [...(soalForm.matchingPairs || [])];
+                                                next[pIdx].left = next[pIdx].left ? `${next[pIdx].left} $${formula.trim()}$` : `$${formula.trim()}$`;
+                                                setSoalForm({ ...soalForm, matchingPairs: next });
+                                              }
+                                            }}
+                                            className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold"
+                                          >
+                                            KaTeX
+                                          </button>
+                                          <label className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold cursor-pointer">
+                                            Gambar
+                                            <input
+                                              type="file"
+                                              accept="image/*"
+                                              className="hidden"
+                                              onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                  const reader = new FileReader();
+                                                  reader.onload = () => {
+                                                    const base64 = reader.result as string;
+                                                    const next = [...(soalForm.matchingPairs || [])];
+                                                    next[pIdx].left = next[pIdx].left ? `${next[pIdx].left} ![${file.name}](${base64})` : `![${file.name}](${base64})`;
+                                                    setSoalForm({ ...soalForm, matchingPairs: next });
+                                                  };
+                                                  reader.readAsDataURL(file);
+                                                }
+                                              }}
+                                            />
+                                          </label>
+                                        </div>
+                                      </div>
+                                      <input
+                                        type="text"
+                                        value={pair.left || ''}
+                                        onChange={(e) => {
+                                          const next = [...(soalForm.matchingPairs || [])];
+                                          next[pIdx].left = e.target.value;
+                                          setSoalForm({ ...soalForm, matchingPairs: next });
+                                        }}
+                                        placeholder={`Premis/Istilah kiri...`}
+                                        className="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs"
+                                      />
+                                      {pair.left && (
+                                        <div className="p-1 text-[10px] text-slate-600 dark:text-slate-300">
+                                          <MathRenderer content={pair.left} />
+                                        </div>
+                                      )}
+                                    </div>
 
-                                  {/* Kotak Kanan */}
-                                  <div className="flex-1">
-                                    <input
-                                      type="text"
-                                      value={pair.right || ''}
-                                      onChange={(e) => {
-                                        const next = [...(soalForm.matchingPairs || [])];
-                                        next[pIdx].right = e.target.value;
-                                        setSoalForm({ ...soalForm, matchingPairs: next });
-                                      }}
-                                      placeholder={`Kotak Kanan #${pIdx + 1} (Jawaban Pasangan)...`}
-                                      className="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs"
-                                    />
+                                    {/* Kotak Kanan */}
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-bold text-slate-500">Kotak Kanan #{pIdx + 1}:</span>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const formula = prompt(`Rumus KaTeX Kotak Kanan #${pIdx + 1}:`);
+                                              if (formula) {
+                                                const next = [...(soalForm.matchingPairs || [])];
+                                                next[pIdx].right = next[pIdx].right ? `${next[pIdx].right} $${formula.trim()}$` : `$${formula.trim()}$`;
+                                                setSoalForm({ ...soalForm, matchingPairs: next });
+                                              }
+                                            }}
+                                            className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold"
+                                          >
+                                            KaTeX
+                                          </button>
+                                          <label className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold cursor-pointer">
+                                            Gambar
+                                            <input
+                                              type="file"
+                                              accept="image/*"
+                                              className="hidden"
+                                              onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                  const reader = new FileReader();
+                                                  reader.onload = () => {
+                                                    const base64 = reader.result as string;
+                                                    const next = [...(soalForm.matchingPairs || [])];
+                                                    next[pIdx].right = next[pIdx].right ? `${next[pIdx].right} ![${file.name}](${base64})` : `![${file.name}](${base64})`;
+                                                    setSoalForm({ ...soalForm, matchingPairs: next });
+                                                  };
+                                                  reader.readAsDataURL(file);
+                                                }
+                                              }}
+                                            />
+                                          </label>
+                                        </div>
+                                      </div>
+                                      <input
+                                        type="text"
+                                        value={pair.right || ''}
+                                        onChange={(e) => {
+                                          const next = [...(soalForm.matchingPairs || [])];
+                                          next[pIdx].right = e.target.value;
+                                          setSoalForm({ ...soalForm, matchingPairs: next });
+                                        }}
+                                        placeholder={`Jawaban pasangan kanan...`}
+                                        className="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs"
+                                      />
+                                      {pair.right && (
+                                        <div className="p-1 text-[10px] text-slate-600 dark:text-slate-300">
+                                          <MathRenderer content={pair.right} />
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
-
-                                  {(soalForm.matchingPairs || []).length > 4 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const next = (soalForm.matchingPairs || []).filter((_: any, i: number) => i !== pIdx);
-                                        setSoalForm({ ...soalForm, matchingPairs: next });
-                                      }}
-                                      className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 cursor-pointer"
-                                      title="Hapus baris pasangan ini"
-                                    >
-                                      ✕
-                                    </button>
-                                  )}
                                 </div>
                               ))}
                             </div>
@@ -4111,6 +4249,7 @@ export default function GuruDashboardPage() {
                   violationScreenModal.logsTerakhir.map((log: any, idx: number) => {
                     const isViolation = [
                       'TAB_SWITCH_ALERT',
+                      'APP_SWITCH_ALERT',
                       'WINDOW_BLUR',
                       'FULLSCREEN_EXIT',
                       'SCREEN_SHARE_STOPPED',

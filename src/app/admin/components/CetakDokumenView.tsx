@@ -13,6 +13,7 @@ interface CetakDokumenViewProps {
   kelasList: any[]
   jadwalList: any[]
   siswaList: any[]
+  modulList?: any[]
   settings: any
   showNotification: (title: string, message: string, type?: any) => void
 }
@@ -21,14 +22,29 @@ export function CetakDokumenView({
   kelasList,
   jadwalList,
   siswaList,
+  modulList = [],
   settings,
   showNotification,
 }: CetakDokumenViewProps) {
   const [docType, setDocType] = useState<'kartu' | 'daftar_hadir' | 'berita_acara' | 'rekap_nilai'>('kartu')
   const [selectedKelas, setSelectedKelas] = useState<string>('ALL')
   const [selectedJadwalId, setSelectedJadwalId] = useState<string>('')
+  const [selectedModul, setSelectedModul] = useState<string>('Ujian Tengah Semester')
   const [pengawas1, setPengawas1] = useState<string>('Drs. H. Pengawas 1, M.Pd.')
   const [pengawas2, setPengawas2] = useState<string>('Pengawas Ruang 2, S.Pd.')
+
+  const schoolName = settings?.schoolName || 'SMA Muhammadiyah 1 Ponorogo'
+
+  const modulOptions = Array.from(
+    new Set([
+      ...(modulList || []).map((m: any) => m.nama),
+      'Ujian Tengah Semester',
+      'Penilaian Akhir Semester',
+      'Asesmen Sumatif Akhir Semester',
+      'Asesmen Bakat Minat',
+      'Ujian Sekolah',
+    ].filter(Boolean))
+  )
 
   const filteredSiswa = siswaList.filter((s) => {
     return selectedKelas === 'ALL' || s.kelasId === selectedKelas || s.kelas?.nama === selectedKelas
@@ -113,21 +129,40 @@ export function CetakDokumenView({
             </select>
           </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 mb-1">Pilih Jadwal Ujian (Opsional)</label>
-            <select
-              value={selectedJadwalId}
-              onChange={(e) => setSelectedJadwalId(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-white"
-            >
-              <option value="">Semua / Pilih Ujian...</option>
-              {jadwalList.map((j) => (
-                <option key={j.id} value={j.id}>
-                  {j.judul} ({j.bankSoal?.mataPelajaran?.nama || j.bankSoal?.nama})
-                </option>
-              ))}
-            </select>
-          </div>
+          {docType === 'kartu' ? (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 mb-1">Nama Modul Ujian (Judul Kartu)</label>
+              <input
+                type="text"
+                list="modul-list-options"
+                value={selectedModul}
+                onChange={(e) => setSelectedModul(e.target.value)}
+                placeholder="Contoh: Ujian Tengah Semester"
+                className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-white"
+              />
+              <datalist id="modul-list-options">
+                {modulOptions.map((m: any) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 mb-1">Pilih Jadwal Ujian (Opsional)</label>
+              <select
+                value={selectedJadwalId}
+                onChange={(e) => setSelectedJadwalId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-white"
+              >
+                <option value="">Semua / Pilih Ujian...</option>
+                {jadwalList.map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.judul} ({j.bankSoal?.mataPelajaran?.nama || j.bankSoal?.nama})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-[11px] font-bold text-slate-500 mb-1">Nama Pengawas Ujian</label>
@@ -142,7 +177,7 @@ export function CetakDokumenView({
       </div>
 
       {/* Printable Paper Area */}
-      <div className="bg-white text-slate-950 p-6 sm:p-10 rounded-3xl shadow-xl border border-slate-200 print:border-none print:shadow-none print:p-0">
+      <div className="bg-white text-slate-950 p-6 sm:p-10 rounded-3xl shadow-xl border border-slate-200 print:border-none print:shadow-none print:p-0 print:m-0 print:rounded-none print:w-full print:max-w-none print:bg-white print:text-black print:block">
         {/* Header Dokumen Resmi */}
         <div className="flex items-center justify-between border-b-2 border-black pb-4 mb-6 text-center">
           <img
@@ -152,7 +187,7 @@ export function CetakDokumenView({
           />
           <div className="flex-1 px-4">
             <h1 className="text-base sm:text-lg font-black uppercase tracking-wider">
-              {settings.schoolName || 'SMA MUHAMMADIYAH 1 PONOROGO'}
+              {schoolName}
             </h1>
             <h2 className="text-xs sm:text-sm font-bold uppercase text-slate-800">
               COMPUTER BASED TEST (CBT) • TAHUN AJARAN {settings.academicYear || '2026/2027'}
@@ -168,35 +203,32 @@ export function CetakDokumenView({
         {docType === 'kartu' && (
           <div>
             <h3 className="text-center font-bold text-sm uppercase underline mb-6">
-              KARTU TANDA PESERTA CBT ({filteredSiswa.length} SISWA)
+              KARTU TANDA PESERTA {selectedModul ? `${selectedModul} - ` : ''}{schoolName} ({filteredSiswa.length} SISWA)
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:grid-cols-2">
-              {filteredSiswa.slice(0, 50).map((s: any) => (
-                <div key={s.id} className="border border-black p-4 rounded-xl text-xs space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:grid-cols-2 print:gap-4">
+              {filteredSiswa.map((s: any) => (
+                <div key={s.id} className="border border-black p-4 rounded-xl text-xs space-y-2 break-inside-avoid print:break-inside-avoid print:bg-white print:text-black">
                   <div className="flex justify-between items-center border-b border-black pb-1.5 font-bold">
-                    <span>KARTU CBT MUHIPO</span>
-                    <span className="font-mono">{s.kelas?.nama || '-'}</span>
+                    <span className="uppercase tracking-tight truncate pr-2">
+                      {selectedModul ? `${selectedModul} - ` : ''}{schoolName}
+                    </span>
+                    <span className="font-mono shrink-0">{s.kelas?.nama || '-'}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-1">
+                  <div className="grid grid-cols-3 gap-1.5 py-1">
                     <span className="text-slate-600">Nama:</span>
-                    <span className="col-span-2 font-bold uppercase">{s.name}</span>
+                    <span className="col-span-2 font-bold uppercase truncate">{s.name}</span>
                     <span className="text-slate-600">Username:</span>
                     <span className="col-span-2 font-mono font-bold text-blue-800">{s.username}</span>
                     <span className="text-slate-600">Password:</span>
-                    <span className="col-span-2 font-mono">123456</span>
+                    <span className="col-span-2 font-mono font-semibold">
+                      {s.plainPassword || (s.password && !s.password.startsWith('$2') ? s.password : '123456')}
+                    </span>
                     <span className="text-slate-600">No. Peserta:</span>
                     <span className="col-span-2 font-mono">{s.nomorPeserta || s.username}</span>
-                    <span className="text-slate-600">Jaringan Ujian:</span>
-                    <span className="col-span-2 font-semibold text-emerald-800">Server Terpusat • WiFi Sekolah</span>
                   </div>
                 </div>
               ))}
             </div>
-            {filteredSiswa.length > 50 && (
-              <p className="print:hidden text-center text-xs text-slate-500 mt-4">
-                Menampilkan 50 siswa pertama dari total {filteredSiswa.length} siswa untuk kenyamanan pratinjau.
-              </p>
-            )}
           </div>
         )}
 

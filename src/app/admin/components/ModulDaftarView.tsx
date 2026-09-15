@@ -13,14 +13,21 @@ import {
   X,
   Volume2,
   FileSpreadsheet,
+  BookOpen,
+  Info,
+  HelpCircle,
+  ExternalLink,
 } from 'lucide-react'
 import { MathRenderer } from '@/components/MathRenderer'
 
 interface ModulDaftarViewProps {
   mapelList: any[]
   bankSoalList?: any[] // Alias kompatibilitas
+  modulList?: any[]
+  selectedMapelId?: string
   onSelectMapel?: (id: string) => void
-  onNavigateToEditor?: () => void
+  onNavigateToTopik?: () => void
+  onNavigateToEditor?: (id?: string) => void
   onNavigateToImport?: () => void
   onRefresh: () => void
   showNotification: (title: string, message: string, type?: any) => void
@@ -30,7 +37,10 @@ interface ModulDaftarViewProps {
 export function ModulDaftarView({
   mapelList,
   bankSoalList,
+  modulList = [],
+  selectedMapelId: initialSelectedMapelId,
   onSelectMapel,
+  onNavigateToTopik,
   onNavigateToEditor,
   onNavigateToImport,
   onRefresh,
@@ -38,7 +48,29 @@ export function ModulDaftarView({
   showConfirm,
 }: ModulDaftarViewProps) {
   const items = mapelList && mapelList.length > 0 ? mapelList : bankSoalList || []
-  const [selectedMapelId, setSelectedMapelId] = useState(items[0]?.id || '')
+
+  // Ambil list modul unik
+  const rawModulNames = Array.from(
+    new Set([
+      'SEMUA',
+      'Default',
+      ...(modulList || []).map((m: any) => m.nama),
+      ...(items || []).map((m: any) => m.namaModul || m.modul?.nama).filter(Boolean),
+    ])
+  )
+
+  const [selectedModul, setSelectedModul] = useState<string>('SEMUA')
+
+  // Topik yang difilter berdasarkan modul terpilih
+  const filteredMapelByModul = items.filter((m: any) => {
+    if (selectedModul === 'SEMUA') return true
+    const itemModul = m.namaModul || m.modul?.nama || 'Default'
+    return itemModul.toLowerCase() === selectedModul.toLowerCase()
+  })
+
+  const [selectedMapelId, setSelectedMapelId] = useState(
+    initialSelectedMapelId || filteredMapelByModul[0]?.id || items[0]?.id || ''
+  )
   const [mapelData, setMapelData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
@@ -62,14 +94,34 @@ export function ModulDaftarView({
   const [kunciJawabanTeks, setKunciJawabanTeks] = useState('')
   const [savingJawaban, setSavingJawaban] = useState(false)
 
+  // Sync initialSelectedMapelId if changed
+  useEffect(() => {
+    if (initialSelectedMapelId && initialSelectedMapelId !== selectedMapelId) {
+      setSelectedMapelId(initialSelectedMapelId)
+    } else if (!selectedMapelId && filteredMapelByModul.length > 0) {
+      setSelectedMapelId(filteredMapelByModul[0].id)
+    }
+  }, [initialSelectedMapelId, items])
+
+  // Sync when modul changes
+  useEffect(() => {
+    if (filteredMapelByModul.length > 0) {
+      const exists = filteredMapelByModul.some((m) => m.id === selectedMapelId)
+      if (!exists) {
+        setSelectedMapelId(filteredMapelByModul[0].id)
+        if (onSelectMapel) onSelectMapel(filteredMapelByModul[0].id)
+      }
+    }
+  }, [selectedModul])
+
   // Fetch Topic Detail
   useEffect(() => {
     if (selectedMapelId) {
       fetchMapelDetail(selectedMapelId)
-    } else if (items.length > 0) {
-      setSelectedMapelId(items[0].id)
+    } else if (filteredMapelByModul.length > 0) {
+      setSelectedMapelId(filteredMapelByModul[0].id)
     }
-  }, [selectedMapelId, items])
+  }, [selectedMapelId])
 
   const fetchMapelDetail = async (id: string) => {
     try {
@@ -141,6 +193,34 @@ export function ModulDaftarView({
     } finally {
       setSavingSoal(false)
     }
+  }
+
+  // Delete Single Soal
+  const handleDeleteSoal = (soalId: string) => {
+    if (!showConfirm) return
+    showConfirm(
+      'Hapus Butir Soal?',
+      'Apakah Anda yakin ingin menghapus butir soal ini?',
+      async () => {
+        try {
+          const res = await fetch('/api/guru/soal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'DELETE_SOAL', soalId }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', 'Butir soal berhasil dihapus', 'success')
+            fetchMapelDetail(selectedMapelId)
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal menghapus butir soal', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        }
+      }
+    )
   }
 
   // Open Edit Jawaban Modal
@@ -247,7 +327,7 @@ export function ModulDaftarView({
           <h1 className="text-xl sm:text-2xl font-normal text-slate-900 dark:text-white flex items-center gap-2">
             Daftar Soal
             <span className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-normal">
-              Daftar soal dan jawaban berdasarkan Modul dan Topik
+              Daftar butir soal dan kunci jawaban berdasarkan Topik Mata Pelajaran
             </span>
           </h1>
         </div>
@@ -259,57 +339,119 @@ export function ModulDaftarView({
         </div>
       </div>
 
-      {/* 2. CARD 1: PILIH TOPIK */}
+      {/* 2. CARD 1: PILIH MODUL & TOPIK */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-white/10 rounded-md shadow-xs overflow-hidden">
-        <div className="px-4 py-2.5 bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-white/10">
-          <h2 className="text-sm font-bold text-slate-800 dark:text-white">Pilih Topik</h2>
+        <div className="px-4 py-2.5 bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-white/10 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-800 dark:text-white">Pilih Modul & Topik Mapel</h2>
+          {onNavigateToTopik && (
+            <button
+              type="button"
+              onClick={onNavigateToTopik}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Kelola & Tambah Modul / Topik</span>
+            </button>
+          )}
         </div>
-        <div className="p-4 sm:p-5 space-y-2">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <label className="sm:w-44 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
-              Pilih Topik
-            </label>
-            <div className="flex-1 max-w-2xl">
+        <div className="p-4 sm:p-5 space-y-3.5">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+            {/* 1. Pilih Modul */}
+            <div className="md:col-span-4 flex flex-col sm:flex-row md:flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                1. Pilih Modul:
+              </label>
               <select
-                value={selectedMapelId}
+                value={selectedModul}
                 onChange={(e) => {
-                  setSelectedMapelId(e.target.value)
+                  setSelectedModul(e.target.value)
                   setCurrentPage(1)
                 }}
-                className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                className="w-full px-3 py-2 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
               >
-                {items.length === 0 && <option value="">(Belum ada topik)</option>}
-                {items.map((bs) => {
-                  const soalCount = bs._count?.soalList ?? bs.soalList?.length ?? 0
-                  return (
-                    <option key={bs.id} value={bs.id}>
-                      {bs.kode || bs.kodeBank || 'Default'} - {bs.nama} [{soalCount}]
-                    </option>
-                  )
-                })}
+                {rawModulNames.map((modName) => (
+                  <option key={modName} value={modName}>
+                    {modName === 'SEMUA' ? '-- Semua Modul --' : `Modul: ${modName}`}
+                  </option>
+                ))}
               </select>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
-                Pilih terlebih dahulu Topik yang akan digunakan sebelum menambah atau mengubah soal
-              </p>
+            </div>
+
+            {/* 2. Pilih Topik dalam Modul */}
+            <div className="md:col-span-8 flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                2. Pilih Topik Mata Pelajaran ({filteredMapelByModul.length}):
+              </label>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <select
+                  value={selectedMapelId}
+                  onChange={(e) => {
+                    setSelectedMapelId(e.target.value)
+                    if (onSelectMapel) onSelectMapel(e.target.value)
+                    setCurrentPage(1)
+                  }}
+                  className="flex-1 px-3 py-2 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                >
+                  {filteredMapelByModul.length === 0 && <option value="">(Belum ada topik pada modul ini)</option>}
+                  {filteredMapelByModul.map((bs) => {
+                    const soalCount = bs._count?.soalList ?? bs.soalList?.length ?? 0
+                    const itemModul = bs.namaModul || bs.modul?.nama || 'Default'
+                    const isArchived = bs.status === 'NONAKTIF'
+                    return (
+                      <option key={bs.id} value={bs.id}>
+                        {isArchived ? '[ARSIP] ' : ''}{bs.kode || bs.kodeBank || 'Default'} - {bs.nama} [{itemModul}] [{soalCount} Soal]
+                      </option>
+                    )
+                  })}
+                </select>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {onNavigateToEditor && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToEditor(selectedMapelId)}
+                      className="px-3.5 py-2 rounded bg-[#337ab7] hover:bg-[#286090] text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Input Soal</span>
+                    </button>
+                  )}
+                  {onNavigateToImport && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToImport}
+                      className="px-3 py-2 rounded border border-slate-300 dark:border-white/15 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Import</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            Pilih <strong>Modul</strong> dan <strong>Topik Mapel</strong> untuk mengelola butir-butir soal di dalamnya. Untuk membuat topik atau modul baru, klik <strong>Kelola & Tambah Modul / Topik</strong>.
+          </p>
         </div>
       </div>
 
       {/* 3. CARD 2: DAFTAR SOAL [NAMA TOPIK] */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-white/10 rounded-md shadow-xs overflow-hidden">
         <div className="px-4 py-2.5 bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-white/10 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-800 dark:text-white">
-            Daftar Soal {topicDisplayName}
+          <h2 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            <span>Daftar Soal {topicDisplayName}</span>
           </h2>
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-medium"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Cetak Daftar Soal</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Cetak Daftar Soal</span>
+            </button>
+          </div>
         </div>
 
         <div className="p-4 sm:p-5 space-y-3">
@@ -342,6 +484,7 @@ export function ModulDaftarView({
                   setSearchQuery(e.target.value)
                   setCurrentPage(1)
                 }}
+                placeholder="Cari teks soal..."
                 className="px-2.5 py-1 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -368,9 +511,18 @@ export function ModulDaftarView({
                 ) : paginatedSoal.length === 0 ? (
                   <tr>
                     <td colSpan={3} className="py-8 text-center text-slate-400">
-                      {searchQuery
-                        ? 'Tidak ada soal yang cocok dengan pencarian.'
-                        : 'Belum ada soal pada topik ini.'}
+                      <div className="space-y-2">
+                        <p>{searchQuery ? 'Tidak ada soal yang cocok dengan pencarian.' : 'Belum ada soal pada topik ini.'}</p>
+                        {onNavigateToEditor && (
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToEditor(selectedMapelId)}
+                            className="px-3.5 py-1.5 rounded bg-blue-600 text-white font-medium text-xs hover:bg-blue-700"
+                          >
+                            + Tambah Butir Soal Sekarang
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -387,11 +539,16 @@ export function ModulDaftarView({
                         <td className="py-3 px-3 align-top text-center font-medium text-slate-500 dark:text-slate-400">
                           {rowNumber}
                         </td>
-                        <td className="py-3 px-3 align-top font-semibold text-slate-700 dark:text-slate-300">
-                          {formatTipeLabel(soal.tipeSoal)}
+                        <td className="py-3 px-3 align-top">
+                          <div className="font-semibold text-slate-700 dark:text-slate-300">
+                            {formatTipeLabel(soal.tipeSoal)}
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            Bobot: {soal.bobot || 1}
+                          </div>
                         </td>
                         <td className="py-3 px-3 align-top space-y-3">
-                          {/* Question Header with Edit Soal Link */}
+                          {/* Question Header with Edit / Delete Soal Link */}
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 space-y-2">
                               {/* Audio Player if present */}
@@ -410,15 +567,25 @@ export function ModulDaftarView({
                               </div>
                             </div>
 
-                            {/* Edit Soal button on top right of question */}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEditSoal(soal)}
-                              className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-medium shrink-0 cursor-pointer pt-0.5"
-                            >
-                              <Edit className="w-3 h-3" />
-                              <span>Edit Soal</span>
-                            </button>
+                            {/* Action Buttons on top right of question */}
+                            <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditSoal(soal)}
+                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                              >
+                                <Edit className="w-3 h-3" />
+                                <span>Edit Soal</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSoal(soal.id)}
+                                title="Hapus Soal"
+                                className="text-xs text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
 
                           {/* Options / Answers List */}
@@ -488,7 +655,7 @@ export function ModulDaftarView({
             </table>
           </div>
 
-          {/* Table Footer */}
+          {/* Table Footer: Pagination */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 pt-2">
             <div>
               Showing {filteredSoal.length === 0 ? 0 : (currentPage - 1) * entriesPerPage + 1} to{' '}
@@ -599,14 +766,14 @@ export function ModulDaftarView({
                 <button
                   type="button"
                   onClick={() => setModalEditSoalOpen(false)}
-                  className="px-4 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100"
+                  className="px-4 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={savingSoal}
-                  className="px-5 py-1.5 rounded bg-[#337ab7] hover:bg-[#286090] text-white text-xs font-semibold shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-5 py-1.5 rounded bg-[#337ab7] hover:bg-[#286090] text-white text-xs font-semibold shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span>{savingSoal ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
@@ -617,16 +784,13 @@ export function ModulDaftarView({
         </div>
       )}
 
-      {/* 5. MODAL EDIT JAWABAN */}
+      {/* 5. MODAL EDIT PILIHAN JAWABAN */}
       {modalEditJawabanOpen && selectedSoalForJawaban && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-md shadow-2xl max-w-3xl w-full overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-md shadow-2xl max-w-2xl w-full overflow-hidden">
             <div className="px-5 py-3.5 bg-[#337ab7] text-white flex items-center justify-between">
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                <span>Kelola Jawaban Soal #{selectedSoalForJawaban.nomorUrut || 1}</span>
-                <span className="px-2 py-0.5 rounded bg-white/20 text-xs font-normal">
-                  {selectedSoalForJawaban.tipeSoal}
-                </span>
+              <h3 className="text-sm font-bold">
+                Kelola Opsi & Kunci Jawaban Soal #{selectedSoalForJawaban.nomorUrut || 1}
               </h3>
               <button
                 type="button"
@@ -637,138 +801,129 @@ export function ModulDaftarView({
               </button>
             </div>
 
-            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-              <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded text-xs space-y-1">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                  Pertanyaan:
-                </span>
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <MathRenderer content={selectedSoalForJawaban.pertanyaan} />
-                </div>
-              </div>
-
+            <div className="p-5 space-y-4">
               {['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(selectedSoalForJawaban.tipeSoal) ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-800 dark:text-white">
-                      Daftar Pilihan Jawaban:
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Daftar Pilihan Jawaban ({opsiList.length})
                     </label>
                     <button
                       type="button"
                       onClick={() => {
-                        const labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
-                        const nextLabel = labels[opsiList.length] || `Opsi ${opsiList.length + 1}`
+                        const nextLabel = String.fromCharCode(65 + opsiList.length)
                         setOpsiList([...opsiList, { label: nextLabel, konten: '', isBenar: false }])
                       }}
-                      className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 flex items-center gap-1"
+                      className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      <Plus className="w-3 h-3" /> Tambah Pilihan
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Tambah Opsi</span>
                     </button>
                   </div>
 
-                  <div className="space-y-2.5">
-                    {opsiList.map((opsi, idx) => (
+                  <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+                    {opsiList.map((op, idx) => (
                       <div
                         key={idx}
-                        className={`p-2.5 rounded border transition flex items-start gap-2.5 ${
-                          opsi.isBenar
-                            ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-400 dark:border-emerald-700'
-                            : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-white/10'
+                        className={`p-3 rounded-lg border transition ${
+                          op.isBenar
+                            ? 'bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-800'
+                            : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-white/10'
                         }`}
                       >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = [...opsiList]
-                            if (selectedSoalForJawaban.tipeSoal === 'PG' || selectedSoalForJawaban.tipeSoal === 'BENAR_SALAH') {
-                              updated.forEach((o, i) => (o.isBenar = i === idx))
-                            } else {
-                              updated[idx].isBenar = !updated[idx].isBenar
-                            }
-                            setOpsiList(updated)
-                          }}
-                          className={`w-7 h-7 rounded font-bold text-xs shrink-0 flex items-center justify-center cursor-pointer transition ${
-                            opsi.isBenar
-                              ? 'bg-emerald-600 text-white shadow-xs'
-                              : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300'
-                          }`}
-                          title={opsi.isBenar ? 'Kunci Jawaban Benar' : 'Klik untuk jadikan Kunci'}
-                        >
-                          {opsi.label}
-                        </button>
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
+                              {op.label || String.fromCharCode(65 + idx)}
+                            </span>
+                            <label className="inline-flex items-center gap-1.5 text-xs font-bold cursor-pointer">
+                              <input
+                                type={selectedSoalForJawaban.tipeSoal === 'PG' ? 'radio' : 'checkbox'}
+                                name="kunciJawabanGroup"
+                                checked={op.isBenar}
+                                onChange={(e) => {
+                                  if (selectedSoalForJawaban.tipeSoal === 'PG') {
+                                    setOpsiList(
+                                      opsiList.map((item, i) => ({
+                                        ...item,
+                                        isBenar: i === idx,
+                                      }))
+                                    )
+                                  } else {
+                                    const updated = [...opsiList]
+                                    updated[idx].isBenar = e.target.checked
+                                    setOpsiList(updated)
+                                  }
+                                }}
+                                className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 rounded border-slate-300"
+                              />
+                              <span className={op.isBenar ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-400'}>
+                                {op.isBenar ? 'Kunci Jawaban Benar' : 'Bukan Kunci'}
+                              </span>
+                            </label>
+                          </div>
 
-                        <div className="flex-1 space-y-1">
-                          <input
-                            type="text"
-                            value={opsi.konten}
-                            onChange={(e) => {
-                              const updated = [...opsiList]
-                              updated[idx].konten = e.target.value
-                              setOpsiList(updated)
-                            }}
-                            placeholder={`Teks pilihan ${opsi.label}...`}
-                            className="w-full px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                          />
+                          {opsiList.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpsiList(opsiList.filter((_, i) => i !== idx))
+                              }}
+                              className="text-slate-400 hover:text-rose-500 p-1"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
 
-                        {opsi.isBenar && (
-                          <span className="px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold shrink-0 self-center">
-                            BENAR
-                          </span>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (opsiList.length <= 2) {
-                              showNotification('Peringatan', 'Minimal harus ada 2 opsi jawaban', 'warning')
-                              return
-                            }
-                            setOpsiList(opsiList.filter((_, i) => i !== idx))
+                        <textarea
+                          rows={2}
+                          value={op.konten}
+                          onChange={(e) => {
+                            const updated = [...opsiList]
+                            updated[idx].konten = e.target.value
+                            setOpsiList(updated)
                           }}
-                          className="p-1 rounded text-slate-400 hover:text-rose-600 transition shrink-0 self-center"
-                          title="Hapus Opsi"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          placeholder={`Teks atau rumus KaTeX opsi ${op.label}...`}
+                          className="w-full p-2.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-sans"
+                        />
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-800 dark:text-white">
-                    {selectedSoalForJawaban.tipeSoal === 'ISIAN'
-                      ? 'Kunci Jawaban Isian Singkat:'
-                      : 'Rubrik Penilaian Esai:'}
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Kunci Jawaban Teks / Kata Kunci Penilaian
                   </label>
                   <textarea
                     rows={4}
                     value={kunciJawabanTeks}
                     onChange={(e) => setKunciJawabanTeks(e.target.value)}
-                    className="w-full p-3 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                    placeholder="Masukkan jawaban yang benar atau kata kunci..."
+                    className="w-full p-3 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-sans"
                   />
                 </div>
               )}
-            </div>
 
-            <div className="px-5 py-3 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-white/10 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setModalEditJawabanOpen(false)}
-                className="px-4 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100"
-              >
-                Tutup
-              </button>
-              <button
-                type="button"
-                disabled={savingJawaban}
-                onClick={handleSaveEditJawaban}
-                className="px-5 py-1.5 rounded bg-[#337ab7] hover:bg-[#286090] text-white text-xs font-semibold shadow-xs disabled:opacity-50 flex items-center gap-1.5"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>{savingJawaban ? 'Menyimpan...' : 'Simpan Jawaban'}</span>
-              </button>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setModalEditJawabanOpen(false)}
+                  className="px-4 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEditJawaban}
+                  disabled={savingJawaban}
+                  className="px-5 py-1.5 rounded bg-[#337ab7] hover:bg-[#286090] text-white text-xs font-semibold shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{savingJawaban ? 'Menyimpan...' : 'Simpan Kunci Jawaban'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

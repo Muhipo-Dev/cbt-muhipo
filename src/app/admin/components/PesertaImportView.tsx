@@ -18,18 +18,19 @@ export function PesertaImportView({
   const [fileName, setFileName] = useState('')
   const [importing, setImporting] = useState(false)
 
-  // Download Excel Template Peserta
+  // Download Excel Template Peserta Sesuai Format Resmi
   const handleDownloadTemplate = async () => {
     try {
       const workbook = new ExcelJS.Workbook()
       const worksheet = workbook.addWorksheet('DATA_PESERTA_CBT')
 
       worksheet.columns = [
-        { header: 'NO', key: 'no', width: 6 },
-        { header: 'USERNAME', key: 'username', width: 24 },
-        { header: 'PASSWORD', key: 'password', width: 20 },
-        { header: 'NAMA LENGKAP', key: 'nama', width: 32 },
-        { header: 'KELAS', key: 'kelas', width: 22 },
+        { header: 'No', key: 'no', width: 6 },
+        { header: 'Username', key: 'username', width: 24 },
+        { header: 'Password', key: 'password', width: 20 },
+        { header: 'Nama Lengkap', key: 'nama', width: 32 },
+        { header: 'Kelas', key: 'kelas', width: 16 },
+        { header: 'Group', key: 'group', width: 26 },
       ]
 
       // Header Styling
@@ -40,29 +41,41 @@ export function PesertaImportView({
         fgColor: { argb: 'FF1E40AF' },
       }
 
-      // Baris Contoh Siswa (Hanya 4 Data Utama)
+      // Baris Contoh Sesuai Format
       worksheet.addRow({
         no: 1,
-        username: '20261001',
-        password: 'password123',
-        nama: 'Ahmad Faiz Al-Farisi',
-        kelas: 'XII-MIPA 1',
+        username: 'username',
+        password: 'password',
+        nama: 'nama lengkap siswa',
+        kelas: 'X',
+        group: 'group yang sudah dibuat',
       })
 
       worksheet.addRow({
         no: 2,
-        username: '20261002',
-        password: '123456',
-        nama: 'Nur Aisyah Rahmawati',
-        kelas: 'XII-MIPA 1',
+        username: '20261001',
+        password: 'password123',
+        nama: 'Ahmad Faiz Al-Farisi',
+        kelas: 'X',
+        group: 'X-MIPA 1',
       })
 
       worksheet.addRow({
         no: 3,
+        username: '20261002',
+        password: '123456',
+        nama: 'Nur Aisyah Rahmawati',
+        kelas: 'XI',
+        group: 'XI-MIPA 2',
+      })
+
+      worksheet.addRow({
+        no: 4,
         username: '20261003',
         password: '123456',
         nama: 'Muhammad Rizki Pratama',
-        kelas: 'XII-IPS 2',
+        kelas: 'XII',
+        group: 'XII-IPS 1',
       })
 
       const buffer = await workbook.xlsx.writeBuffer()
@@ -76,7 +89,7 @@ export function PesertaImportView({
       a.click()
       window.URL.revokeObjectURL(url)
 
-      showNotification('Berhasil', 'Template format Excel data peserta (Username, Password, Nama, Kelas) berhasil diunduh.', 'success')
+      showNotification('Berhasil', 'Template format Excel data peserta (No, Username, Password, Nama Lengkap, Kelas, Group) berhasil diunduh.', 'success')
     } catch (err: any) {
       showNotification('Error', 'Gagal membuat template: ' + err.message, 'error')
     }
@@ -106,12 +119,22 @@ export function PesertaImportView({
         const items: any[] = []
         for (let i = 1; i < rawJson.length; i++) {
           const row = rawJson[i]
-          if (!row || !row[1]) continue // Username wajib ada
+          if (!row || (!row[1] && !row[0])) continue
 
-          const username = String(row[1] || '').trim()
+          // Handle format [No, Username, Password, Nama Lengkap, Kelas, Group]
+          const username = String(row[1] || row[0] || '').trim()
+          if (!username || username.toLowerCase() === 'username') {
+            // Check if this is the example row or header repeat
+            if (username.toLowerCase() === 'username' && String(row[3] || '').includes('nama lengkap')) {
+              // skip template placeholder row if detected
+              continue
+            }
+          }
+
           const password = String(row[2] || '123456').trim()
           const nama = String(row[3] || 'Peserta ' + i).trim()
-          const kelas = String(row[4] || 'Umum').trim()
+          const kelas = String(row[4] || 'X').trim()
+          const group = String(row[5] || row[4] || 'Umum').trim()
 
           items.push({
             username,
@@ -119,6 +142,7 @@ export function PesertaImportView({
             name: nama,
             nomorPeserta: username,
             kelas,
+            group,
             ruang: 'Ruang 1',
             sesi: 1,
             gender: 'L',
@@ -183,7 +207,7 @@ export function PesertaImportView({
             <span>Import Data Peserta Ujian dari Excel</span>
           </h2>
           <p className="text-xs text-slate-300">
-            Daftarkan ratusan akun siswa secara instan dengan 4 kolom utama: <strong className="text-white">Username</strong>, <strong className="text-white">Password</strong>, <strong className="text-white">Nama Lengkap</strong>, dan <strong className="text-white">Kelas</strong>.
+            Daftarkan akun peserta dengan 6 kolom standar: <strong className="text-white">No</strong>, <strong className="text-white">Username</strong>, <strong className="text-white">Password</strong>, <strong className="text-white">Nama Lengkap</strong>, <strong className="text-white">Kelas</strong>, dan <strong className="text-white">Group</strong>.
           </p>
         </div>
 
@@ -193,7 +217,7 @@ export function PesertaImportView({
           className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition cursor-pointer self-start sm:self-auto"
         >
           <Download className="w-4 h-4" />
-          <span>Unduh Format Template (4 Kolom)</span>
+          <span>Unduh Format Template (6 Kolom)</span>
         </button>
       </div>
 
@@ -247,6 +271,7 @@ export function PesertaImportView({
                   <th className="py-2.5 px-3">Password</th>
                   <th className="py-2.5 px-3">Nama Lengkap</th>
                   <th className="py-2.5 px-3">Kelas</th>
+                  <th className="py-2.5 px-3">Group</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
@@ -262,8 +287,11 @@ export function PesertaImportView({
                     <td className="py-2 px-3 font-bold text-slate-900 dark:text-white">
                       {item.name}
                     </td>
-                    <td className="py-2 px-3 font-semibold text-emerald-600 dark:text-emerald-400">
+                    <td className="py-2 px-3 font-semibold text-indigo-600 dark:text-indigo-400">
                       {item.kelas}
+                    </td>
+                    <td className="py-2 px-3 font-semibold text-emerald-600 dark:text-emerald-400">
+                      {item.group}
                     </td>
                   </tr>
                 ))}
@@ -275,3 +303,4 @@ export function PesertaImportView({
     </div>
   )
 }
+

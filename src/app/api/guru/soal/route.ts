@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { TipeSoal } from '@/lib/enums';
+import { convertEquationToKatex } from '@/lib/katexConverter';
 
 // Helper untuk kalkulasi otomatis poin butir soal secara seimbang dan proporsional dalam sebuah Topik / Mata Pelajaran
 async function recalculateTopikPoints(mataPelajaranId: string) {
@@ -82,7 +83,7 @@ async function recalculateTopikPoints(mataPelajaranId: string) {
 export async function GET(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !['GURU', 'ADMIN', 'SUPERADMIN'].includes(user.role)) {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
@@ -90,16 +91,8 @@ export async function GET(request: NextRequest) {
     const mataPelajaranId = searchParams.get('mataPelajaranId') || searchParams.get('topikId') || searchParams.get('bankSoalId');
 
     if (mataPelajaranId) {
-      const whereClause: any = { id: mataPelajaranId };
-      if (user.role === 'GURU') {
-        whereClause.OR = [
-          { pembuatId: user.userId },
-          { gurus: { some: { guruId: user.userId } } },
-        ];
-      }
-
       const mapel = await prisma.mataPelajaran.findFirst({
-        where: whereClause,
+        where: { id: mataPelajaranId },
         include: {
           gurus: {
             include: {
@@ -195,7 +188,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !['GURU', 'ADMIN', 'SUPERADMIN'].includes(user.role)) {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
@@ -204,7 +197,7 @@ export async function POST(request: NextRequest) {
 
     // 1. Buat Topik / Mata Pelajaran Baru
     if (action === 'CREATE_MAPEL' || action === 'CREATE_TOPIK' || action === 'CREATE_BANK_SOAL') {
-      const { kode, kodeBank, nama, tingkat, jurusan, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal, guruPengampuId } = body;
+      const { kode, kodeBank, nama, tingkat, jurusan, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal, guruPengampuId, status } = body;
       const cleanKode = (kode || kodeBank || '').trim().toUpperCase();
       if (!cleanKode || !nama?.trim()) {
         return NextResponse.json({ success: false, message: 'Kode dan Nama Topik / Mata Pelajaran wajib diisi' }, { status: 400 });
@@ -224,6 +217,7 @@ export async function POST(request: NextRequest) {
           tingkat: tingkat !== undefined ? Number(tingkat) : 10,
           jurusan: jurusan || 'UMUM',
           durasiMenit: Number(durasiMenit) || 90,
+          status: status === 'NONAKTIF' ? 'NONAKTIF' : 'AKTIF',
           kkm: kkm !== undefined ? Number(kkm) : 75.0,
           nilaiMinimal: nilaiMinimal !== undefined ? Number(nilaiMinimal) : 0.0,
           nilaiMaksimal: nilaiMaksimal !== undefined ? Number(nilaiMaksimal) : 100.0,
@@ -243,7 +237,7 @@ export async function POST(request: NextRequest) {
 
     // 1b. Update Topik / Mata Pelajaran
     if (action === 'UPDATE_MAPEL' || action === 'UPDATE_TOPIK' || action === 'UPDATE_BANK_SOAL') {
-      const { id, mataPelajaranId, bankSoalId, kode, kodeBank, nama, tingkat, jurusan, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal } = body;
+      const { id, mataPelajaranId, bankSoalId, kode, kodeBank, nama, tingkat, jurusan, durasiMenit, kkm, nilaiMinimal, nilaiMaksimal, status } = body;
       const targetId = id || mataPelajaranId || bankSoalId;
 
       const existing = await prisma.mataPelajaran.findUnique({
@@ -269,6 +263,7 @@ export async function POST(request: NextRequest) {
           tingkat: tingkat !== undefined ? Number(tingkat) : undefined,
           jurusan: jurusan || undefined,
           durasiMenit: durasiMenit ? Number(durasiMenit) : undefined,
+          status: status ? (status === 'NONAKTIF' ? 'NONAKTIF' : 'AKTIF') : undefined,
           kkm: kkm !== undefined ? Number(kkm) : undefined,
           nilaiMinimal: nilaiMinimal !== undefined ? Number(nilaiMinimal) : undefined,
           nilaiMaksimal: nilaiMaksimal !== undefined ? Number(nilaiMaksimal) : undefined,
@@ -278,6 +273,66 @@ export async function POST(request: NextRequest) {
       await recalculateTopikPoints(targetId);
 
       return NextResponse.json({ success: true, data: mapel, message: 'Topik / Mata Pelajaran berhasil diperbarui' });
+    }
+
+    // 1b.2 Arsipkan Topik
+    if (action === 'ARCHIVE_MAPEL' || action === 'ARCHIVE_TOPIK' || action === 'ARCHIVE_BANK_SOAL') {
+      const { id, mataPelajaranId, bankSoalId, status = 'NONAKTIF' } = body;
+      const targetId = id || mataPelajaranId || bankSoalId;
+
+      const existing = await prisma.mataPelajaran.findUnique({
+        where: { id: targetId },
+        include: { gurus: true },
+      });
+      if (!existing) {
+        return NextResponse.json({ success: false, message: 'Topik tidak ditemukan' }, { status: 404 });
+      }
+
+      const isTeacherOfMapel = existing.gurus?.some((g) => g.guruId === user.userId);
+      if (user.role === 'GURU' && existing.pembuatId !== user.userId && !isTeacherOfMapel) {
+        return NextResponse.json({ success: false, message: 'Akses ditolak.' }, { status: 403 });
+      }
+
+      const updated = await prisma.mataPelajaran.update({
+        where: { id: targetId },
+        data: { status: status as any },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: updated,
+        message: `Topik "${updated.nama}" berhasil diarsipkan. Seluruh butir soal tetap aman.`,
+      });
+    }
+
+    // 1b.3 Pulihkan / Aktifkan Kembali Topik
+    if (action === 'UNARCHIVE_MAPEL' || action === 'UNARCHIVE_TOPIK' || action === 'UNARCHIVE_BANK_SOAL') {
+      const { id, mataPelajaranId, bankSoalId } = body;
+      const targetId = id || mataPelajaranId || bankSoalId;
+
+      const existing = await prisma.mataPelajaran.findUnique({
+        where: { id: targetId },
+        include: { gurus: true },
+      });
+      if (!existing) {
+        return NextResponse.json({ success: false, message: 'Topik tidak ditemukan' }, { status: 404 });
+      }
+
+      const isTeacherOfMapel = existing.gurus?.some((g) => g.guruId === user.userId);
+      if (user.role === 'GURU' && existing.pembuatId !== user.userId && !isTeacherOfMapel) {
+        return NextResponse.json({ success: false, message: 'Akses ditolak.' }, { status: 403 });
+      }
+
+      const updated = await prisma.mataPelajaran.update({
+        where: { id: targetId },
+        data: { status: 'AKTIF' },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: updated,
+        message: `Topik "${updated.nama}" berhasil diaktifkan kembali.`,
+      });
     }
 
     // 1c. Hapus Topik / Mata Pelajaran
@@ -347,21 +402,21 @@ export async function POST(request: NextRequest) {
 
       for (const item of soalItems) {
         const tipe = (item.tipeSoal || 'PG').toUpperCase();
-        const pertanyaan = String(item.pertanyaan || '').trim();
+        const pertanyaan = convertEquationToKatex(String(item.pertanyaan || '').trim());
         if (!pertanyaan) continue;
 
         const bobot = Number(item.bobot) || 1.0;
-        const kunciTeks = item.kunciJawabanTeks || null;
+        const kunciTeks = item.kunciJawabanTeks ? convertEquationToKatex(String(item.kunciJawabanTeks)) : null;
 
         const opsiList: { label: string; konten: string; isBenar: boolean }[] = [];
-        if (tipe === 'PG' || tipe === 'PG_KOMPLEKS') {
+        if (tipe === 'PG' || tipe === 'PG_KOMPLEKS' || tipe === 'BENAR_SALAH') {
           const rawOpsi = item.opsi || [];
           if (Array.isArray(rawOpsi)) {
             for (const o of rawOpsi) {
               if (o.konten && String(o.konten).trim()) {
                 opsiList.push({
                   label: String(o.label || '').toUpperCase(),
-                  konten: String(o.konten).trim(),
+                  konten: convertEquationToKatex(String(o.konten).trim()),
                   isBenar: Boolean(o.isBenar),
                 });
               }
@@ -369,11 +424,23 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const rawMatching = item.matchingData
-          ? typeof item.matchingData === 'string'
-            ? item.matchingData
-            : JSON.stringify(item.matchingData)
-          : null;
+        let rawMatching: string | null = null;
+        if (item.matchingData) {
+          try {
+            const parsed = typeof item.matchingData === 'string' ? JSON.parse(item.matchingData) : item.matchingData;
+            if (Array.isArray(parsed)) {
+              const convertedPairs = parsed.map((p: any) => ({
+                left: convertEquationToKatex(String(p.left || '')),
+                right: convertEquationToKatex(String(p.right || '')),
+              }));
+              rawMatching = JSON.stringify(convertedPairs);
+            } else {
+              rawMatching = typeof item.matchingData === 'string' ? item.matchingData : JSON.stringify(item.matchingData);
+            }
+          } catch {
+            rawMatching = typeof item.matchingData === 'string' ? item.matchingData : JSON.stringify(item.matchingData);
+          }
+        }
 
         await prisma.soal.create({
           data: {
@@ -481,11 +548,26 @@ export async function POST(request: NextRequest) {
       const { mataPelajaranId, topikId, bankSoalId, soalId, nomorUrut, tipeSoal, pertanyaan, bobot, opsiJawaban, kunciJawabanTeks, matchingData, mediaGambar, mediaAudio } = body;
       const targetMapelId = mataPelajaranId || topikId || bankSoalId;
 
-      const rawMatchingString = matchingData
-        ? typeof matchingData === 'string'
-          ? matchingData
-          : JSON.stringify(matchingData)
-        : null;
+      const cleanPertanyaan = convertEquationToKatex(String(pertanyaan || '').trim());
+      const cleanKunciTeks = kunciJawabanTeks ? convertEquationToKatex(String(kunciJawabanTeks)) : null;
+
+      let rawMatchingString: string | null = null;
+      if (matchingData) {
+        try {
+          const parsed = typeof matchingData === 'string' ? JSON.parse(matchingData) : matchingData;
+          if (Array.isArray(parsed)) {
+            const convertedPairs = parsed.map((p: any) => ({
+              left: convertEquationToKatex(String(p.left || '')),
+              right: convertEquationToKatex(String(p.right || '')),
+            }));
+            rawMatchingString = JSON.stringify(convertedPairs);
+          } else {
+            rawMatchingString = typeof matchingData === 'string' ? matchingData : JSON.stringify(matchingData);
+          }
+        } catch {
+          rawMatchingString = typeof matchingData === 'string' ? matchingData : JSON.stringify(matchingData);
+        }
+      }
 
       if (soalId) {
         await prisma.soal.update({
@@ -493,11 +575,11 @@ export async function POST(request: NextRequest) {
           data: {
             nomorUrut: Number(nomorUrut) || 1,
             tipeSoal: tipeSoal as TipeSoal,
-            pertanyaan,
+            pertanyaan: cleanPertanyaan,
             bobot: bobot !== undefined && Number(bobot) > 0 ? Number(bobot) : 1.0,
             mediaGambar: mediaGambar || null,
             mediaAudio: mediaAudio || null,
-            kunciJawabanTeks,
+            kunciJawabanTeks: cleanKunciTeks,
             matchingData: rawMatchingString,
           },
         });
@@ -509,7 +591,7 @@ export async function POST(request: NextRequest) {
               data: {
                 soalId,
                 label: o.label,
-                konten: o.konten,
+                konten: convertEquationToKatex(String(o.konten || '').trim()),
                 isBenar: Boolean(o.isBenar),
               },
             });
@@ -533,17 +615,17 @@ export async function POST(request: NextRequest) {
             mataPelajaranId: targetMapelId,
             nomorUrut: count + 1,
             tipeSoal: tipeSoal as TipeSoal,
-            pertanyaan,
+            pertanyaan: cleanPertanyaan,
             bobot: bobot !== undefined && Number(bobot) > 0 ? Number(bobot) : 1.0,
             mediaGambar: mediaGambar || null,
             mediaAudio: mediaAudio || null,
-            kunciJawabanTeks,
+            kunciJawabanTeks: cleanKunciTeks,
             matchingData: rawMatchingString,
             opsiJawaban: isChoiceType
               ? {
                   create: (opsiJawaban || []).map((o: any) => ({
                     label: o.label,
-                    konten: o.konten,
+                    konten: convertEquationToKatex(String(o.konten || '').trim()),
                     isBenar: Boolean(o.isBenar),
                   })),
                 }

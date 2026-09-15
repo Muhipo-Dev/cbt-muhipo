@@ -52,37 +52,40 @@ call :SUB_START_SERVER
 cls
 color 0A
 echo ==============================================================================
-echo            CBT MUHIPO - PRODUCTION SERVER CONTROLLER
+echo            CBT MUHIPO - SECURE HTTPS SERVER CONTROLLER
 echo            SMA Muhammadiyah 1 Ponorogo (C) 2026
 echo ==============================================================================
 echo.
 
-REM Cek Status Port 3010
+REM Cek Status Port 443 & 80
 set "STATUS_LABEL=NONAKTIF / MATI"
-netstat -ano 2>nul | findstr ":3010" | findstr "LISTENING" >nul 2>&1
+netstat -ano 2>nul | findstr ":443" | findstr "LISTENING" >nul 2>&1
 if not errorlevel 1 (
-    set "STATUS_LABEL=AKTIF (MODE PRODUCTION - RINGAN DAN CEPAT)"
+    set "STATUS_LABEL=AKTIF (SECURE HTTPS - PORT 443 & HTTP REDIRECT 80)"
 )
 
 echo  STATUS SERVER : [ !STATUS_LABEL! ]
-echo  PORT SERVER   : 3010
-echo  AKSES LOKAL   : http://localhost:3010
+echo  PORT SERVER   : 443 (HTTPS UTAMA AMAN) & 80 (HTTP AUTO-REDIRECT)
+echo  AKSES LOKAL   : https://localhost
 echo.
 echo  ALAMAT IP JARINGAN (UNTUK AKSES PESERTA/SISWA):
 for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /i "IPv4"') do (
     set "raw_ip=%%i"
     set "clean_ip=!raw_ip: =!"
-    echo    -^> http://!clean_ip!:3010
+    echo    -^> https://!clean_ip!
 )
+echo.
+echo  [Catatan]: HTTP (http://!clean_ip!) akan otomatis dialihkan ke HTTPS (https://!clean_ip!).
+echo             Pada browser siswa, klik "Lanjutan / Advanced" lalu "Lanjutkan ke situs".
 echo.
 echo ==============================================================================
 echo  PILIHAN KONTROL SERVER CBT:
 echo ==============================================================================
-echo    [1] RESTART SERVER      - Mulai ulang server production
-echo    [2] NONAKTIFKAN SERVER  - Matikan server dan bebaskan port 3010
+echo    [1] RESTART SERVER      - Mulai ulang server production HTTPS (Port 443 & 80)
+echo    [2] NONAKTIFKAN SERVER  - Matikan server dan bebaskan port 443 & 80
 echo    [3] REBUILD SISTEM      - Build ulang source code + Restart server
 echo    [4] NYALAKAN SERVER     - Jalankan server (jika sedang mati)
-echo    [5] BUKA DI BROWSER     - Buka http://localhost:3010 di browser
+echo    [5] BUKA DI BROWSER     - Buka https://localhost di browser
 echo    [6] REFRESH TAMPILAN    - Segarkan status server
 echo    [0] KELUAR              - Matikan server dan tutup jendela
 echo ==============================================================================
@@ -109,10 +112,10 @@ echo.
 echo ==============================================================================
 echo [1/2] Menghentikan server CBT...
 call :SUB_STOP_SERVER
-echo [2/2] Menyalakan server CBT Mode Production...
+echo [2/2] Menyalakan server CBT Mode Secure HTTPS di Port 443 & 80...
 call :SUB_START_SERVER
 echo.
-echo [SUKSES] Server CBT berhasil direstart!
+echo [SUKSES] Server CBT berhasil direstart pada HTTPS Port 443!
 ping 127.0.0.1 -n 3 >nul
 goto MENU_LOOP
 
@@ -122,7 +125,7 @@ echo.
 echo ==============================================================================
 echo Menghentikan server CBT...
 call :SUB_STOP_SERVER
-echo [SUKSES] Server CBT berhasil dinonaktifkan. Port 3010 telah dibebaskan.
+echo [SUKSES] Server CBT berhasil dinonaktifkan. Port 443 dan 80 telah dibebaskan.
 ping 127.0.0.1 -n 3 >nul
 goto MENU_LOOP
 
@@ -130,10 +133,10 @@ goto MENU_LOOP
 :DO_START
 echo.
 echo ==============================================================================
-echo Memeriksa dan menyalakan server CBT...
+echo Memeriksa dan menyalakan server CBT di Port 443 & 80...
 call :SUB_STOP_SERVER
 call :SUB_START_SERVER
-echo [SUKSES] Server CBT aktif di mode production!
+echo [SUKSES] Server CBT aktif di mode HTTPS pada Port 443!
 ping 127.0.0.1 -n 3 >nul
 goto MENU_LOOP
 
@@ -159,16 +162,16 @@ if errorlevel 1 (
     goto MENU_LOOP
 )
 echo.
-echo [4/4] Menyalakan ulang server CBT Production...
+echo [4/4] Menyalakan ulang server CBT Secure HTTPS di Port 443...
 call :SUB_START_SERVER
 echo.
-echo [SUKSES] Sistem CBT berhasil di-rebuild dan dijalankan ulang!
+echo [SUKSES] Sistem CBT berhasil di-rebuild dan dijalankan ulang di HTTPS Port 443!
 ping 127.0.0.1 -n 3 >nul
 goto MENU_LOOP
 
 
 :DO_BROWSER
-start http://localhost:3010
+start https://localhost
 goto MENU_LOOP
 
 
@@ -191,7 +194,10 @@ ping 127.0.0.1 -n 3 >nul
 goto :eof
 
 :SUB_STOP_SERVER
-for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr ":3010" ^| findstr "LISTENING"') do (
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr ":443\>" ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%p >nul 2>&1
+)
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr ":80\>" ^| findstr "LISTENING"') do (
     taskkill /F /PID %%p >nul 2>&1
 )
 taskkill /FI "WINDOWTITLE eq CBT_MUHIPO_PROD_SERVICE*" /F /T >nul 2>&1

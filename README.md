@@ -56,7 +56,7 @@ Skrip ini akan otomatis:
 # Klik dua kali berkas 'start-cbt-server.bat' atau jalankan:
 start-cbt-server.bat
 ```
-Server akan aktif di `http://localhost:3010` (dan dapat diakses seluruh komputer klien/lab via `http://[IP_SERVER]:3010`).
+Server akan aktif di port utama `http://localhost` (dan dapat diakses seluruh komputer klien/lab via `http://[IP_SERVER]` tanpa perlu mengetikkan nomor port).
 
 ---
 
@@ -70,6 +70,41 @@ Server akan aktif di `http://localhost:3010` (dan dapat diakses seluruh komputer
 ---
 
 ## 🛡️ Keamanan & Integritas Ujian
-- Deteksi perpindahan tab browser (*Tab Switch Violation Count*).
+- **Anti-Cheat Engine Komprehensif**:
+  - Deteksi perpindahan tab browser (*Tab Switch Violation*).
+  - Deteksi perpindahan aplikasi / jendela tidak fokus / `Alt+Tab` (*App Switch Violation*).
+  - Deteksi keluar dari mode layar penuh (*Fullscreen Exit*).
+  - Proteksi tombol pintas keyboard (F12, Inspect Element, DevTools, Ctrl+U, Print, dll.).
+  - Batas toleransi maksimal **5x pelanggaran** dengan penguncian akun otomatis (*Auto-Lock*).
+  - Alarm suara Bahasa Indonesia via Web Speech API & Web Audio Synthesizer buzzer.
+- **Dual-Engine Live Screen Monitoring (Proktor)**:
+  - Streaming layar native Google Chrome via `getDisplayMedia` pada Desktop PC/Laptop.
+  - Active Canvas Fallback State Real-time untuk perangkat mobile (Android & iOS).
+  - Snapshot tangkapan layar otomatis saat terjadi pelanggaran sebagai bukti audit pengawas.
+- **Secure Context HTTPS Enforced**:
+  - Server otomatis berjalan di **Port 443 (HTTPS)** dengan sertifikat SSL/TLS mandiri.
+  - Port 80 secara otomatis mengalihkan (*auto-redirect*) ke HTTPS.
 - Auto-save jawaban ke database setiap kali memilih opsi atau berpindah nomor.
 - Timer sinkron dengan waktu server untuk mencegah manipulasi jam lokal pada perangkat peserta.
+
+---
+
+## 📋 Changelog / Riwayat Pembaruan
+
+### Versi 2.4.0 (Terbaru)
+- **Anti-Cheat Engine**:
+  - Penambahan deteksi pergantian aplikasi / `Alt+Tab` / jendela blur (`APP_SWITCH_ALERT`).
+  - Penyesuaian batas maksimal pelanggaran menjadi **5 kali pelanggaran** sebelum akun ujian terkunci otomatis.
+  - Pengambilan foto bukti snapshot layar otomatis saat pelanggaran terjadi.
+- **Secure HTTPS Server**:
+  - Penambahan `server.js` standalone dengan dukungan HTTPS Port 443 dan HTTP Port 80 Auto-Redirect.
+  - Generator sertifikat SSL/TLS mandiri otomatis mencakup `localhost`, `127.0.0.1`, dan semua alamat IP jaringan lokal.
+  - Pengaktifan Secure Context agar fitur *Share Screen* (`getDisplayMedia`) Google Chrome client berjalan lancar tanpa terblokir.
+- **Dashboard & Monitoring Proktor**:
+  - Pembaruan `ProktorLiveView` CCTV grid multi-layar dengan filter kelas, pencarian siswa, dan visualisasi bukti audit pelanggaran.
+  - Sinkronisasi realtime status ujian dan aksi reset login / reset pelanggaran.
+- **Manajemen Data & Backup**:
+  - Fitur Backup & Restore Database SQLite dan berkas unggahan media.
+  - Peningkatan sistem alokasi bank soal dan modul tingkat kelas (X, XI, XII).
+  - Skrip pengontrol server `start-cbt-server.bat` dan `cbt.ps1` yang diperbarui.
+

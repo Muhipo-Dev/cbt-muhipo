@@ -41,7 +41,7 @@ export function AppNavbar({
 
   return (
     <header
-      className={`h-14 sm:h-16 lg:h-20 flex items-center justify-between px-3 sm:px-5 lg:px-8 xl:px-12 sticky top-0 z-40 shadow-xs transition-colors duration-300 bg-white/85 dark:bg-slate-950/85 border-b border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white backdrop-blur-xl shrink-0 w-full overflow-x-clip ${className}`}
+      className={`print:hidden h-14 sm:h-16 lg:h-20 flex items-center justify-between px-3 sm:px-5 lg:px-8 xl:px-12 sticky top-0 z-40 shadow-xs transition-colors duration-300 bg-white/85 dark:bg-slate-950/85 border-b border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white backdrop-blur-xl shrink-0 w-full overflow-x-clip ${className}`}
     >
       {/* SISI KIRI: Logo & Nama Aplikasi CBT */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
@@ -109,8 +109,8 @@ export function AppNavbar({
               <User className="w-3.5 h-3.5" />
             </div>
             <div className="hidden md:flex flex-col text-left leading-tight min-w-0">
-              <span className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[120px]">
-                {userProfile.name || 'Pengguna'}
+              <span className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[120px]" title={userProfile.name ? userProfile.name.replace(/\s*\([^)]*\)/g, '').trim() : 'Pengguna'}>
+                {userProfile.name ? userProfile.name.replace(/\s*\([^)]*\)/g, '').trim() || 'Pengguna' : 'Pengguna'}
               </span>
               <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider truncate">
                 {userProfile.role || 'USER'}

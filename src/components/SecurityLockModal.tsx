@@ -74,14 +74,24 @@ export function SecurityLockModal({
 
         {/* Security Checklist Requirements */}
         <div className="space-y-2 text-left text-xs bg-slate-50 p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-200">
+          <div className="flex items-start gap-2 sm:gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <b className="text-slate-900 text-xs">Masa Penyesuaian Bebas Pelanggaran (5 Detik Pertama):</b>
+              <span className="text-slate-500 block text-[11px] mt-0.5">
+                Sistem memberikan waktu <b>5 detik</b> setelah mulai untuk penyesuaian layar, mengizinkan dialog browser, dan beralih ke mode Fullscreen tanpa sanksi pelanggaran.
+              </span>
+            </div>
+          </div>
+
           {/* Entire Screen Sharing Info (Diutamakan di Laptop/Desktop/MacBook) */}
           {deviceInfo?.hasDisplayMedia && !isMobileOrTablet && (
             <div className="flex items-start gap-2 sm:gap-2.5">
               <Tv className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
               <div>
-                <b className="text-slate-900 text-xs">1. Perekaman Seluruh Layar (Entire Screen):</b>
+                <b className="text-slate-900 text-xs">1. Izinkan Permintaan Google Chrome / Browser (Seluruh Layar):</b>
                 <span className="text-slate-500 block text-[11px] mt-0.5">
-                  Setelah menekan tombol di bawah, pilih opsi <b>"Entire Screen / Seluruh Layar"</b> pada pop-up izin browser untuk pengawasan ujian langsung.
+                  Saat muncul pop-up izin browser, pilih <b>"Entire Screen / Seluruh Layar"</b> lalu klik <b>"Share / Bagikan"</b>.
                 </span>
               </div>
             </div>
@@ -91,14 +101,14 @@ export function SecurityLockModal({
             <Maximize2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
             <div>
               <b className="text-slate-900 text-xs">
-                {isMobileOrTablet ? 'Mode Ujian Mobile (Android & iOS):' : 'Kunci Layar Penuh (Fullscreen Lockdown):'}
+                {isMobileOrTablet ? '2. Mode Ujian Mobile (Android & iOS):' : '2. Kunci Layar Penuh (Fullscreen Lockdown):'}
               </b>
               <span className="text-slate-500 block text-[11px] mt-0.5">
                 {isApple && isMobileOrTablet
                   ? 'Pada iPhone/iPad Safari: Tetap fokus pada layar ujian Safari, dilarang swipe gesture berpindah tab atau aplikasi.'
                   : isMobileOrTablet
                   ? 'Pada Android (Chrome/Brave): Harap tetap berada di halaman ujian, dilarang split-screen atau pop-up app.'
-                  : 'Layar akan otomatis terkunci penuh. Dilarang berpindah tab browser, membuka aplikasi lain, atau split-screen.'}
+                  : 'Layar akan otomatis masuk ke mode layar penuh. Dilarang berpindah tab browser, membuka aplikasi lain, atau split-screen.'}
               </span>
             </div>
           </div>
@@ -106,17 +116,21 @@ export function SecurityLockModal({
           <div className="flex items-start gap-2 sm:gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <b className="text-slate-900 text-xs">Peringatan Suara & Batas Pelanggaran (Maksimal 3x):</b>
+              <b className="text-slate-900 text-xs">3. Batas Toleransi Pelanggaran (Maksimal 5x):</b>
               <span className="text-slate-500 block text-[11px] mt-0.5">
-                Jika terdeteksi keluar dari layar ujian atau membuka tab/aplikasi lain, sistem membunyikan alarm. Pada <b>pelanggaran ke-3</b>, akun ujian akan <b>otomatis terkunci</b> dan wajib dibuka oleh pengawas proktor.
+                Setelah masa 5 detik berakhir, jika berpindah tab, berpindah aplikasi, atau keluar fullscreen, sistem membunyikan alarm. Pada <b>pelanggaran ke-5</b>, akun ujian akan <b>otomatis terkunci</b> dan wajib dibuka oleh pengawas.
               </span>
             </div>
           </div>
         </div>
 
         {errorMsg && (
-          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
-            {errorMsg}
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-semibold flex items-start gap-2 text-left animate-in fade-in">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Izin Browser Wajib Diberikan!</p>
+              <p className="text-[11px] font-normal text-rose-700 mt-0.5">{errorMsg}</p>
+            </div>
           </div>
         )}
 

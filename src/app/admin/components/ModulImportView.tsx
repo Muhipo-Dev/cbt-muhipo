@@ -1,9 +1,11 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Home, ChevronRight, Download, Upload, FileSpreadsheet, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Home, ChevronRight, Download, Upload, FileSpreadsheet, RefreshCw, CheckCircle2, AlertCircle, Sparkles, Eye, Sigma } from 'lucide-react'
 import ExcelJS from 'exceljs'
 import * as XLSX from 'xlsx'
+import { convertEquationToKatex, hasEquationOrFormula } from '@/lib/katexConverter'
+import { MathRenderer } from '@/components/MathRenderer'
 
 interface ModulImportViewProps {
   mapelList?: any[]
@@ -23,6 +25,8 @@ export function ModulImportView({
   const [parsedItems, setParsedItems] = useState<any[]>([])
   const [fileName, setFileName] = useState('')
   const [importing, setImporting] = useState(false)
+  const [equationConvertedCount, setEquationConvertedCount] = useState(0)
+  const [showPreviewList, setShowPreviewList] = useState(true)
 
   useEffect(() => {
     if (!selectedMapelId && items.length > 0) {
@@ -30,7 +34,7 @@ export function ModulImportView({
     }
   }, [items, selectedMapelId])
 
-  // Unduh Template Excel Soal Resmi (Semua Tipe: Q, Q2, Q3, Q4, Q5, Q6)
+  // Unduh Template Excel Soal Resmi (Semua Tipe: Q, Q2, Q3, Q4, Q5, Q6 + Otomatis KaTeX / Rumus)
   const handleDownloadTemplate = async () => {
     try {
       const workbook = new ExcelJS.Workbook()
@@ -39,12 +43,11 @@ export function ModulImportView({
       })
 
       ws.columns = [
-        { key: 'col1', width: 6 },   // No.
-        { key: 'col2', width: 22 },  // Keterangan
+        { key: 'col1', width: 8 },   // No.
+        { key: 'col2', width: 26 },  // Keterangan
         { key: 'col3', width: 10 },  // Tipe
-        { key: 'col4', width: 64 },  // Isi Soal / Jawaban
-        { key: 'col5', width: 22 },  // Status Jawaban
-        { key: 'col6', width: 14 },  // Kesulitan / Bobot
+        { key: 'col4', width: 75 },  // Isi Soal / Jawaban
+        { key: 'col5', width: 24 },  // Status Jawaban
       ]
 
       const thinBorder: Partial<ExcelJS.Borders> = {
@@ -62,23 +65,23 @@ export function ModulImportView({
       }
 
       // Baris 1: Judul Utama
-      ws.mergeCells('A1:F1')
+      ws.mergeCells('A1:E1')
       const titleCell = ws.getCell('A1')
-      titleCell.value = 'FORM EXCEL SOAL CBT (SEMUA TIPE)'
+      titleCell.value = 'TEMPLATE IMPORT SOAL CBT (MENDUKUNG RUMUS KATEX / WORD EQUATION)'
       titleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } }
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
       titleCell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF337AB7' },
+        fgColor: { argb: 'FF4338CA' },
       }
       ws.getRow(1).height = 28
 
       // Baris 2: Sub-judul / Keterangan Tipe
-      ws.mergeCells('A2:F2')
+      ws.mergeCells('A2:E2')
       const subCell = ws.getCell('A2')
-      subCell.value = 'Tipe: Q (Pilihan Ganda), Q2 (Esai), Q3 (Jawaban Singkat), Q4 (PG Kompleks), Q5 (Benar/Salah), Q6 (Menjodohkan)'
-      subCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF1E293B' } }
+      subCell.value = 'Tipe: Q (Pilihan Ganda), Q2 (Esai), Q3 (Jawaban Singkat), Q4 (PG Kompleks), Q5 (Benar/Salah), Q6 (Menjodohkan). Rumus Word / Excel otomatis dikonversi ke KaTeX.'
+      subCell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF1E293B' } }
       subCell.alignment = { horizontal: 'center', vertical: 'middle' }
       subCell.fill = {
         type: 'pattern',
@@ -93,7 +96,7 @@ export function ModulImportView({
 
       // Baris 5: Table Header
       const headerRow = ws.getRow(5)
-      headerRow.values = ['No.', 'Keterangan', 'Tipe', 'Isi Soal / Jawaban', 'Status Jawaban', 'Kesulitan']
+      headerRow.values = ['No.', 'Keterangan', 'Tipe', 'Isi Soal / Jawaban', 'Status Jawaban']
       headerRow.height = 26
       headerRow.eachCell((cell, colNumber) => {
         cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
@@ -106,24 +109,37 @@ export function ModulImportView({
         cell.border = tableBorder
       })
 
-      // Data Baris Soal & Jawaban
+      // Data Baris Soal & Jawaban (Format Menurun) dengan contoh rumus matematika nyata
       const rowsData = [
-        { row: [1, 'Soal Pilihan Ganda', 'Q', 'Ibu kota negara Republik Indonesia adalah...', '', 1], bg: 'FFE0E7FF', isBold: true },
-        { row: ['', 'Jawaban Benar', 'A', 'Jakarta', 1, ''], bg: 'FFDCFCE7', isBold: false },
-        { row: ['', '', 'A', 'Surabaya', 0, ''], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', '', 'A', 'Bandung', 0, ''], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', '', 'A', 'Yogyakarta', 0, ''], bg: 'FFFFFFFF', isBold: false },
-        { row: [2, 'Soal Esai', 'Q2', 'Jelaskan pengertian Pancasila sebagai dasar falsafah negara Indonesia!', '', 2], bg: 'FFE0F2FE', isBold: true },
-        { row: [3, 'Jawaban Singkat', 'Q3', 'Sebutkan 3 pulau terbesar di Indonesia!', '', 1], bg: 'FFFEF3C7', isBold: true },
-        { row: [4, 'Soal PG Kompleks', 'Q4', 'Manakah yang termasuk organ pernapasan pada manusia?', '', 2], bg: 'FFFCE7F3', isBold: true },
-        { row: ['', 'Jawaban Benar', 'A', 'Hidung', 1, ''], bg: 'FFDCFCE7', isBold: false },
-        { row: ['', '', 'A', 'Lambung', 0, ''], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', 'Jawaban Benar', 'A', 'Paru-paru', 1, ''], bg: 'FFDCFCE7', isBold: false },
-        { row: [5, 'Soal Benar/Salah', 'Q5', 'Fotosintesis pada tumbuhan hijau terjadi di dalam kloroplas', '', 1], bg: 'FFFFE4E6', isBold: true },
-        { row: ['', 'Pernyataan BENAR', 'A', 'Benar', 1, ''], bg: 'FFDCFCE7', isBold: false },
-        { row: [6, 'Soal Menjodohkan', 'Q6', 'Pasangkan nama negara dengan ibu kotanya yang tepat!', '', 2], bg: 'FFF3E8FF', isBold: true },
-        { row: ['', 'Premis -> Respons', 'A', 'Indonesia', 'Jakarta', ''], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', 'Premis -> Respons', 'A', 'Malaysia', 'Kuala Lumpur', ''], bg: 'FFFFFFFF', isBold: false },
+        // No 1: PG Umum
+        { row: [1, 'Soal Pilihan Ganda', 'Q', 'Ibu kota negara Indonesia adalah...', ''], bg: 'FFE0E7FF', isBold: true },
+        { row: ['', 'Jawaban Benar', 'A', 'Jakarta', 1], bg: 'FFDCFCE7', isBold: false },
+        { row: ['', '', 'A', 'Surabaya', 0], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', '', 'A', 'Bandung', 0], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', '', 'A', 'Yogyakarta', 0], bg: 'FFFFFFFF', isBold: false },
+        // No 2: PG Matematika (Auto KaTeX / Equation)
+        { row: [2, 'Soal PG Rumus Math', 'Q', 'Tentukan himpunan penyelesaian dari persamaan kuadrat $2x^2 - 4x + 2 = 0$ atau $\\frac{1}{2}x = 4$!', ''], bg: 'FFE0E7FF', isBold: true },
+        { row: ['', 'Jawaban Benar', 'A', '$x = 1$ atau $x = 8$', 1], bg: 'FFDCFCE7', isBold: false },
+        { row: ['', '', 'A', '$x = 2$ atau $x = 4$', 0], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', '', 'A', '$x = -1$ atau $x = 6$', 0], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', '', 'A', '$x = 0$ atau $x = 2$', 0], bg: 'FFFFFFFF', isBold: false },
+        // No 3: Esai
+        { row: [3, 'Soal Esai', 'Q2', 'Jelaskan rumus luas lingkaran $L = \\pi r^2$ dan berikan contoh perhitungannya jika jari-jari $r = 7\\text{ cm}$!', ''], bg: 'FFE0F2FE', isBold: true },
+        // No 4: Jawaban Singkat
+        { row: [4, 'Jawaban Singkat', 'Q3', 'Berapakah nilai dari $\\sqrt{144} \\times 2^3$?', '96'], bg: 'FFFEF3C7', isBold: true },
+        // No 5: PG Kompleks
+        { row: [5, 'Soal PG Kompleks', 'Q4', 'Manakah di antara rumus fisika berikut yang merupakan besaran turunan?', ''], bg: 'FFFCE7F3', isBold: true },
+        { row: ['', 'Jawaban Benar', 'A', 'Kecepatan ($v = \\frac{s}{t}$)', 1], bg: 'FFDCFCE7', isBold: false },
+        { row: ['', '', 'A', 'Massa ($m$)', 0], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', 'Jawaban Benar', 'A', 'Gaya ($F = m \\times a$)', 1], bg: 'FFDCFCE7', isBold: false },
+        // No 6: Benar/Salah
+        { row: [6, 'Soal Benar/Salah', 'Q5', 'Nilai dari $\\sin(30^\\circ) = \\frac{1}{2}$ adalah bernilai BENAR.', ''], bg: 'FFFFE4E6', isBold: true },
+        { row: ['', 'Pernyataan BENAR', 'A', 'Benar', 1], bg: 'FFDCFCE7', isBold: false },
+        // No 7: Menjodohkan
+        { row: [7, 'Soal Menjodohkan', 'Q6', 'Pasangkan rumus fisika di kolom kiri dengan besaran yang sesuai di kolom kanan!', ''], bg: 'FFF3E8FF', isBold: true },
+        { row: ['', 'Premis -> Respons', 'A', '$E_k = \\frac{1}{2}mv^2$', 'Energi Kinetik'], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', 'Premis -> Respons', 'A', '$E_p = mgh$', 'Energi Potensial'], bg: 'FFFFFFFF', isBold: false },
+        { row: ['', 'Premis -> Respons', 'A', '$W = F \\times s$', 'Usaha / Kerja'], bg: 'FFFFFFFF', isBold: false },
       ]
 
       rowsData.forEach((item, idx) => {
@@ -156,7 +172,7 @@ export function ModulImportView({
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'Form_Excel_Soal_Baru_Semua_Tipe.xlsx'
+      a.download = 'Template_Import_Soal_CBT.xlsx'
       a.click()
       window.URL.revokeObjectURL(url)
 
@@ -182,7 +198,7 @@ export function ModulImportView({
         const worksheet = workbook.Sheets[sheetName]
 
         let headerRowIndex = 0
-        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:F50')
+        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:E50')
         for (let r = range.s.r; r <= Math.min(range.e.r, 20); r++) {
           let foundHeader = false
           for (let c = range.s.c; c <= range.e.c; c++) {
@@ -214,12 +230,18 @@ export function ModulImportView({
           (r) => r['Tipe'] !== undefined || r['TIPE'] !== undefined || r['tipe'] !== undefined || r['Type'] !== undefined
         )
 
+        let formulaCount = 0
+
         if (hasTipeColumn) {
           for (const row of rawRows) {
             const rawTipe = String(row['Tipe'] || row['TIPE'] || row['tipe'] || row['Type'] || '').trim().toUpperCase()
-            const rawContent = String(row['Isi Soal / Jawaban'] || row['Isi Soal'] || row['Pertanyaan / Soal'] || row['Soal'] || row['Konten'] || '').trim()
+            const originalContent = String(row['Isi Soal / Jawaban'] || row['Isi Soal'] || row['Pertanyaan / Soal'] || row['Soal'] || row['Konten'] || '').trim()
+            
+            if (hasEquationOrFormula(originalContent)) {
+              formulaCount++
+            }
+            const rawContent = convertEquationToKatex(originalContent)
             const rawStatus = row['Status Jawaban'] !== undefined ? row['Status Jawaban'] : row['Status']
-            const rawBobot = row['Kesulitan'] !== undefined && row['Kesulitan'] !== '' ? Number(row['Kesulitan']) : (row['Bobot'] ? Number(row['Bobot']) : null)
 
             if (rawTipe.startsWith('Q')) {
               if (currentSoal && currentSoal.pertanyaan) {
@@ -227,18 +249,32 @@ export function ModulImportView({
               }
 
               let dbTipe = 'PG'
-              if (rawTipe === 'Q' || rawTipe === 'Q1') dbTipe = 'PG'
-              else if (rawTipe === 'Q2') dbTipe = 'ESAI'
-              else if (rawTipe === 'Q3') dbTipe = 'ISIAN'
-              else if (rawTipe === 'Q4') dbTipe = 'PG_KOMPLEKS'
-              else if (rawTipe === 'Q5') dbTipe = 'BENAR_SALAH'
-              else if (rawTipe === 'Q6') dbTipe = 'MENJODOHKAN'
+              let defaultBobot = 1.0
+              if (rawTipe === 'Q' || rawTipe === 'Q1') {
+                dbTipe = 'PG'
+                defaultBobot = 1.0
+              } else if (rawTipe === 'Q2') {
+                dbTipe = 'ESAI'
+                defaultBobot = 3.0
+              } else if (rawTipe === 'Q3') {
+                dbTipe = 'ISIAN'
+                defaultBobot = 2.0
+              } else if (rawTipe === 'Q4') {
+                dbTipe = 'PG_KOMPLEKS'
+                defaultBobot = 2.0
+              } else if (rawTipe === 'Q5') {
+                dbTipe = 'BENAR_SALAH'
+                defaultBobot = 1.0
+              } else if (rawTipe === 'Q6') {
+                dbTipe = 'MENJODOHKAN'
+                defaultBobot = 2.0
+              }
 
               currentSoal = {
                 nomor: itemsList.length + 1,
                 tipeSoal: dbTipe,
                 pertanyaan: rawContent,
-                bobot: rawBobot && rawBobot > 0 ? rawBobot : (dbTipe === 'ESAI' ? 3.0 : dbTipe === 'ISIAN' ? 2.0 : 1.0),
+                bobot: defaultBobot,
                 opsi: [],
                 rawMatchingPairs: [],
                 matchingData: undefined,
@@ -246,19 +282,32 @@ export function ModulImportView({
               }
 
               if (rawStatus && String(rawStatus).trim()) {
-                currentSoal.kunciJawabanTeks = String(rawStatus).trim()
+                currentSoal.kunciJawabanTeks = convertEquationToKatex(String(rawStatus).trim())
               }
             } else if (rawTipe === 'A' && currentSoal) {
               if (currentSoal.tipeSoal === 'MENJODOHKAN') {
                 const left = rawContent
-                const right = String(rawStatus || '').trim()
+                const right = convertEquationToKatex(String(rawStatus || '').trim())
                 if (left && right) {
                   currentSoal.rawMatchingPairs.push({ left, right })
                 }
               } else if (currentSoal.tipeSoal === 'BENAR_SALAH') {
-                const isBenar = String(rawStatus).trim() === '1' || String(rawStatus).toLowerCase() === 'benar' || String(rawStatus).toLowerCase() === 'true'
-                const label = letters[currentSoal.opsi.length] || `Opsi ${currentSoal.opsi.length + 1}`
-                if (rawContent) {
+                const statusStr = String(rawStatus).trim()
+                const isBenar = statusStr === '1' || statusStr.toLowerCase() === 'benar' || statusStr.toLowerCase() === 'true'
+                const contentLower = rawContent.toLowerCase()
+
+                if (contentLower.includes('benar')) {
+                  currentSoal.opsi = [
+                    { label: 'A', konten: 'Benar', isBenar: isBenar },
+                    { label: 'B', konten: 'Salah', isBenar: !isBenar },
+                  ]
+                } else if (contentLower.includes('salah')) {
+                  currentSoal.opsi = [
+                    { label: 'A', konten: 'Benar', isBenar: !isBenar },
+                    { label: 'B', konten: 'Salah', isBenar: isBenar },
+                  ]
+                } else if (rawContent) {
+                  const label = letters[currentSoal.opsi.length] || `Opsi ${currentSoal.opsi.length + 1}`
                   currentSoal.opsi.push({
                     label,
                     konten: rawContent,
@@ -270,7 +319,7 @@ export function ModulImportView({
                   currentSoal.kunciJawabanTeks = rawContent
                 }
               } else {
-                const isBenar = String(rawStatus).trim() === '1' || String(rawStatus).toLowerCase() === 'true'
+                const isBenar = String(rawStatus).trim() === '1' || String(rawStatus).toLowerCase() === 'true' || String(rawStatus).toLowerCase() === 'benar'
                 const label = letters[currentSoal.opsi.length] || `Opsi ${currentSoal.opsi.length + 1}`
                 if (rawContent) {
                   currentSoal.opsi.push({
@@ -296,16 +345,21 @@ export function ModulImportView({
         } else {
           for (const row of rawRows) {
             const tipe = (row['Tipe Soal'] || 'PG').toUpperCase()
-            const pertanyaan = row['Pertanyaan / Soal'] || row['Pertanyaan'] || row['Soal'] || ''
-            const bobot = Number(row['Bobot'] || row['Kesulitan']) || 1.0
+            const rawPertanyaan = row['Pertanyaan / Soal'] || row['Pertanyaan'] || row['Soal'] || ''
+            if (hasEquationOrFormula(rawPertanyaan)) formulaCount++
+            const pertanyaan = convertEquationToKatex(rawPertanyaan)
             const kunci = String(row['Kunci Jawaban (A/B/C/D/E)'] || row['Kunci'] || '').trim().toUpperCase()
 
             const opsi = ['A', 'B', 'C', 'D', 'E']
-              .map((lbl) => ({
-                label: lbl,
-                konten: row[`Pilihan ${lbl}`] || row[`Opsi ${lbl}`] || row[lbl] || '',
-                isBenar: kunci === lbl,
-              }))
+              .map((lbl) => {
+                const rawOpt = row[`Pilihan ${lbl}`] || row[`Opsi ${lbl}`] || row[lbl] || ''
+                if (hasEquationOrFormula(rawOpt)) formulaCount++
+                return {
+                  label: lbl,
+                  konten: convertEquationToKatex(rawOpt),
+                  isBenar: kunci === lbl,
+                }
+              })
               .filter((o) => o.konten.trim() !== '')
 
             if (pertanyaan.trim()) {
@@ -313,9 +367,9 @@ export function ModulImportView({
                 nomor: itemsList.length + 1,
                 tipeSoal: tipe,
                 pertanyaan,
-                bobot,
+                bobot: tipe === 'ESAI' ? 3.0 : tipe === 'ISIAN' ? 2.0 : 1.0,
                 opsi,
-                kunciJawabanTeks: row['Kunci Isian / Rubrik'] || null,
+                kunciJawabanTeks: convertEquationToKatex(row['Kunci Isian / Rubrik'] || null),
               })
             }
           }
@@ -326,8 +380,13 @@ export function ModulImportView({
           return
         }
 
+        setEquationConvertedCount(formulaCount)
         setParsedItems(itemsList)
-        showNotification('Berhasil', `Berhasil membaca ${itemsList.length} butir soal dari file Excel!`, 'success')
+        showNotification(
+          'Berhasil Membaca File',
+          `Berhasil membaca ${itemsList.length} butir soal${formulaCount > 0 ? ` (${formulaCount} rumus terdeteksi dan otomatis dikonversi ke KaTeX)` : ''}!`,
+          'success'
+        )
       } catch (err: any) {
         showNotification('Error', 'Gagal memproses file Excel: ' + err.message, 'error')
       }
@@ -363,6 +422,7 @@ export function ModulImportView({
         showNotification('Berhasil', json.message || `Berhasil mengimport ${parsedItems.length} butir soal!`, 'success')
         setParsedItems([])
         setFileName('')
+        setEquationConvertedCount(0)
         onRefresh()
       } else {
         showNotification('Gagal', json.message || 'Gagal mengimport soal', 'error')
@@ -382,7 +442,7 @@ export function ModulImportView({
           <h1 className="text-xl sm:text-2xl font-normal text-slate-900 dark:text-white flex items-center gap-2">
             Mengimport Soal
             <span className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-normal">
-              Melakukan Import Soal berdasarkan modul dan topik
+              Melakukan Import Soal berdasarkan modul dan topik (Auto KaTeX &amp; Equation Converter)
             </span>
           </h1>
         </div>
@@ -425,6 +485,16 @@ export function ModulImportView({
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
               Pilih terlebih dahulu Topik yang akan digunakan sebelum melakukan import soal
             </p>
+
+            <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 rounded text-xs space-y-1.5 text-indigo-950 dark:text-indigo-200">
+              <div className="flex items-center gap-1.5 font-bold text-indigo-700 dark:text-indigo-300">
+                <Sparkles className="w-4 h-4" />
+                <span>Auto Konversi Rumus KaTeX:</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-indigo-900/80 dark:text-indigo-200/80">
+                File Excel yang memuat formula Word Equation, MathML, pecahan (½, ¾), akar (√x), pangkat (x²), indeks (x₁), simbol Yunani (α, β, θ, π), atau LaTeX otomatis dikonversi ke KaTeX ($...$).
+              </p>
+            </div>
           </div>
         </div>
 
@@ -438,7 +508,7 @@ export function ModulImportView({
               className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-medium"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Form Excel Soal Baru (Semua Tipe)</span>
+              <span>Unduh Template Excel Baru</span>
             </button>
           </div>
 
@@ -446,22 +516,42 @@ export function ModulImportView({
             {/* File Chooser */}
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                Pilih File
+                Pilih File Excel (.xlsx / .xls)
               </label>
               <div className="flex flex-wrap items-center gap-3">
                 <input
                   type="file"
                   accept=".xlsx,.xls"
                   onChange={handleFileUpload}
-                  className="text-xs text-slate-700 dark:text-slate-300 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 cursor-pointer"
+                  className="text-xs text-slate-700 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
                 />
               </div>
             </div>
 
+            {/* Parsed Preview Status */}
+            {parsedItems.length > 0 && (
+              <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-md space-y-1.5 text-xs">
+                <div className="flex items-center justify-between text-emerald-800 dark:text-emerald-300">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>
+                      Siap mengimport <strong>{parsedItems.length}</strong> butir soal ({fileName})
+                    </span>
+                  </div>
+                  {equationConvertedCount > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200 text-[10px] font-bold flex items-center gap-1">
+                      <Sigma className="w-3 h-3" />
+                      <span>{equationConvertedCount} Rumus Terkonversi</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Explanatory Texts */}
             <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed border-t border-slate-200 dark:border-white/10 pt-3">
               <p>
-                Soal yang dapat diimport: Tipe Pilihan Ganda (Q), Esai (Q2), Jawaban Singkat (Q3), PG Kompleks (Q4), Benar/Salah (Q5), dan Menjodohkan (Q6). Tidak dapat melakukan import soal yang terdapat gambar atau audio.
+                Soal yang dapat diimport: Tipe Pilihan Ganda (Q), Esai (Q2), Jawaban Singkat (Q3), PG Kompleks (Q4), Benar/Salah (Q5), dan Menjodohkan (Q6).
               </p>
 
               <div className="space-y-1 pt-1">
@@ -471,34 +561,17 @@ export function ModulImportView({
                     <span className="font-semibold text-slate-700 dark:text-slate-300">Pilihan Ganda (Q) &amp; PG Kompleks (Q4):</span> Isi 1 untuk jawaban benar, 0 untuk salah.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">Esai (Q2) &amp; Jawaban Singkat (Q3):</span> Kolom Answer dikosongkan (tidak perlu pilihan jawaban).
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Esai (Q2) &amp; Jawaban Singkat (Q3):</span> Kolom Answer diisi kunci/rubrik teks atau dikosongkan.
                   </li>
                   <li>
                     <span className="font-semibold text-slate-700 dark:text-slate-300">Benar/Salah (Q5):</span> Isi 1 jika pernyataan (Answer) adalah Benar, 0 jika Salah.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">Menjodohkan (Q6):</span> Kolom Answer diisi Premis, dan kolom Status Jawaban diisi dengan Pasangannya (Respons).
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Menjodohkan (Q6):</span> Kolom Answer diisi Premis (Kiri), dan kolom Status Jawaban diisi dengan Pasangannya (Kanan).
                   </li>
                 </ul>
               </div>
-
-              <div className="pt-2 text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5">
-                <p>File Excel yang didukung adalah Microsoft Excel 2003 dan Microsoft Excel 2007</p>
-                <p>SAVE AS ke Office 2007 jika gagal mengupload data dalam format Office 2003</p>
-              </div>
             </div>
-
-            {/* Parsed Preview if available */}
-            {parsedItems.length > 0 && (
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>
-                    Siap mengimport <strong>{parsedItems.length}</strong> butir soal ({fileName})
-                  </span>
-                </div>
-              </div>
-            )}
 
             {/* Bottom Button */}
             <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-white/10">
@@ -509,12 +582,125 @@ export function ModulImportView({
                 className="px-6 py-2 rounded bg-[#337ab7] hover:bg-[#286090] text-white font-semibold text-xs shadow-xs transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
                 <Upload className="w-3.5 h-3.5" />
-                <span>{importing ? 'Mengimport...' : 'Import'}</span>
+                <span>{importing ? 'Mengimport...' : 'Import Soal'}</span>
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* 3. Live Preview of Parsed Questions */}
+      {parsedItems.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-white/10 rounded-md shadow-xs overflow-hidden">
+          <div className="px-4 py-2.5 bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <h3 className="text-sm font-bold text-slate-800 dark:text-white">
+                Pratinjau Hasil Pembacaan Soal &amp; Render KaTeX ({parsedItems.length} Soal)
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPreviewList(!showPreviewList)}
+              className="text-xs text-blue-600 hover:underline cursor-pointer"
+            >
+              {showPreviewList ? 'Sembunyikan Pratinjau' : 'Tampilkan Pratinjau'}
+            </button>
+          </div>
+
+          {showPreviewList && (
+            <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
+              {parsedItems.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-slate-950/40 space-y-2 text-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-white">
+                      <span className="w-5 h-5 rounded bg-[#337ab7] text-white flex items-center justify-center text-[10px]">
+                        {idx + 1}
+                      </span>
+                      <span>Tipe: {item.tipeSoal}</span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 font-medium">Bobot: {item.bobot}</span>
+                  </div>
+
+                  {/* Pertanyaan render */}
+                  <div className="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-white/5">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Pertanyaan:</div>
+                    <div className="prose prose-xs dark:prose-invert max-w-none font-medium">
+                      <MathRenderer content={item.pertanyaan} />
+                    </div>
+                  </div>
+
+                  {/* Pilihan Jawaban */}
+                  {item.opsi && item.opsi.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                      {item.opsi.map((op: any, oIdx: number) => (
+                        <div
+                          key={oIdx}
+                          className={`p-1.5 px-2.5 rounded border text-[11px] flex items-center gap-2 ${
+                            op.isBenar
+                              ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 text-emerald-900 dark:text-emerald-200 font-semibold'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <span className="font-bold text-slate-500">{op.label}.</span>
+                          <div className="flex-1">
+                            <MathRenderer content={op.konten} />
+                          </div>
+                          {op.isBenar && <span className="text-[9px] text-emerald-600 font-extrabold">✓ KUNCI</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Menjodohkan Pairs */}
+                  {item.tipeSoal === 'MENJODOHKAN' && item.matchingData && (
+                    <div className="space-y-1 pt-1">
+                      <div className="text-[10px] font-bold text-slate-500">Pasangan Pencocokan:</div>
+                      {(() => {
+                        try {
+                          const pairs = JSON.parse(item.matchingData)
+                          return (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              {pairs.map((p: any, pIdx: number) => (
+                                <div
+                                  key={pIdx}
+                                  className="p-1.5 px-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 flex items-center justify-between text-[11px]"
+                                >
+                                  <div className="flex-1 font-medium">
+                                    <MathRenderer content={p.left} />
+                                  </div>
+                                  <span className="text-slate-400 px-1.5">➔</span>
+                                  <div className="flex-1 text-blue-600 dark:text-blue-400 font-semibold">
+                                    <MathRenderer content={p.right} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        } catch (e) {
+                          return null
+                        }
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Kunci Isian / Esai */}
+                  {item.kunciJawabanTeks && (
+                    <div className="text-[11px] text-slate-600 dark:text-slate-300 pt-1">
+                      <span className="font-bold">Kunci/Rubrik: </span>
+                      <MathRenderer content={item.kunciJawabanTeks} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
+

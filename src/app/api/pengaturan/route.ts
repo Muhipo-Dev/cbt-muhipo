@@ -135,7 +135,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 

@@ -62,14 +62,14 @@ export function AppSidebar({
       {/* Backdrop for Mobile */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40 lg:hidden transition-opacity"
+          className="print:hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40 lg:hidden transition-opacity"
           onClick={onClose}
         />
       )}
 
       {/* Sidebar Frame CBT Mandiri Theme */}
       <aside
-        className={`w-72 bg-slate-900/95 dark:bg-slate-950/95 border-r border-slate-800 dark:border-white/10 text-slate-200 backdrop-blur-2xl flex flex-col fixed inset-y-0 z-50 transition-transform duration-300 ease-in-out lg:translate-x-0 shadow-2xl ${
+        className={`print:hidden w-72 bg-slate-900/95 dark:bg-slate-950/95 border-r border-slate-800 dark:border-white/10 text-slate-200 backdrop-blur-2xl flex flex-col fixed inset-y-0 z-50 transition-transform duration-300 ease-in-out lg:translate-x-0 shadow-2xl ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

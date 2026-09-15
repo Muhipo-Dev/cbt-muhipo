@@ -224,24 +224,33 @@ export default function SiswaPortalPage() {
           </div>
         )}
 
-        {/* Petunjuk Ringkas Pengerjaan (Compact 4-Pill Banner) */}
-        <div className="bg-white/80 dark:bg-slate-900/75 border border-slate-200/80 dark:border-white/10 rounded-2xl p-3.5 sm:p-4 backdrop-blur-xl">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 text-xs">
+        {/* Informasi Pengawasan & Izin Aplikasi Chrome */}
+        <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 dark:border-amber-500/30 rounded-2xl p-3.5 sm:p-4 backdrop-blur-xl">
+          <div className="flex items-center gap-2.5 mb-2.5">
+            <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-xs font-bold text-amber-900 dark:text-amber-200 tracking-wide">
+              Pemberitahuan Pengawasan Ujian
+            </span>
+            <span className="text-[11px] text-amber-800/80 dark:text-amber-300/70 hidden md:inline">
+              — Mohon perhatikan dan ikuti instruksi pengawasan berikut:
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-xs">
             <div className="flex items-center gap-2 p-2 rounded-xl bg-blue-50/60 dark:bg-slate-950/50 border border-blue-100/80 dark:border-white/5">
               <span className="w-5 h-5 rounded-lg bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">1</span>
-              <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Jaringan & Baterai Stabil</span>
+              <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Wajib gunakan Chrome</span>
             </div>
             <div className="flex items-center gap-2 p-2 rounded-xl bg-amber-50/60 dark:bg-slate-950/50 border border-amber-100/80 dark:border-white/5">
               <span className="w-5 h-5 rounded-lg bg-amber-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">2</span>
-              <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Tetap di Layar Penuh</span>
+              <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Izinkan semua pesan chrome setelah klik kerjakan</span>
             </div>
             <div className="flex items-center gap-2 p-2 rounded-xl bg-emerald-50/60 dark:bg-slate-950/50 border border-emerald-100/80 dark:border-white/5">
               <span className="w-5 h-5 rounded-lg bg-emerald-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">3</span>
-              <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Jawaban Otomatis Tersimpan</span>
+              <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Kerjakan langsung di layar penuh</span>
             </div>
             <div className="flex items-center gap-2 p-2 rounded-xl bg-purple-50/60 dark:bg-slate-950/50 border border-purple-100/80 dark:border-white/5">
               <span className="w-5 h-5 rounded-lg bg-purple-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">4</span>
-              <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Cek Nomor Lalu Selesai</span>
+              <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Pelanggaran dicatat langsung oleh sistem</span>
             </div>
           </div>
         </div>
@@ -381,10 +390,6 @@ export default function SiswaPortalPage() {
                           <div className="flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                             <span>{ujian.durasiMenit} Menit</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 col-span-2 text-[11px] text-slate-500 dark:text-slate-400">
-                            <UserCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                            <span>Guru Pengampu: <b className="text-slate-800 dark:text-slate-200">{ujian.guruPengampu || 'Guru Mata Pelajaran'}</b></span>
                           </div>
                           {ujian.waktuMulai && (
                             <div className="flex items-center gap-1.5 col-span-2 text-[11px] text-slate-500 dark:text-slate-400">
@@ -539,10 +544,6 @@ export default function SiswaPortalPage() {
                           <div className="flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                             <span>{ujian.durasiMenit} Menit</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 col-span-2 text-[11px] text-slate-500 dark:text-slate-400">
-                            <UserCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                            <span>Guru Pengampu: <b className="text-slate-800 dark:text-slate-200">{ujian.guruPengampu || 'Guru Mata Pelajaran'}</b></span>
                           </div>
                         </div>
                       </div>

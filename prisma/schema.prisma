@@ -11,6 +11,7 @@ model User {
   id            String    @id @default(cuid())
   username      String    @unique
   password      String
+  plainPassword String?
   name          String
   role          String    @default("SISWA") // SUPERADMIN, ADMIN, GURU, PROKTOR, SISWA
   nip           String?   @unique
@@ -19,6 +20,7 @@ model User {
   nomorPeserta  String?   @unique // Dipertahankan sebagai alias opsional
   ruangUjian    String?
   sesiUjian     Int?      @default(1)
+  group         String?   // Group / Rombel peserta
   
   // Relasi Siswa ke Kelas
   kelasId       String?
@@ -73,6 +75,16 @@ model UjianKelas {
   @@unique([ujianId, kelasId])
 }
 
+// Modul (Kontainer Induk Kategori Topik CBT)
+model Modul {
+  id            String              @id @default(cuid())
+  nama          String              @unique // Contoh: Default, Ujian Sekolah, Asesmen Mandiri, Tryout TKA
+  deskripsi     String?
+  topikList     MataPelajaran[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+}
+
 // Topik Pembelajaran / Mata Pelajaran (Kontainer Utama Butir Soal)
 model MataPelajaran {
   id            String              @id @default(cuid())
@@ -81,6 +93,12 @@ model MataPelajaran {
   tingkat       Int?                @default(10) // 10, 11, 12
   jurusan       String?             @default("UMUM")
   durasiMenit   Int                 @default(90) // Durasi standar pengerjaan (menit)
+  status        String              @default("AKTIF") // AKTIF, NONAKTIF (Arsip)
+  
+  // Relasi Modul
+  modulId       String?
+  modul         Modul?              @relation(fields: [modulId], references: [id], onDelete: SetNull)
+  namaModul     String?             @default("Default")
   
   // Nilai Standar Topik / Mapel
   kkm           Float               @default(75.0) // Kriteria Ketuntasan Minimal

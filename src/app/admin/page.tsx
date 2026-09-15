@@ -46,6 +46,7 @@ import { ProktorLiveView } from './components/ProktorLiveView'
 import { CetakDokumenView } from './components/CetakDokumenView'
 import { PengaturanView } from './components/PengaturanView'
 import { PenggunaAksesView } from './components/PenggunaAksesView'
+import { BackupDataView } from './components/BackupDataView'
 
 export default function ComprehensiveAdminDashboard() {
   const router = useRouter()
@@ -57,11 +58,13 @@ export default function ComprehensiveAdminDashboard() {
   // Master Data State
   const [dashboardData, setDashboardData] = useState<any>(null)
   const [proktorData, setProktorData] = useState<any>(null)
+  const [modulList, setModulList] = useState<any[]>([])
   const [bankSoalList, setBankSoalList] = useState<any[]>([])
   const [mapelList, setMapelList] = useState<any[]>([])
   const [kelasList, setKelasList] = useState<any[]>([])
   const [siswaList, setSiswaList] = useState<any[]>([])
   const [ujianList, setUjianList] = useState<any[]>([])
+  const [selectedMapelId, setSelectedMapelId] = useState<string>('')
 
   // Modal Extra Time State
   const [extraTimeModal, setExtraTimeModal] = useState<any>(null)
@@ -162,6 +165,7 @@ export default function ComprehensiveAdminDashboard() {
       const adminJson = await adminRes.json()
       if (adminJson.success && adminJson.data) {
         setDashboardData(adminJson.data.dashboard)
+        setModulList(adminJson.data.modulList || adminJson.data.modul || [])
         setBankSoalList(adminJson.data.bankSoal || [])
         setMapelList(adminJson.data.mapel || [])
         setKelasList(adminJson.data.kelas || [])
@@ -273,8 +277,14 @@ export default function ComprehensiveAdminDashboard() {
     )
   }
 
-  // Tambah Waktu Ujian Handler
-  const handleAddExtraTime = async () => {
+  // Buka Modal Tambah Waktu Ujian
+  const handleOpenAddExtraTime = (pesertaUjianId: string, namaSiswa: string) => {
+    setExtraTimeModal({ pesertaUjianId, namaSiswa })
+    setExtraMinutes(15)
+  }
+
+  // Eksekusi Tambah Waktu Ujian dari Modal
+  const handleExecuteAddExtraTime = async () => {
     if (!extraTimeModal) return
     try {
       const res = await fetch('/api/proktor', {
@@ -299,19 +309,98 @@ export default function ComprehensiveAdminDashboard() {
     }
   }
 
-  // Navigation Items (Disesuaikan dengan Role: Administrator Full Akses, Proktor Input Soal & Pengawasan)
+  // Reset Pelanggaran Siswa Individual
+  const handleResetPelanggaran = async (pesertaUjianId: string, namaSiswa: string) => {
+    showConfirm(
+      'Reset Pelanggaran Siswa',
+      `Yakin ingin mereset seluruh catatan pelanggaran untuk ${namaSiswa}? Log pelanggaran akan dibersihkan, total pelanggaran kembali ke 0, dan ujian yang terkunci akan otomatis dibuka kembali.`,
+      async () => {
+        try {
+          const res = await fetch('/api/proktor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'RESET_PELANGGARAN',
+              pesertaUjianId,
+            }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', json.message || 'Pelanggaran siswa berhasil direset ke 0!', 'success')
+            fetchAllData()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal mereset pelanggaran', 'error')
+          }
+        } catch (e) {
+          showNotification('Error', 'Terjadi kesalahan saat mereset pelanggaran', 'error')
+        }
+      },
+      'warning',
+      'Ya, Reset Pelanggaran'
+    )
+  }
+
+  // Reset Pelanggaran Semua Siswa pada Sesi Ujian Aktif
+  const handleResetAllPelanggaran = async (ujianId: string) => {
+    if (!ujianId) {
+      showNotification('Peringatan', 'Silakan pilih jadwal ujian terlebih dahulu.', 'warning')
+      return
+    }
+    showConfirm(
+      'Reset Semua Pelanggaran',
+      'Yakin ingin mereset catatan pelanggaran untuk SEMUA peserta di sesi ujian ini? Semua peserta yang terkunci karena pelanggaran akan dibuka kembali.',
+      async () => {
+        try {
+          const res = await fetch('/api/proktor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'RESET_ALL_PELANGGARAN',
+              ujianId,
+            }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', json.message || 'Seluruh pelanggaran berhasil direset!', 'success')
+            fetchAllData()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal mereset semua pelanggaran', 'error')
+          }
+        } catch (e) {
+          showNotification('Error', 'Terjadi kesalahan saat mereset semua pelanggaran', 'error')
+        }
+      },
+      'warning',
+      'Ya, Reset Semua'
+    )
+  }
+
+  // Navigation Items (Disesuaikan dengan Role: Administrator Full Akses, Proktor Input Soal, Kelola Tes & Pengawasan)
   const sidebarNavItems: NavTabItem[] = useMemo(() => {
     if (currentUser?.role === 'PROKTOR') {
       return [
         {
           id: 'data_modul',
-          name: 'Input & Kelola Soal',
+          name: 'Data Modul (Soal)',
           icon: BookOpen,
           subItems: [
-            { id: 'modul_daftar', name: 'Topik / Mata Pelajaran' },
-            { id: 'modul_soal', name: 'Kelola Butir Soal' },
+            { id: 'modul_topik', name: 'Topik' },
+            { id: 'modul_daftar', name: 'Daftar Soal' },
+            { id: 'modul_soal', name: 'Input Soal' },
             { id: 'modul_import', name: 'Import Soal Excel' },
             { id: 'modul_filemanager', name: 'File Manager' },
+          ],
+        },
+        {
+          id: 'data_tes',
+          name: 'Data Tes (Ujian)',
+          icon: Database,
+          subItems: [
+            { id: 'tes_tambah', name: 'Tambah Tes' },
+            { id: 'tes_daftar', name: 'Daftar Tes' },
+            { id: 'tes_evaluasi', name: 'Evaluasi Tes' },
+            { id: 'tes_hasil', name: 'Hasil Tes' },
+            { id: 'tes_rekap', name: 'Rekap Hasil Tes' },
           ],
         },
         {
@@ -330,11 +419,12 @@ export default function ComprehensiveAdminDashboard() {
       },
       {
         id: 'data_modul',
-        name: 'Data Modul (Soal)',
+        name: 'Data Modul',
         icon: BookOpen,
         subItems: [
-          { id: 'modul_daftar', name: 'Topik / Mata Pelajaran' },
-          { id: 'modul_soal', name: 'Kelola Butir Soal' },
+          { id: 'modul_topik', name: 'Topik' },
+          { id: 'modul_daftar', name: 'Daftar Soal' },
+          { id: 'modul_soal', name: 'Input Soal' },
           { id: 'modul_import', name: 'Import Soal Excel' },
           { id: 'modul_filemanager', name: 'File Manager' },
         ],
@@ -381,6 +471,11 @@ export default function ComprehensiveAdminDashboard() {
         name: 'Pengaturan',
         icon: Settings,
       },
+      {
+        id: 'backup_data',
+        name: 'Backup & Pemeliharaan',
+        icon: Database,
+      },
     ]
   }, [currentUser])
 
@@ -399,9 +494,9 @@ export default function ComprehensiveAdminDashboard() {
   const activeBg = settingsForm.backgroundUrl || '/muhipo-front.jpg'
 
   return (
-    <div className="min-h-screen relative flex flex-col justify-between selection:bg-blue-600 selection:text-white transition-colors duration-300 overflow-x-hidden">
+    <div className="min-h-screen relative flex flex-col justify-between selection:bg-blue-600 selection:text-white transition-colors duration-300 overflow-x-hidden print:overflow-visible print:bg-white print:text-black">
       {/* Background Wallpaper */}
-      <div className="fixed inset-0 -z-30 w-full h-full overflow-hidden pointer-events-none">
+      <div className="print:hidden fixed inset-0 -z-30 w-full h-full overflow-hidden pointer-events-none">
         {activeBg.startsWith('http') || activeBg.startsWith('data:') ? (
           <img
             src={activeBg}
@@ -422,7 +517,7 @@ export default function ComprehensiveAdminDashboard() {
       </div>
 
       {/* Glassmorphism Backdrop Overlay */}
-      <div className="fixed inset-0 bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-[2px] -z-20 pointer-events-none transition-colors duration-300" />
+      <div className="print:hidden fixed inset-0 bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-[2px] -z-20 pointer-events-none transition-colors duration-300" />
 
       {/* Sidebar Navigation */}
       <AppSidebar
@@ -437,7 +532,7 @@ export default function ComprehensiveAdminDashboard() {
       />
 
       {/* Main Layout Area */}
-      <div className="flex-1 lg:ml-72 flex flex-col justify-between min-w-0 transition-all duration-300 relative z-10">
+      <div className="flex-1 lg:ml-72 print:ml-0 print:m-0 print:p-0 flex flex-col justify-between min-w-0 transition-all duration-300 relative z-10">
         {/* Navbar */}
         <AppNavbar
           appTitle={settingsForm.appTitle || 'CBT MUHIPO'}
@@ -459,9 +554,9 @@ export default function ComprehensiveAdminDashboard() {
         />
 
         {/* Page Content */}
-        <main className="p-3.5 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto flex-1">
+        <main className="p-3.5 sm:p-6 lg:p-8 print:p-0 print:m-0 print:max-w-none space-y-6 max-w-7xl w-full mx-auto flex-1">
           {/* Header Title Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 dark:bg-slate-900/75 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl shadow-sm dark:shadow-xl">
+          <div className="print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 dark:bg-slate-900/75 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl shadow-sm dark:shadow-xl">
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block mb-1">
                 CBT SMA Muhipo
@@ -492,7 +587,16 @@ export default function ComprehensiveAdminDashboard() {
           {activeTab === 'modul_topik' && (
             <ModulTopikView
               mapelList={mapelList}
+              modulList={modulList}
               onRefresh={fetchAllData}
+              onNavigateToDaftarSoal={(id) => {
+                if (id) setSelectedMapelId(id)
+                setActiveTab('modul_daftar')
+              }}
+              onNavigateToEditor={(id) => {
+                if (id) setSelectedMapelId(id)
+                setActiveTab('modul_soal')
+              }}
               showNotification={showNotification}
               showConfirm={showConfirm}
             />
@@ -502,6 +606,14 @@ export default function ComprehensiveAdminDashboard() {
             <ModulSoalView
               mapelList={mapelList}
               bankSoalList={bankSoalList}
+              modulList={modulList}
+              selectedMapelId={selectedMapelId}
+              onSelectMapel={(id) => setSelectedMapelId(id)}
+              onNavigateToTopik={() => setActiveTab('modul_topik')}
+              onNavigateToDaftarSoal={(id) => {
+                if (id) setSelectedMapelId(id)
+                setActiveTab('modul_daftar')
+              }}
               showNotification={showNotification}
               showConfirm={showConfirm}
             />
@@ -520,8 +632,14 @@ export default function ComprehensiveAdminDashboard() {
             <ModulDaftarView
               mapelList={mapelList}
               bankSoalList={mapelList}
-              onSelectMapel={() => setActiveTab('modul_soal')}
-              onNavigateToEditor={() => setActiveTab('modul_soal')}
+              modulList={modulList}
+              selectedMapelId={selectedMapelId}
+              onSelectMapel={(id) => setSelectedMapelId(id)}
+              onNavigateToTopik={() => setActiveTab('modul_topik')}
+              onNavigateToEditor={(id) => {
+                if (id) setSelectedMapelId(id)
+                setActiveTab('modul_soal')
+              }}
               onNavigateToImport={() => setActiveTab('modul_import')}
               onRefresh={fetchAllData}
               showNotification={showNotification}
@@ -566,6 +684,7 @@ export default function ComprehensiveAdminDashboard() {
           {/* TAB 4: DATA TES */}
           {activeTab === 'tes_tambah' && (
             <TesTambahView
+              mapelList={mapelList}
               bankSoalList={bankSoalList}
               kelasList={kelasList}
               onSuccess={() => {
@@ -579,6 +698,7 @@ export default function ComprehensiveAdminDashboard() {
           {activeTab === 'tes_daftar' && (
             <TesDaftarView
               jadwalList={ujianList}
+              mapelList={mapelList}
               bankSoalList={bankSoalList}
               kelasList={kelasList}
               onNavigateToTambah={() => setActiveTab('tes_tambah')}
@@ -615,7 +735,9 @@ export default function ComprehensiveAdminDashboard() {
             <ProktorLiveView
               proktorData={proktorData}
               onResetLogin={handleResetLogin}
-              onAddExtraTime={handleAddExtraTime}
+              onAddExtraTime={handleOpenAddExtraTime}
+              onResetPelanggaran={handleResetPelanggaran}
+              onResetAllPelanggaran={handleResetAllPelanggaran}
               onRefresh={fetchAllData}
               showNotification={showNotification}
             />
@@ -626,6 +748,7 @@ export default function ComprehensiveAdminDashboard() {
               kelasList={kelasList}
               jadwalList={ujianList}
               siswaList={siswaList}
+              modulList={modulList}
               settings={settingsForm}
               showNotification={showNotification}
             />
@@ -637,6 +760,7 @@ export default function ComprehensiveAdminDashboard() {
               setSettingsForm={setSettingsForm}
               onSaveSettings={handleSaveSettings}
               savingSettings={savingSettings}
+              onNavigateToBackup={() => setActiveTab('backup_data')}
               onRefresh={fetchAllData}
               showNotification={showNotification}
             />
@@ -646,6 +770,15 @@ export default function ComprehensiveAdminDashboard() {
             <PenggunaAksesView
               currentUser={currentUser}
               kelasList={kelasList}
+              showNotification={showNotification}
+              showConfirm={showConfirm}
+            />
+          )}
+
+          {activeTab === 'backup_data' && (
+            <BackupDataView
+              stats={dashboardData?.stats}
+              onRefresh={fetchAllData}
               showNotification={showNotification}
               showConfirm={showConfirm}
             />
@@ -693,7 +826,7 @@ export default function ComprehensiveAdminDashboard() {
               </button>
               <button
                 type="button"
-                onClick={handleAddExtraTime}
+                onClick={handleExecuteAddExtraTime}
                 className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition cursor-pointer"
               >
                 Tambahkan

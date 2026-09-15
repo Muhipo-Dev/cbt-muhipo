@@ -267,7 +267,7 @@ export function PenggunaAksesView({
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Kelola hak akses pengguna: <strong className="text-slate-700 dark:text-slate-200">Super Admin</strong>, <strong className="text-blue-600 dark:text-blue-400">Administrator (Full Akses)</strong>, dan <strong className="text-rose-600 dark:text-rose-400">Proktor (Input Soal & Pengawasan)</strong>.
+                Kelola hak akses pengguna: <strong className="text-slate-700 dark:text-slate-200">Super Admin</strong>, <strong className="text-blue-600 dark:text-blue-400">Administrator (Full Akses)</strong>, dan <strong className="text-rose-600 dark:text-rose-400">Proktor (Input Soal, Data Tes & Pengawasan)</strong>.
               </p>
             </div>
           </div>
@@ -315,7 +315,7 @@ export function PenggunaAksesView({
                 : 'bg-slate-50 dark:bg-white/5 border-slate-200/60 dark:border-white/5 hover:bg-rose-500/10'
             }`}
           >
-            <span className="text-rose-600 dark:text-rose-400 font-bold block">Proktor (Input Soal & Pengawasan)</span>
+            <span className="text-rose-600 dark:text-rose-400 font-bold block">Proktor (Soal, Tes & Pengawasan)</span>
             <span className="text-xl font-black text-slate-900 dark:text-white">{roleCounts.PROKTOR} Akun</span>
           </div>
         </div>
@@ -342,7 +342,7 @@ export function PenggunaAksesView({
               <option value="ALL">Semua Pengguna ({roleCounts.TOTAL})</option>
               <option value="SUPERADMIN">Super Admin ({roleCounts.SUPERADMIN})</option>
               <option value="ADMIN">Administrator Full Akses ({roleCounts.ADMIN})</option>
-              <option value="PROKTOR">Proktor Input Soal & Pengawasan ({roleCounts.PROKTOR})</option>
+              <option value="PROKTOR">Proktor (Soal, Tes & Pengawasan) ({roleCounts.PROKTOR})</option>
             </select>
           </div>
         </div>
@@ -409,9 +409,13 @@ export function PenggunaAksesView({
                           <span className="text-blue-600 dark:text-blue-400 font-semibold">
                             Full Akses: Modul, Soal, Peserta, Tes, Pengawasan & Pengaturan
                           </span>
-                        ) : u.role === 'PROKTOR' || u.role === 'GURU' ? (
+                        ) : u.role === 'PROKTOR' ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                            Modul Soal, Data Tes (Tambah/Kelola Tes) & Pengawasan Live
+                          </span>
+                        ) : u.role === 'GURU' ? (
                           <span className="text-rose-600 dark:text-rose-400 font-semibold">
-                            Khusus: Input Butir Soal (Modul) & Pengawasan Live
+                            Khusus: Input Butir Soal (Modul) & Status Ujian Guru
                           </span>
                         ) : (
                           <span>Akses Terbatas</span>
@@ -489,10 +493,10 @@ export function PenggunaAksesView({
                 >
                   <option value="SUPERADMIN">👑 SUPER ADMIN (Wewenang Penuh Server & Manajemen User)</option>
                   <option value="ADMIN">🛡️ ADMINISTRATOR (Full Akses Semua Menu CBT)</option>
-                  <option value="PROKTOR">📡 PROKTOR (Khusus Input Soal & Pengawasan Live)</option>
+                  <option value="PROKTOR">📡 PROKTOR (Modul Soal, Data Tes & Pengawasan Live)</option>
                 </select>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                  * Administrator memiliki full akses seluruh menu ujian, sedangkan Proktor fokus pada input soal dan pengawasan live siswa.
+                  * Administrator memiliki full akses seluruh menu ujian, sedangkan Proktor mengelola Modul Soal, Data Tes (Tambah & Kelola Ujian), dan Pengawasan Live peserta.
                 </p>
               </div>
 

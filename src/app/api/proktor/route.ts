@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 export async function GET(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !['ADMIN', 'PROKTOR', 'GURU'].includes(user.role)) {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'PROKTOR', 'GURU'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
         const violationLogs = p.logs.filter((l) =>
           [
             'TAB_SWITCH_ALERT',
+            'APP_SWITCH_ALERT',
             'WINDOW_BLUR',
             'FULLSCREEN_EXIT',
             'SCREEN_SHARE_STOPPED',
@@ -132,7 +133,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !['ADMIN', 'PROKTOR', 'GURU'].includes(user.role)) {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'PROKTOR', 'GURU'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
@@ -157,7 +158,98 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Ujian peserta berhasil diselesaikan paksa.' });
     }
 
-    if (action === 'ADD_TIME') {
+    if (action === 'RESET_PELANGGARAN') {
+      const { pesertaUjianId } = body;
+      if (!pesertaUjianId) {
+        return NextResponse.json({ success: false, message: 'pesertaUjianId diperlukan' }, { status: 400 });
+      }
+
+      // 1. Hapus log pelanggaran peserta
+      await prisma.logAktivitasUjian.deleteMany({
+        where: {
+          pesertaUjianId,
+          aktivitas: {
+            in: [
+              'TAB_SWITCH_ALERT',
+              'APP_SWITCH_ALERT',
+              'WINDOW_BLUR',
+              'FULLSCREEN_EXIT',
+              'SCREEN_SHARE_STOPPED',
+              'KEYBOARD_SHORTCUT_VIOLATION',
+              'SECURITY_ALERT',
+            ],
+          },
+        },
+      });
+
+      // 2. Jika status peserta TERKUNCI, buka kembali menjadi SEDANG_MENGERJAKAN
+      const peserta = await prisma.pesertaUjian.findUnique({ where: { id: pesertaUjianId } });
+      if (peserta && peserta.status === 'TERKUNCI') {
+        await prisma.pesertaUjian.update({
+          where: { id: pesertaUjianId },
+          data: { status: 'SEDANG_MENGERJAKAN' },
+        });
+      }
+
+      // 3. Catat log audit pengawas
+      await prisma.logAktivitasUjian.create({
+        data: {
+          userId: user.userId,
+          pesertaUjianId,
+          aktivitas: 'RESET_PELANGGARAN',
+          detail: `Proktor/Pengawas (${user.name}) mereset total pelanggaran menjadi 0 dan membuka kunci ujian siswa.`,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Pelanggaran berhasil direset ke 0 dan status ujian aktif kembali.',
+      });
+    }
+
+    if (action === 'RESET_ALL_PELANGGARAN') {
+      const { ujianId } = body;
+      if (!ujianId) {
+        return NextResponse.json({ success: false, message: 'ujianId diperlukan' }, { status: 400 });
+      }
+
+      const pesertaList = await prisma.pesertaUjian.findMany({
+        where: { ujianId },
+        select: { id: true },
+      });
+      const pesertaIds = pesertaList.map((p) => p.id);
+
+      if (pesertaIds.length > 0) {
+        await prisma.logAktivitasUjian.deleteMany({
+          where: {
+            pesertaUjianId: { in: pesertaIds },
+            aktivitas: {
+              in: [
+                'TAB_SWITCH_ALERT',
+                'APP_SWITCH_ALERT',
+                'WINDOW_BLUR',
+                'FULLSCREEN_EXIT',
+                'SCREEN_SHARE_STOPPED',
+                'KEYBOARD_SHORTCUT_VIOLATION',
+                'SECURITY_ALERT',
+              ],
+            },
+          },
+        });
+
+        await prisma.pesertaUjian.updateMany({
+          where: { ujianId, status: 'TERKUNCI' },
+          data: { status: 'SEDANG_MENGERJAKAN' },
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Berhasil mereset pelanggaran untuk seluruh ${pesertaIds.length} peserta pada sesi ujian ini.`,
+      });
+    }
+
+    if (action === 'ADD_TIME' || action === 'ADD_EXTRA_TIME') {
       const { pesertaUjianId, extraMinutes } = body;
       const extraSeconds = (Number(extraMinutes) || 15) * 60;
       const current = await prisma.pesertaUjian.findUnique({ where: { id: pesertaUjianId } });

@@ -162,22 +162,23 @@ export function PesertaDaftarView({
       return
     }
 
-    const rows = filteredSiswa.map((s, idx) => ({
-      No: idx + 1,
-      Username: s.username,
-      'Nama Lengkap': s.name,
-      'Nomor Peserta': s.nomorPeserta || s.username,
-      'Group / Kelas': s.kelas?.nama || '-',
-      'Ruang Ujian': s.ruangUjian || 'Ruang 1',
-      'Sesi Ujian': s.sesiUjian || 1,
-      'Jenis Kelamin': s.jenisKelamin || 'L',
-    }))
+    const rows = filteredSiswa.map((s, idx) => {
+      const tingkatStr = s.kelas?.tingkat === 10 ? 'X' : s.kelas?.tingkat === 11 ? 'XI' : s.kelas?.tingkat === 12 ? 'XII' : 'X'
+      return {
+        No: idx + 1,
+        Username: s.username,
+        Password: s.plainPassword || '123456',
+        'Nama Lengkap': s.name,
+        Kelas: tingkatStr,
+        Group: s.group || s.kelas?.nama || 'Umum',
+      }
+    })
 
     const worksheet = XLSX.utils.json_to_sheet(rows)
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Peserta')
-    XLSX.writeFile(workbook, `Daftar_Peserta_CBT_${filterKelas !== 'ALL' ? filterKelas : 'Semua'}.xlsx`)
-    showNotification('Berhasil', 'Data peserta berhasil diekspor ke Excel.', 'success')
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'DATA_PESERTA_CBT')
+    XLSX.writeFile(workbook, `Format_Peserta_CBT_${filterKelas !== 'ALL' ? filterKelas : 'Semua'}.xlsx`)
+    showNotification('Berhasil', 'Data peserta berhasil diekspor sesuai format standar.', 'success')
   }
 
   const filteredSiswa = useMemo(() => {

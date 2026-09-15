@@ -38,14 +38,21 @@ import {
   Eye,
   Calculator,
   HelpCircle,
+  BookOpen,
+  Upload,
+  Link as LinkIcon,
+  ArrowRight,
 } from 'lucide-react'
 import { MathRenderer } from '@/components/MathRenderer'
 
 interface ModulSoalViewProps {
   mapelList?: any[]
   bankSoalList?: any[] // Alias kompatibilitas
+  modulList?: any[]
   selectedMapelId?: string
   onSelectMapel?: (id: string) => void
+  onNavigateToTopik?: () => void
+  onNavigateToDaftarSoal?: (id?: string) => void
   showNotification: (title: string, message: string, type?: any) => void
   showConfirm?: (title: string, message: string, onConfirm: () => void) => void
 }
@@ -53,13 +60,38 @@ interface ModulSoalViewProps {
 export function ModulSoalView({
   mapelList,
   bankSoalList,
+  modulList = [],
   selectedMapelId,
   onSelectMapel,
+  onNavigateToTopik,
+  onNavigateToDaftarSoal,
   showNotification,
   showConfirm,
 }: ModulSoalViewProps) {
   const items = mapelList && mapelList.length > 0 ? mapelList : bankSoalList || []
-  const [activeMapelId, setActiveMapelId] = useState(selectedMapelId || (items[0]?.id ?? ''))
+
+  // Ambil list modul unik
+  const rawModulNames = Array.from(
+    new Set([
+      'SEMUA',
+      'Default',
+      ...(modulList || []).map((m: any) => m.nama),
+      ...(items || []).map((m: any) => m.namaModul || m.modul?.nama).filter(Boolean),
+    ])
+  )
+
+  const [selectedModul, setSelectedModul] = useState<string>('SEMUA')
+
+  // Topik yang difilter berdasarkan modul terpilih
+  const filteredMapelByModul = items.filter((m: any) => {
+    if (selectedModul === 'SEMUA') return true
+    const itemModul = m.namaModul || m.modul?.nama || 'Default'
+    return itemModul.toLowerCase() === selectedModul.toLowerCase()
+  })
+
+  const [activeMapelId, setActiveMapelId] = useState(
+    selectedMapelId || filteredMapelByModul[0]?.id || items[0]?.id || ''
+  )
   const [mapelData, setMapelData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -85,25 +117,46 @@ export function ModulSoalView({
   const [showLivePreview, setShowLivePreview] = useState(true)
   const [katexModalOpen, setKatexModalOpen] = useState(false)
   const [customKatexInput, setCustomKatexInput] = useState('')
+  const [katexTarget, setKatexTarget] = useState<{
+    type: 'pertanyaan' | 'opsi' | 'matching_left' | 'matching_right'
+    index?: number
+  }>({ type: 'pertanyaan' })
 
   // Kelola Jawaban Modal State
   const [modalJawabanOpen, setModalJawabanOpen] = useState(false)
   const [currentSoalJawaban, setCurrentSoalJawaban] = useState<any | null>(null)
   const [opsiList, setOpsiList] = useState<{ id?: string; label: string; konten: string; isBenar: boolean }[]>([])
+  const [matchingPairs, setMatchingPairs] = useState<{ left: string; right: string }[]>([])
   const [kunciJawabanTeks, setKunciJawabanTeks] = useState('')
   const [savingJawaban, setSavingJawaban] = useState(false)
+  const [uploadingTarget, setUploadingTarget] = useState<{
+    type: 'pertanyaan' | 'opsi' | 'matching_left' | 'matching_right'
+    index?: number
+  } | null>(null)
 
   const editorRef = useRef<HTMLDivElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
+  const mediaUploadInputRef = useRef<HTMLInputElement>(null)
 
   // Sync selectedMapelId
   useEffect(() => {
     if (selectedMapelId) {
       setActiveMapelId(selectedMapelId)
-    } else if (items.length > 0 && !activeMapelId) {
-      setActiveMapelId(items[0].id)
+    } else if (filteredMapelByModul.length > 0 && !activeMapelId) {
+      setActiveMapelId(filteredMapelByModul[0].id)
     }
   }, [selectedMapelId, items])
+
+  // Sync when modul changes
+  useEffect(() => {
+    if (filteredMapelByModul.length > 0) {
+      const exists = filteredMapelByModul.some((m) => m.id === activeMapelId)
+      if (!exists) {
+        setActiveMapelId(filteredMapelByModul[0].id)
+        if (onSelectMapel) onSelectMapel(filteredMapelByModul[0].id)
+      }
+    }
+  }, [selectedModul])
 
   // Fetch Topic Data
   useEffect(() => {
@@ -160,6 +213,7 @@ export function ModulSoalView({
     setTipeSoal('PG')
     setTingkatKesulitan('1')
     setBobot(1.0)
+    setIsSourceMode(false)
     if (editorRef.current) {
       editorRef.current.innerHTML = ''
     }
@@ -168,14 +222,15 @@ export function ModulSoalView({
     }
   }
 
-  // Edit Soal handler
+  // Edit existing soal in question creator
   const handleEditSoal = (soal: any) => {
     setEditingSoalId(soal.id)
     setPertanyaan(soal.pertanyaan || '')
     setMediaAudio(soal.mediaAudio || '')
     setTipeSoal(soal.tipeSoal || 'PG')
-    setBobot(soal.bobot || 1.0)
-    setTingkatKesulitan('1')
+    setTingkatKesulitan(String(soal.tingkatKesulitan || 1))
+    setBobot(Number(soal.bobot) || 1.0)
+    setIsSourceMode(false)
 
     if (editorRef.current) {
       editorRef.current.innerHTML = soal.pertanyaan || ''
@@ -191,6 +246,27 @@ export function ModulSoalView({
   const handleOpenKelolaJawaban = (soal: any) => {
     setCurrentSoalJawaban(soal)
     setKunciJawabanTeks(soal.kunciJawabanTeks || '')
+
+    // Handle Menjodohkan
+    if (soal.tipeSoal === 'MENJODOHKAN') {
+      let pairs: { left: string; right: string }[] = []
+      try {
+        if (soal.matchingData) {
+          pairs = typeof soal.matchingData === 'string' ? JSON.parse(soal.matchingData) : soal.matchingData
+        }
+      } catch (e) {
+        pairs = []
+      }
+      if (!Array.isArray(pairs) || pairs.length === 0) {
+        pairs = [
+          { left: '', right: '' },
+          { left: '', right: '' },
+          { left: '', right: '' },
+          { left: '', right: '' },
+        ]
+      }
+      setMatchingPairs(pairs)
+    }
 
     if (soal.opsiJawaban && soal.opsiJawaban.length > 0) {
       setOpsiList(
@@ -211,6 +287,114 @@ export function ModulSoalView({
       ])
     }
     setModalJawabanOpen(true)
+  }
+
+  // Insert text/formula/media helper for any target
+  const insertTextToTarget = (
+    text: string,
+    target?: {
+      type: 'pertanyaan' | 'opsi' | 'matching_left' | 'matching_right'
+      index?: number
+    }
+  ) => {
+    const t = target || katexTarget
+    if (t.type === 'pertanyaan') {
+      insertTextAtCursor(text)
+    } else if (t.type === 'opsi' && typeof t.index === 'number') {
+      setOpsiList((prev) => {
+        const next = [...prev]
+        if (next[t.index!]) {
+          const cur = next[t.index!].konten || ''
+          next[t.index!].konten = cur ? `${cur} ${text}` : text
+        }
+        return next
+      })
+    } else if (t.type === 'matching_left' && typeof t.index === 'number') {
+      setMatchingPairs((prev) => {
+        const next = [...prev]
+        if (next[t.index!]) {
+          const cur = next[t.index!].left || ''
+          next[t.index!].left = cur ? `${cur} ${text}` : text
+        }
+        return next
+      })
+    } else if (t.type === 'matching_right' && typeof t.index === 'number') {
+      setMatchingPairs((prev) => {
+        const next = [...prev]
+        if (next[t.index!]) {
+          const cur = next[t.index!].right || ''
+          next[t.index!].right = cur ? `${cur} ${text}` : text
+        }
+        return next
+      })
+    }
+  }
+
+  // Handle direct file upload for target option/question
+  const handleMediaUploadForTarget = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !uploadingTarget) return
+
+    const formData = new FormData()
+    formData.append('files', file)
+
+    try {
+      showNotification('Mengunggah', `Sedang mengunggah ${file.name}...`, 'info')
+      const res = await fetch('/api/admin/files', {
+        method: 'POST',
+        body: formData,
+      })
+      const json = await res.json()
+      let fileUrl = ''
+      if (json.success && json.data?.[0]?.url) {
+        fileUrl = json.data[0].url
+      } else if (json.uploadedFiles?.[0]?.url) {
+        fileUrl = json.uploadedFiles[0].url
+      } else {
+        fileUrl = `/uploads/${file.name}`
+      }
+
+      const isImg = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name)
+      const isAudio = /\.(mp3|wav|ogg|m4a|aac)$/i.test(file.name)
+      const snippet = isImg
+        ? `![${file.name}](${fileUrl}) `
+        : isAudio
+        ? `[Audio: ${file.name}](${fileUrl}) `
+        : `[File: ${file.name}](${fileUrl}) `
+
+      insertTextToTarget(snippet, uploadingTarget)
+      showNotification('Berhasil', `Media ${file.name} berhasil diunggah dan disisipkan!`, 'success')
+    } catch (err: any) {
+      showNotification('Error', 'Gagal mengunggah media: ' + err.message, 'error')
+    } finally {
+      setUploadingTarget(null)
+      if (mediaUploadInputRef.current) mediaUploadInputRef.current.value = ''
+    }
+  }
+
+  // Trigger file picker for specific target
+  const triggerMediaUpload = (target: {
+    type: 'pertanyaan' | 'opsi' | 'matching_left' | 'matching_right'
+    index?: number
+  }) => {
+    setUploadingTarget(target)
+    setTimeout(() => {
+      mediaUploadInputRef.current?.click()
+    }, 50)
+  }
+
+  // Prompt for media URL for specific target
+  const promptMediaUrl = (target: {
+    type: 'pertanyaan' | 'opsi' | 'matching_left' | 'matching_right'
+    index?: number
+  }) => {
+    const url = prompt('Masukkan URL Gambar / Media (contoh: /uploads/foto.jpg atau https://...):')
+    if (url && url.trim()) {
+      const cleanUrl = url.trim()
+      const isImg = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(cleanUrl) || cleanUrl.includes('image') || cleanUrl.includes('/uploads/')
+      const snippet = isImg ? `![Gambar](${cleanUrl}) ` : `${cleanUrl} `
+      insertTextToTarget(snippet, target)
+    }
   }
 
   // Rich Text Editor Command Helpers
@@ -343,7 +527,7 @@ export function ModulSoalView({
         const savedSoal = json.data
         handleResetForm()
 
-        if (['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal) && savedSoal) {
+        if (['PG', 'PG_KOMPLEKS', 'BENAR_SALAH', 'MENJODOHKAN'].includes(tipeSoal) && savedSoal) {
           handleOpenKelolaJawaban(savedSoal)
         }
       } else {
@@ -391,6 +575,11 @@ export function ModulSoalView({
 
     try {
       setSavingJawaban(true)
+      const isMatching = currentSoalJawaban.tipeSoal === 'MENJODOHKAN'
+      const isChoice = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(currentSoalJawaban.tipeSoal)
+
+      const validPairs = matchingPairs.filter((p) => p.left.trim() || p.right.trim())
+
       const res = await fetch('/api/guru/soal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -405,13 +594,14 @@ export function ModulSoalView({
           mediaAudio: currentSoalJawaban.mediaAudio,
           mediaGambar: currentSoalJawaban.mediaGambar,
           kunciJawabanTeks: kunciJawabanTeks,
-          opsiJawaban: opsiList,
+          opsiJawaban: isChoice ? opsiList : undefined,
+          matchingData: isMatching ? JSON.stringify(validPairs) : undefined,
         }),
       })
 
       const json = await res.json()
       if (json.success) {
-        showNotification('Berhasil', 'Pilihan jawaban berhasil disimpan!', 'success')
+        showNotification('Berhasil', 'Pilihan jawaban / pasangan berhasil disimpan!', 'success')
         setModalJawabanOpen(false)
         fetchMapelDetail(activeMapelId)
       } else {
@@ -452,10 +642,10 @@ export function ModulSoalView({
         </div>
       </div>
 
-      {/* 2. CARD 1: PILIH TOPIK */}
+      {/* 2. CARD 1: PILIH MODUL & TOPIK */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-white/10 rounded-md shadow-xs overflow-hidden">
         <div className="px-4 py-2.5 bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-white/10 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-800 dark:text-white">Pilih Topik</h2>
+          <h2 className="text-sm font-bold text-slate-800 dark:text-white">Pilih Modul & Topik Mata Pelajaran</h2>
           {isMathTopic && (
             <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-[11px] font-medium flex items-center gap-1 border border-indigo-200 dark:border-indigo-800">
               <Sparkles className="w-3 h-3 text-indigo-600" />
@@ -463,34 +653,85 @@ export function ModulSoalView({
             </span>
           )}
         </div>
-        <div className="p-4 sm:p-5 space-y-2">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <label className="sm:w-44 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
-              Pilih Topik
-            </label>
-            <div className="flex-1 max-w-2xl">
+        <div className="p-4 sm:p-5 space-y-3.5">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+            {/* 1. Pilih Modul */}
+            <div className="md:col-span-4 flex flex-col sm:flex-row md:flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                1. Pilih Modul:
+              </label>
               <select
-                value={activeMapelId}
+                value={selectedModul}
                 onChange={(e) => {
-                  const newId = e.target.value
-                  setActiveMapelId(newId)
-                  if (onSelectMapel) onSelectMapel(newId)
-                  handleResetForm()
+                  setSelectedModul(e.target.value)
+                  setCurrentPage(1)
                 }}
-                className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-xs"
+                className="w-full px-3 py-2 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
               >
-                {items.length === 0 && <option value="">(Belum ada topik tersedia)</option>}
-                {items.map((bs) => (
-                  <option key={bs.id} value={bs.id}>
-                    {bs.kode || bs.kodeBank || 'Default'} - {bs.nama}
+                {rawModulNames.map((modName) => (
+                  <option key={modName} value={modName}>
+                    {modName === 'SEMUA' ? '-- Semua Modul --' : `Modul: ${modName}`}
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
-                Pilih terlebih dahulu topik yang akan digunakan sebelum menambah atau mengubah soal
-              </p>
+            </div>
+
+            {/* 2. Pilih Topik dalam Modul */}
+            <div className="md:col-span-8 flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                2. Pilih Topik Mata Pelajaran ({filteredMapelByModul.length}):
+              </label>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <select
+                  value={activeMapelId}
+                  onChange={(e) => {
+                    const newId = e.target.value
+                    setActiveMapelId(newId)
+                    if (onSelectMapel) onSelectMapel(newId)
+                    handleResetForm()
+                  }}
+                  className="flex-1 px-3 py-2 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                >
+                  {filteredMapelByModul.length === 0 && <option value="">(Belum ada topik pada modul ini)</option>}
+                  {filteredMapelByModul.map((bs) => {
+                    const itemModul = bs.namaModul || bs.modul?.nama || 'Default'
+                    const isArchived = bs.status === 'NONAKTIF'
+                    return (
+                      <option key={bs.id} value={bs.id}>
+                        {isArchived ? '[ARSIP] ' : ''}{bs.kode || bs.kodeBank || 'Default'} - {bs.nama} [{itemModul}]
+                      </option>
+                    )
+                  })}
+                </select>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {onNavigateToTopik && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToTopik}
+                      className="px-3 py-2 rounded border border-slate-300 dark:border-white/15 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Kelola Topik</span>
+                    </button>
+                  )}
+                  {onNavigateToDaftarSoal && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToDaftarSoal(activeMapelId)}
+                      className="px-3 py-2 rounded border border-slate-300 dark:border-white/15 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Daftar Soal</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            Pilih <strong>Modul</strong> dan <strong>Topik</strong> sebelum menulis atau mengedit butir soal. Anda dapat membuat topik mapel baru melalui tombol <strong>Kelola Topik</strong>.
+          </p>
         </div>
       </div>
 
@@ -1167,6 +1408,15 @@ export function ModulSoalView({
         </div>
       </div>
 
+      {/* Hidden File Input for Image/Media Uploads into specific targets */}
+      <input
+        type="file"
+        ref={mediaUploadInputRef}
+        onChange={handleMediaUploadForTarget}
+        accept="image/*,audio/*,video/*"
+        className="hidden"
+      />
+
       {/* 5. MODAL FORMULA KATEX / MATH INSERTER */}
       {katexModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
@@ -1174,12 +1424,21 @@ export function ModulSoalView({
             <div className="px-5 py-3.5 bg-indigo-700 text-white flex items-center justify-between">
               <h3 className="text-sm font-bold flex items-center gap-2">
                 <Sigma className="w-4 h-4" />
-                <span>KaTeX Math Formula Inserter</span>
+                <span>
+                  KaTeX Math Formula Inserter
+                  {katexTarget.type === 'opsi' && typeof katexTarget.index === 'number'
+                    ? ` (Pilihan ${opsiList[katexTarget.index]?.label || ''})`
+                    : katexTarget.type === 'matching_left' && typeof katexTarget.index === 'number'
+                    ? ` (Kotak Kiri #${katexTarget.index + 1})`
+                    : katexTarget.type === 'matching_right' && typeof katexTarget.index === 'number'
+                    ? ` (Kotak Kanan #${katexTarget.index + 1})`
+                    : ' (Pertanyaan Soal)'}
+                </span>
               </h3>
               <button
                 type="button"
                 onClick={() => setKatexModalOpen(false)}
-                className="text-white/80 hover:text-white p-1"
+                className="text-white/80 hover:text-white p-1 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1210,7 +1469,7 @@ export function ModulSoalView({
                       key={idx}
                       type="button"
                       onClick={() => setCustomKatexInput((prev) => prev + item.snippet.replace(/\$/g, ''))}
-                      className="px-2 py-1 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:bg-indigo-50 text-[11px] font-medium text-slate-700 dark:text-slate-200 cursor-pointer"
+                      className="px-2 py-1 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-[11px] font-medium text-slate-700 dark:text-slate-200 cursor-pointer"
                     >
                       {item.label} ({item.preview})
                     </button>
@@ -1237,7 +1496,7 @@ export function ModulSoalView({
               <button
                 type="button"
                 onClick={() => setKatexModalOpen(false)}
-                className="px-4 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100"
+                className="px-4 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 cursor-pointer"
               >
                 Batal
               </button>
@@ -1245,14 +1504,22 @@ export function ModulSoalView({
                 type="button"
                 onClick={() => {
                   if (customKatexInput.trim()) {
-                    insertTextAtCursor(`$${customKatexInput.trim()}$ `)
+                    insertTextToTarget(`$${customKatexInput.trim()}$ `, katexTarget)
                     setCustomKatexInput('')
                     setKatexModalOpen(false)
                   }
                 }}
-                className="px-5 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+                className="px-5 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer flex items-center gap-1"
               >
-                Sisipkan ke Soal
+                <span>
+                  {katexTarget.type === 'opsi' && typeof katexTarget.index === 'number'
+                    ? `Sisipkan ke Pilihan ${opsiList[katexTarget.index]?.label || ''}`
+                    : katexTarget.type === 'matching_left' && typeof katexTarget.index === 'number'
+                    ? `Sisipkan ke Kotak Kiri #${katexTarget.index + 1}`
+                    : katexTarget.type === 'matching_right' && typeof katexTarget.index === 'number'
+                    ? `Sisipkan ke Kotak Kanan #${katexTarget.index + 1}`
+                    : 'Sisipkan ke Pertanyaan Soal'}
+                </span>
               </button>
             </div>
           </div>
@@ -1262,12 +1529,20 @@ export function ModulSoalView({
       {/* 6. MODAL KELOLA JAWABAN */}
       {modalJawabanOpen && currentSoalJawaban && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-md shadow-2xl max-w-3xl w-full overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-md shadow-2xl max-w-4xl w-full overflow-hidden">
             <div className="px-5 py-3.5 bg-[#337ab7] text-white flex items-center justify-between">
               <h3 className="text-sm font-bold flex items-center gap-2">
                 <span>Kelola Jawaban Soal #{currentSoalJawaban.nomorUrut || 1}</span>
-                <span className="px-2 py-0.5 rounded bg-white/20 text-xs font-normal">
-                  {currentSoalJawaban.tipeSoal}
+                <span className="px-2 py-0.5 rounded bg-white/20 text-xs font-semibold">
+                  {currentSoalJawaban.tipeSoal === 'PG'
+                    ? 'Pilihan Ganda'
+                    : currentSoalJawaban.tipeSoal === 'PG_KOMPLEKS'
+                    ? 'Pilihan Majemuk / PG Kompleks'
+                    : currentSoalJawaban.tipeSoal === 'MENJODOHKAN'
+                    ? 'Mencocokkan / Menjodohkan'
+                    : currentSoalJawaban.tipeSoal === 'BENAR_SALAH'
+                    ? 'Pernyataan Benar / Salah'
+                    : currentSoalJawaban.tipeSoal}
                 </span>
               </h3>
               <button
@@ -1290,109 +1565,428 @@ export function ModulSoalView({
                 </div>
               </div>
 
-              {/* Opsi Pilihan Jawaban */}
-              {['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(currentSoalJawaban.tipeSoal) ? (
+              {/* A. OPSI PILIHAN GANDA / PG KOMPLEKS / BENAR SALAH */}
+              {['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(currentSoalJawaban.tipeSoal) && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-800 dark:text-white">
-                      Daftar Pilihan Jawaban (Mendukung Rumus KaTeX $...$):
-                    </label>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <label className="text-xs font-bold text-slate-800 dark:text-white block">
+                        Daftar Pilihan Jawaban:
+                      </label>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Mendukung Rumus KaTeX ($...$), Gambar, Audio, dan Media pada setiap pilihan jawaban.
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
-                        const labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+                        const labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
                         const nextLabel = labels[opsiList.length] || `Opsi ${opsiList.length + 1}`
                         setOpsiList([...opsiList, { label: nextLabel, konten: '', isBenar: false }])
                       }}
-                      className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 flex items-center gap-1"
+                      className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 flex items-center gap-1 self-start sm:self-auto cursor-pointer"
                     >
-                      <Plus className="w-3 h-3" /> Tambah Pilihan
+                      <Plus className="w-3.5 h-3.5 text-blue-600" /> Tambah Pilihan
                     </button>
                   </div>
 
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
                     {opsiList.map((opsi, idx) => (
                       <div
                         key={idx}
-                        className={`p-2.5 rounded border transition flex flex-col sm:flex-row sm:items-start gap-2.5 ${
+                        className={`p-3 rounded-lg border transition space-y-2.5 ${
                           opsi.isBenar
-                            ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-400 dark:border-emerald-700'
+                            ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-400 dark:border-emerald-700 shadow-2xs'
                             : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-white/10'
                         }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = [...opsiList]
-                              if (currentSoalJawaban.tipeSoal === 'PG' || currentSoalJawaban.tipeSoal === 'BENAR_SALAH') {
-                                updated.forEach((o, i) => (o.isBenar = i === idx))
-                              } else {
-                                updated[idx].isBenar = !updated[idx].isBenar
-                              }
-                              setOpsiList(updated)
-                            }}
-                            className={`w-7 h-7 rounded font-bold text-xs shrink-0 flex items-center justify-center cursor-pointer transition ${
-                              opsi.isBenar
-                                ? 'bg-emerald-600 text-white shadow-xs'
-                                : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300'
-                            }`}
-                            title={opsi.isBenar ? 'Kunci Jawaban Benar' : 'Klik untuk jadikan Kunci'}
-                          >
-                            {opsi.label}
-                          </button>
+                        {/* Top Row: Label Button, Input, Action Buttons */}
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-2">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = [...opsiList]
+                                if (currentSoalJawaban.tipeSoal === 'PG' || currentSoalJawaban.tipeSoal === 'BENAR_SALAH') {
+                                  updated.forEach((o, i) => (o.isBenar = i === idx))
+                                } else {
+                                  updated[idx].isBenar = !updated[idx].isBenar
+                                }
+                                setOpsiList(updated)
+                              }}
+                              className={`w-8 h-8 rounded-md font-bold text-xs shrink-0 flex items-center justify-center cursor-pointer transition ${
+                                opsi.isBenar
+                                  ? 'bg-emerald-600 text-white shadow-xs'
+                                  : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300'
+                              }`}
+                              title={opsi.isBenar ? 'Kunci Jawaban Benar' : 'Klik untuk jadikan Kunci'}
+                            >
+                              {opsi.label}
+                            </button>
+                          </div>
+
+                          <div className="flex-1 w-full space-y-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                value={opsi.konten}
+                                onChange={(e) => {
+                                  const updated = [...opsiList]
+                                  updated[idx].konten = e.target.value
+                                  setOpsiList(updated)
+                                }}
+                                placeholder={`Teks, rumus KaTeX ($...$), atau URL media pilihan ${opsi.label}...`}
+                                className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                              />
+
+                              {/* Action Buttons for this Option */}
+                              <div className="flex items-center gap-1 shrink-0">
+                                {/* KaTeX modal open */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setKatexTarget({ type: 'opsi', index: idx })
+                                    setCustomKatexInput('')
+                                    setKatexModalOpen(true)
+                                  }}
+                                  className="px-2 py-1 rounded bg-indigo-50 dark:bg-indigo-950 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                                  title={`Sisipkan Rumus KaTeX ke Pilihan ${opsi.label}`}
+                                >
+                                  <Sigma className="w-3.5 h-3.5 text-indigo-600" />
+                                  <span className="hidden sm:inline">KaTeX</span>
+                                </button>
+
+                                {/* Direct Image/Media Upload */}
+                                <button
+                                  type="button"
+                                  onClick={() => triggerMediaUpload({ type: 'opsi', index: idx })}
+                                  className="px-2 py-1 rounded bg-emerald-50 dark:bg-emerald-950 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                                  title={`Unggah & Sisipkan Gambar ke Pilihan ${opsi.label}`}
+                                >
+                                  <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span className="hidden sm:inline">Gambar</span>
+                                </button>
+
+                                {/* URL Media Prompt */}
+                                <button
+                                  type="button"
+                                  onClick={() => promptMediaUrl({ type: 'opsi', index: idx })}
+                                  className="p-1.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs cursor-pointer"
+                                  title={`Sisipkan URL Media ke Pilihan ${opsi.label}`}
+                                >
+                                  <LinkIcon className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              {opsi.isBenar && (
+                                <span className="px-2 py-1 rounded bg-emerald-600 text-white text-[10px] font-bold shrink-0">
+                                  KUNCI
+                                </span>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (opsiList.length <= 2) {
+                                    showNotification('Peringatan', 'Minimal harus ada 2 opsi jawaban', 'warning')
+                                    return
+                                  }
+                                  setOpsiList(opsiList.filter((_, i) => i !== idx))
+                                }}
+                                className="p-1.5 rounded text-slate-400 hover:text-rose-600 transition shrink-0 cursor-pointer"
+                                title="Hapus Opsi"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Quick KaTeX Formula Chips */}
+                            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                              <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 mr-1">
+                                Cepat:
+                              </span>
+                              {[
+                                { label: '½', snippet: '$\\frac{a}{b}$ ' },
+                                { label: '√x', snippet: '$\\sqrt{x}$ ' },
+                                { label: 'x²', snippet: '$x^{2}$ ' },
+                                { label: '×', snippet: '$\\times$ ' },
+                                { label: '÷', snippet: '$\\div$ ' },
+                                { label: '±', snippet: '$\\pm$ ' },
+                                { label: '≠', snippet: '$\\neq$ ' },
+                                { label: '≤', snippet: '$\\le$ ' },
+                                { label: '≥', snippet: '$\\ge$ ' },
+                                { label: '°', snippet: '$^\\circ$ ' },
+                              ].map((chip, cIdx) => (
+                                <button
+                                  key={cIdx}
+                                  type="button"
+                                  onClick={() => insertTextToTarget(chip.snippet, { type: 'opsi', index: idx })}
+                                  className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-[10px] font-medium text-slate-700 dark:text-slate-300 cursor-pointer"
+                                  title={`Sisipkan rumus ${chip.snippet}`}
+                                >
+                                  {chip.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
 
-                        <div className="flex-1 space-y-1 w-full">
-                          <input
-                            type="text"
-                            value={opsi.konten}
-                            onChange={(e) => {
-                              const updated = [...opsiList]
-                              updated[idx].konten = e.target.value
-                              setOpsiList(updated)
-                            }}
-                            placeholder={`Teks atau rumus pilihan ${opsi.label} (contoh: $\\frac{1}{2}$)...`}
-                            className="w-full px-2.5 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                          />
-                          {opsi.konten.includes('$') && (
-                            <div className="p-1.5 bg-slate-50 dark:bg-slate-900/60 rounded border border-slate-200 dark:border-white/5 text-[11px]">
+                        {/* Live Rendered Math/Media Preview */}
+                        {opsi.konten && opsi.konten.trim() && (
+                          <div className="ml-0 sm:ml-10 p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded border border-slate-200 dark:border-white/10 text-xs">
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                              Preview Render Pilihan {opsi.label}:
+                            </div>
+                            <div className="prose prose-xs dark:prose-invert max-w-none">
                               <MathRenderer content={opsi.konten} />
                             </div>
-                          )}
-                        </div>
-
-                        {opsi.isBenar && (
-                          <span className="px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold shrink-0 self-start sm:self-center">
-                            KUNCI BENAR
-                          </span>
+                          </div>
                         )}
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (opsiList.length <= 2) {
-                              showNotification('Peringatan', 'Minimal harus ada 2 opsi jawaban', 'warning')
-                              return
-                            }
-                            setOpsiList(opsiList.filter((_, i) => i !== idx))
-                          }}
-                          className="p-1 rounded text-slate-400 hover:text-rose-600 transition shrink-0 self-start sm:self-center"
-                          title="Hapus Opsi"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     ))}
                   </div>
                 </div>
-              ) : (
+              )}
+
+              {/* B. EDITOR MENCOCOKKAN / MENJODOHKAN */}
+              {currentSoalJawaban.tipeSoal === 'MENJODOHKAN' && (
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <label className="text-xs font-bold text-slate-800 dark:text-white block">
+                        Pasangan Kotak Pencocokan (Kotak Kiri ➔ Kotak Kanan):
+                      </label>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Isi premis di kotak kiri dan pasangannya di kotak kanan. Setiap kotak mendukung KaTeX ($...$) dan Media Gambar/Audio.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={matchingPairs.length >= 10}
+                      onClick={() => {
+                        if (matchingPairs.length < 10) {
+                          setMatchingPairs([...matchingPairs, { left: '', right: '' }])
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded bg-blue-50 dark:bg-blue-900/40 text-xs font-bold text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 flex items-center gap-1 self-start sm:self-auto cursor-pointer disabled:opacity-40"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Tambah Pasangan ({matchingPairs.length}/10)
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {matchingPairs.map((pair, pIdx) => (
+                      <div
+                        key={pIdx}
+                        className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-lg border border-slate-200 dark:border-white/10 space-y-2.5"
+                      >
+                        <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-white/5 pb-1.5">
+                          <span className="w-6 h-6 rounded bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
+                            #{pIdx + 1}
+                          </span>
+                          {matchingPairs.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMatchingPairs(matchingPairs.filter((_, i) => i !== pIdx))
+                              }}
+                              className="text-xs text-rose-500 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Hapus Baris Ini
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {/* Kotak Kiri */}
+                          <div className="space-y-1.5 bg-white dark:bg-slate-900 p-2.5 rounded border border-slate-200 dark:border-white/10">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                                Kotak Kiri #{pIdx + 1} (Premis/Istilah):
+                              </label>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setKatexTarget({ type: 'matching_left', index: pIdx })
+                                    setCustomKatexInput('')
+                                    setKatexModalOpen(true)
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                                  title="Sisipkan KaTeX ke Kotak Kiri"
+                                >
+                                  <Sigma className="w-3 h-3" /> KaTeX
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => triggerMediaUpload({ type: 'matching_left', index: pIdx })}
+                                  className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                                  title="Unggah Gambar ke Kotak Kiri"
+                                >
+                                  <ImageIcon className="w-3 h-3" /> Gambar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => promptMediaUrl({ type: 'matching_left', index: pIdx })}
+                                  className="p-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] cursor-pointer"
+                                  title="Sisipkan URL Media"
+                                >
+                                  <LinkIcon className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <input
+                              type="text"
+                              value={pair.left}
+                              onChange={(e) => {
+                                const next = [...matchingPairs]
+                                next[pIdx].left = e.target.value
+                                setMatchingPairs(next)
+                              }}
+                              placeholder="Premis / istilah / pertanyaan kiri..."
+                              className="w-full px-2.5 py-1.5 rounded bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                            />
+
+                            {/* Quick Chips */}
+                            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                              {[
+                                { label: '½', snippet: '$\\frac{a}{b}$ ' },
+                                { label: '√x', snippet: '$\\sqrt{x}$ ' },
+                                { label: 'x²', snippet: '$x^{2}$ ' },
+                                { label: '×', snippet: '$\\times$ ' },
+                                { label: '±', snippet: '$\\pm$ ' },
+                              ].map((chip, cIdx) => (
+                                <button
+                                  key={cIdx}
+                                  type="button"
+                                  onClick={() => insertTextToTarget(chip.snippet, { type: 'matching_left', index: pIdx })}
+                                  className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 text-[10px] font-medium text-slate-700 dark:text-slate-300 cursor-pointer"
+                                >
+                                  {chip.label}
+                                </button>
+                              ))}
+                            </div>
+
+                            {pair.left && pair.left.trim() && (
+                              <div className="p-2 bg-slate-50 dark:bg-slate-950 rounded border border-slate-200 dark:border-white/5 text-xs">
+                                <div className="text-[9px] font-bold text-slate-400 uppercase">Preview Render Kiri:</div>
+                                <div className="prose prose-xs dark:prose-invert max-w-none">
+                                  <MathRenderer content={pair.left} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Kotak Kanan */}
+                          <div className="space-y-1.5 bg-white dark:bg-slate-900 p-2.5 rounded border border-slate-200 dark:border-white/10">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                                Kotak Kanan #{pIdx + 1} (Jawaban Pasangan):
+                              </label>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setKatexTarget({ type: 'matching_right', index: pIdx })
+                                    setCustomKatexInput('')
+                                    setKatexModalOpen(true)
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                                  title="Sisipkan KaTeX ke Kotak Kanan"
+                                >
+                                  <Sigma className="w-3 h-3" /> KaTeX
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => triggerMediaUpload({ type: 'matching_right', index: pIdx })}
+                                  className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                                  title="Unggah Gambar ke Kotak Kanan"
+                                >
+                                  <ImageIcon className="w-3 h-3" /> Gambar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => promptMediaUrl({ type: 'matching_right', index: pIdx })}
+                                  className="p-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] cursor-pointer"
+                                  title="Sisipkan URL Media"
+                                >
+                                  <LinkIcon className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <input
+                              type="text"
+                              value={pair.right}
+                              onChange={(e) => {
+                                const next = [...matchingPairs]
+                                next[pIdx].right = e.target.value
+                                setMatchingPairs(next)
+                              }}
+                              placeholder="Respons / jawaban pasangan kanan..."
+                              className="w-full px-2.5 py-1.5 rounded bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                            />
+
+                            {/* Quick Chips */}
+                            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                              {[
+                                { label: '½', snippet: '$\\frac{a}{b}$ ' },
+                                { label: '√x', snippet: '$\\sqrt{x}$ ' },
+                                { label: 'x²', snippet: '$x^{2}$ ' },
+                                { label: '×', snippet: '$\\times$ ' },
+                                { label: '±', snippet: '$\\pm$ ' },
+                              ].map((chip, cIdx) => (
+                                <button
+                                  key={cIdx}
+                                  type="button"
+                                  onClick={() => insertTextToTarget(chip.snippet, { type: 'matching_right', index: pIdx })}
+                                  className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 text-[10px] font-medium text-slate-700 dark:text-slate-300 cursor-pointer"
+                                >
+                                  {chip.label}
+                                </button>
+                              ))}
+                            </div>
+
+                            {pair.right && pair.right.trim() && (
+                              <div className="p-2 bg-slate-50 dark:bg-slate-950 rounded border border-slate-200 dark:border-white/5 text-xs">
+                                <div className="text-[9px] font-bold text-slate-400 uppercase">Preview Render Kanan:</div>
+                                <div className="prose prose-xs dark:prose-invert max-w-none">
+                                  <MathRenderer content={pair.right} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* C. ISIAN SINGKAT / ESAI */}
+              {['ISIAN', 'ESAI'].includes(currentSoalJawaban.tipeSoal) && (
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-800 dark:text-white">
-                    {currentSoalJawaban.tipeSoal === 'ISIAN'
-                      ? 'Kunci Jawaban Isian Singkat (Cocok Teks Persis):'
-                      : 'Rubrik Penilaian Esai / Catatan Jawaban Benar:'}
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 dark:text-white">
+                      {currentSoalJawaban.tipeSoal === 'ISIAN'
+                        ? 'Kunci Jawaban Isian Singkat (Cocok Teks Persis):'
+                        : 'Rubrik Penilaian Esai / Catatan Jawaban Benar:'}
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setKatexTarget({ type: 'pertanyaan' })
+                          setCustomKatexInput('')
+                          setKatexModalOpen(true)
+                        }}
+                        className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Sigma className="w-3 h-3" /> KaTeX
+                      </button>
+                    </div>
+                  </div>
                   <textarea
                     rows={4}
                     value={kunciJawabanTeks}
@@ -1400,6 +1994,12 @@ export function ModulSoalView({
                     placeholder="Tuliskan kunci jawaban teks atau panduan penilaian..."
                     className="w-full p-3 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                   />
+                  {kunciJawabanTeks && (
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-white/10 text-xs">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">Preview Render:</div>
+                      <MathRenderer content={kunciJawabanTeks} />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1428,3 +2028,4 @@ export function ModulSoalView({
     </div>
   )
 }
+

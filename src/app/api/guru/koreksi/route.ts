@@ -5,25 +5,14 @@ import { prisma } from '@/lib/prisma';
 export async function GET(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !['GURU', 'ADMIN'].includes(user.role)) {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const ujianId = searchParams.get('ujianId');
 
-    const ujianWhereClause: any = {};
-    if (user.role === 'GURU') {
-      ujianWhereClause.mataPelajaran = {
-        OR: [
-          { pembuatId: user.userId },
-          { gurus: { some: { guruId: user.userId } } },
-        ],
-      };
-    }
-
-    const ujianList = await prisma.ujian.findMany({
-      where: ujianWhereClause,
+    let ujianList = await prisma.ujian.findMany({
       include: {
         mataPelajaran: true,
       },
@@ -35,18 +24,8 @@ export async function GET(request: NextRequest) {
     let activeUjian: any = null;
 
     if (activeUjianId) {
-      const singleUjianWhere: any = { id: activeUjianId };
-      if (user.role === 'GURU') {
-        singleUjianWhere.mataPelajaran = {
-          OR: [
-            { pembuatId: user.userId },
-            { gurus: { some: { guruId: user.userId } } },
-          ],
-        };
-      }
-
       activeUjian = await prisma.ujian.findFirst({
-        where: singleUjianWhere,
+        where: { id: activeUjianId },
         include: {
           mataPelajaran: {
             include: {
@@ -101,7 +80,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !['GURU', 'ADMIN'].includes(user.role)) {
+    if (!user || !['SUPERADMIN', 'ADMIN', 'GURU', 'PROKTOR'].includes(user.role)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 

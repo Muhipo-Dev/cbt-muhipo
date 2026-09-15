@@ -10,13 +10,12 @@ export default async function HomePage() {
 
   if (user.role === 'SISWA') {
     redirect('/siswa');
-  } else if (user.role === 'PROKTOR') {
-    redirect('/proktor');
+  } else if (user.role === 'SUPERADMIN' || user.role === 'ADMIN' || user.role === 'PROKTOR') {
+    redirect('/admin');
   } else if (user.role === 'GURU') {
     redirect('/guru');
-  } else if (user.role === 'ADMIN') {
-    redirect('/admin');
   }
 
   redirect('/login');
 }
+

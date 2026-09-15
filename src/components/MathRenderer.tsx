@@ -41,7 +41,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
 
     // 3. Format Video URL langsung (mp4, webm, ogg) jika berupa URL teks
     formatted = formatted.replace(
-      /(https?:\/\/[^\s<>"']+\.(?:mp4|webm|ogg))/gi,
+      /(https?:\/\/[^\s<>"']+\.(?:mp4|webm|ogg)|\/uploads\/[^\s<>"']+\.(?:mp4|webm|ogg))/gi,
       `<video controls class="my-2 rounded-2xl max-w-lg w-full mx-auto shadow-sm"><source src="$1" /></video>`
     );
 
@@ -51,16 +51,16 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
       `<div class="my-2 rounded-2xl overflow-hidden shadow-sm aspect-video max-w-lg mx-auto"><iframe class="w-full h-full" src="https://www.youtube-nocookie.com/embed/$1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>`
     );
 
-    // 5. Format Audio URL langsung (mp3, wav, ogg) jika berupa URL teks
+    // 5. Format Audio URL langsung (mp3, wav, ogg, m4a) jika berupa URL teks
     formatted = formatted.replace(
-      /(https?:\/\/[^\s<>"']+\.(?:mp3|wav|m4a))/gi,
+      /(https?:\/\/[^\s<>"']+\.(?:mp3|wav|m4a|aac|ogg)|\/uploads\/[^\s<>"']+\.(?:mp3|wav|m4a|aac|ogg))/gi,
       `<audio controls class="my-2 w-full max-w-lg mx-auto block"><source src="$1" /></audio>`
     );
 
     // 6. Format Markdown Image ![alt](url)
     formatted = formatted.replace(
-      /!\[([^\]]*)\]\((https?:\/\/[^\s\)]+|data:image\/[^\)]+)\)/gi,
-      `<img src="$2" alt="$1" class="my-2 rounded-2xl max-h-72 mx-auto border shadow-xs object-contain" />`
+      /!\[([^\]]*)\]\(([^)]+)\)/gi,
+      `<img src="$2" alt="$1" class="my-2 rounded-xl max-h-72 max-w-full mx-auto border border-slate-200 dark:border-slate-700 shadow-xs object-contain" />`
     );
 
     // 7. Dukung line breaks (spasi ke bawah / baris baru)
@@ -76,4 +76,5 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
     />
   );
 };
+
 
