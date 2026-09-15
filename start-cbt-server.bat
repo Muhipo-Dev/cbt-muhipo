@@ -1,12 +1,12 @@
 @echo off
 setlocal enabledelayedexpansion
 
-REM Atur PATH sistem agar semua utility selalu tersedia
+REM Atur PATH sistem agar semua utility sistem selalu dapat dipanggil
 set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0;C:\Program Files\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\nodejs;%PATH%"
 set "NODE_ENV=production"
 
 cd /d "%~dp0"
-title CBT MUHIPO Server (Production) - SMA Muhammadiyah 1 Ponorogo
+title CBT MUHIPO Server Controller - SMA Muhammadiyah 1 Ponorogo
 color 0B
 
 cls
@@ -19,7 +19,7 @@ REM 1. Cek ketersediaan Node.js
 where node >nul 2>&1
 if errorlevel 1 (
     color 0C
-    echo [ERROR] Node.js tidak terdeteksi di PATH sistem.
+    echo [ERROR] Node.js tidak ditemukan di sistem.
     echo Silakan install Node.js dari: https://nodejs.org/
     echo.
     pause
@@ -28,27 +28,25 @@ if errorlevel 1 (
 
 REM 2. Cek apakah build Next.js sudah ada
 if not exist ".next" (
-    echo [INFO] Build production belum ditemukan.
-    echo Melakukan proses build pertama kali (membutuhkan waktu sebentar)...
+    echo [INFO] Build sistem production belum ditemukan.
+    echo Melakukan compiling build pertama kali (membutuhkan waktu sebentar)...
     echo.
     call npm run build
     if errorlevel 1 (
         color 0C
         echo.
-        echo [ERROR] Gagal melakukan build sistem. Silakan periksa pesan error di atas.
+        echo [ERROR] Gagal melakukan build sistem. Silakan periksa pesan error.
         echo.
         pause
         exit /b 1
     )
-    echo.
     echo [OK] Build sistem berhasil.
-    ping 127.0.0.1 -n 2 >nul
 )
 
-REM 3. Inisialisasi awal server jika belum berjalan
+REM 3. Jalankan server pertama kali jika belum aktif
 set "INIT_PID="
-for /f "delims=" %%p in ('powershell.exe -NoProfile -Command "(Get-NetTCPConnection -LocalPort 443 -State Listen -ErrorAction SilentlyContinue).OwningProcess"') do (
-    if %%p GTR 0 set "INIT_PID=%%p"
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr /R /C:":443 " ^| findstr "LISTENING"') do (
+    set "INIT_PID=%%a"
 )
 if not defined INIT_PID (
     call :SUB_START_SERVER
@@ -57,8 +55,8 @@ if not defined INIT_PID (
 :MENU_LOOP
 cls
 set "SERVER_PID="
-for /f "delims=" %%p in ('powershell.exe -NoProfile -Command "(Get-NetTCPConnection -LocalPort 443 -State Listen -ErrorAction SilentlyContinue).OwningProcess"') do (
-    if %%p GTR 0 set "SERVER_PID=%%p"
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr /R /C:":443 " ^| findstr "LISTENING"') do (
+    set "SERVER_PID=%%a"
 )
 
 if defined SERVER_PID (
@@ -74,12 +72,12 @@ echo ===========================================================================
 echo.
 
 if defined SERVER_PID (
-    echo  STATUS SERVER : [ AKTIF - SIAP DIGUNAKAN ] (PID: !SERVER_PID!)
+    echo  STATUS SERVER : [ AKTIF / ONLINE - SIAP DIGUNAKAN (PID: !SERVER_PID!) ]
 ) else (
-    echo  STATUS SERVER : [ NONAKTIF / MATI ]
+    echo  STATUS SERVER : [ NONAKTIF / OFFLINE (SERVER MATI) ]
 )
 
-echo  PORT SERVER   : 443 (HTTPS UTAMA AMAN) ^& 80 (HTTP AUTO-REDIRECT)
+echo  PORT UTAMA    : 443 (HTTPS Secure) ^& 80 (HTTP Auto-Redirect)
 echo  AKSES LOKAL   : https://localhost
 echo.
 echo  ALAMAT IP JARINGAN (UNTUK AKSES PESERTA / SISWA):
@@ -98,26 +96,17 @@ if defined LAST_IP (
 )
 echo             Pada browser siswa, klik "Lanjutan / Advanced" lalu "Lanjutkan ke situs".
 echo.
-echo  ------------------------------------------------------------------------------
-echo  LOG STATUS TERAKHIR:
-if exist "cbt-app.log" (
-    powershell.exe -NoProfile -Command "Get-Content -Path 'cbt-app.log' -Tail 6 | ForEach-Object { '   | ' + $_ }"
-) else (
-    echo    (Belum ada catatan log aktivitas)
-)
-echo  ------------------------------------------------------------------------------
-echo.
 echo ==============================================================================
 echo  PILIHAN KONTROL SERVER CBT:
 echo ==============================================================================
 echo    [1] RESTART SERVER      - Mulai ulang server HTTPS (Port 443 ^& 80)
-echo    [2] MATIKAN SERVER      - Matikan server CBT (POWER OFF)
+echo    [2] MATIKAN SERVER      - Hentikan server CBT (POWER OFF)
 echo    [3] NYALAKAN SERVER     - Jalankan server CBT (POWER ON)
 echo    [4] REBUILD SISTEM      - Build ulang source code + Restart server
 echo    [5] BUKA DI BROWSER     - Buka https://localhost di browser
-echo    [6] LIHAT SEMUA LOG     - Buka log lengkap aktivitas server
-echo    [7] REFRESH TAMPILAN    - Segarkan status dan daftar alamat IP
-echo    [0] KELUAR              - Matikan server dan tutup jendela
+echo    [6] LIHAT LOG AKTIF     - Tampilkan catatan log aktivitas server
+echo    [7] REFRESH STATUS      - Segarkan tampilan dan status koneksi
+echo    [0] KELUAR              - Matikan server dan tutup jendela controller
 echo ==============================================================================
 echo.
 set "CHOICE="
@@ -133,7 +122,7 @@ if "%CHOICE%"=="7" goto MENU_LOOP
 if "%CHOICE%"=="0" goto DO_EXIT
 
 echo.
-echo [!] Pilihan tidak valid, silakan coba lagi.
+echo [!] Pilihan tidak valid, silakan masukkan nomor 0 sampai 7.
 ping 127.0.0.1 -n 2 >nul
 goto MENU_LOOP
 
@@ -141,7 +130,7 @@ goto MENU_LOOP
 :DO_RESTART
 echo.
 echo ==============================================================================
-echo [1/2] Menghentikan server CBT yang berjalan...
+echo [1/2] Menghentikan server CBT...
 call :SUB_STOP_SERVER
 echo [2/2] Menyalakan server CBT Mode Secure HTTPS di Port 443 ^& 80...
 call :SUB_START_SERVER
@@ -154,10 +143,10 @@ goto MENU_LOOP
 :DO_STOP
 echo.
 echo ==============================================================================
-echo Menghentikan server CBT...
+echo Menghentikan server CBT (POWER OFF)...
 call :SUB_STOP_SERVER
 echo.
-echo [SUKSES] Server CBT berhasil dinonaktifkan (Port 443 dan 80 dibebaskan).
+echo [SUKSES] Server CBT berhasil dinonaktifkan (Port 443 dan 80 telah dibebaskan).
 ping 127.0.0.1 -n 2 >nul
 goto MENU_LOOP
 
@@ -165,7 +154,7 @@ goto MENU_LOOP
 :DO_START
 echo.
 echo ==============================================================================
-echo Memeriksa dan menyalakan server CBT di Port 443 ^& 80...
+echo Menyalakan server CBT (POWER ON)...
 call :SUB_STOP_SERVER
 call :SUB_START_SERVER
 echo.
@@ -212,17 +201,17 @@ goto MENU_LOOP
 cls
 color 0F
 echo ==============================================================================
-echo                       LOG AKTIVITAS LENGKAP SERVER CBT
+echo                       LOG AKTIVITAS SERVER CBT
 echo ==============================================================================
 echo.
 if exist "cbt-app.log" (
-    powershell.exe -NoProfile -Command "Get-Content -Path 'cbt-app.log' -Tail 40"
+    powershell.exe -NoProfile -Command "Get-Content -Path 'cbt-app.log' -Tail 30"
 ) else (
-    echo [INFO] File cbt-app.log belum tersedia.
+    echo [INFO] File log cbt-app.log belum tersedia.
 )
 echo.
 echo ==============================================================================
-echo Tekan sembarang tombol untuk kembali ke dashboard...
+echo Tekan sembarang tombol untuk kembali ke menu utama...
 pause >nul
 goto MENU_LOOP
 
@@ -230,9 +219,9 @@ goto MENU_LOOP
 :DO_EXIT
 echo.
 echo ==============================================================================
-echo Menghentikan server CBT dan menutup jendela...
+echo Menghentikan server CBT dan menutup controller...
 call :SUB_STOP_SERVER
-echo Selesai. Sampai jumpa!
+echo Server dimatikan. Selesai.
 ping 127.0.0.1 -n 2 >nul
 exit /b 0
 
@@ -242,17 +231,18 @@ REM SUBROUTINES
 REM ==============================================================================
 
 :SUB_START_SERVER
-echo [..] Mengaktifkan service HTTPS Server Port 443 ^& 80...
+echo [..] Menjalankan server CBT di Port 443 ^& 80...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c node server.js > cbt-app.log 2>&1' -WorkingDirectory '%~dp0.' -WindowStyle Hidden" >nul 2>&1
 ping 127.0.0.1 -n 3 >nul
 goto :eof
 
 :SUB_STOP_SERVER
-echo [..] Mematikan proses server pada Port 443 dan 80...
-for /f "delims=" %%p in ('powershell.exe -NoProfile -Command "(Get-NetTCPConnection -LocalPort 443,80 -State Listen -ErrorAction SilentlyContinue).OwningProcess"') do (
-    if %%p GTR 0 (
-        taskkill /F /PID %%p >nul 2>&1
-    )
+echo [..] Menghentikan service pada Port 443 dan 80...
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /R /C:":443 " ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%p >nul 2>&1
+)
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /R /C:":80 " ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%p >nul 2>&1
 )
 ping 127.0.0.1 -n 2 >nul
 goto :eof
