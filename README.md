@@ -74,7 +74,7 @@ Platform ini beroperasi secara *standalone* menggunakan file database SQLite lok
 | **Frontend** | React 19 + TypeScript | UI interaktif, type-safe, dan modular |
 | **Styling** | Tailwind CSS v4 | Desain antarmuka responsif dan clean |
 | **Database** | SQLite + Prisma ORM 5.22 | Penyimpanan database lokal bebas konfigurasi (*zero-config*) |
-| **Keamanan Server** | Custom Node.js Server (`server.js`) | Dual-listener: Port 443 (HTTPS) & Port 80 (HTTP Auto-Redirect) |
+| **Keamanan Server** | Custom Node.js Server (`server.js`) | Dual-listener: Port 8443 (HTTPS) & Port 8080 (HTTP Auto-Redirect) |
 | **Sertifikat SSL** | `selfsigned` | Otomatis men-generate sertifikat TLS untuk localhost dan seluruh IP lokal |
 | **Matematika/Formula** | KaTeX | Render notasi matematika & sains instan di browser |
 | **Spreadsheet** | ExcelJS & XLSX | Generator dan parser data Excel untuk soal, peserta, dan rekap nilai |
@@ -121,11 +121,12 @@ Atau melalui PowerShell:
 ```
 
 Server akan aktif pada:
-- **HTTPS (Port 443)**: `https://localhost` atau `https://[IP_SERVER]` *(Utama)*
-- **HTTP (Port 80)**: `http://localhost` *(Otomatis dialihkan ke HTTPS)*
+- **HTTPS (Port 8443)**: `https://localhost:8443` *(Rekomendasi Utama)*
+- **HTTP (Port 8080)**: `http://localhost:8080` *(Otomatis dialihkan ke HTTPS Port 8443)*
+- **Prisma Studio (Port 5560)**: `http://localhost:5560` *(GUI Database SQLite)*
 
 > 💡 **Akses Komputer Klien (Siswa & Proktor):**
-> Komputer siswa cukup membuka browser dan mengakses alamat IP Server: `https://[IP_SERVER]` (contoh: `https://192.168.1.100`).
+> Komputer siswa cukup membuka browser dan mengakses alamat IP Server: `https://[IP_SERVER]:8443` (contoh: `https://192.168.1.100:8443`).
 
 ---
 
@@ -175,8 +176,8 @@ cbt-muhipo/
   - Penambahan deteksi pergantian aplikasi / `Alt+Tab` / kehilangan fokus jendela browser (`APP_SWITCH_ALERT`).
   - Penyesuaian batas maksimal pelanggaran menjadi **5 kali pelanggaran** sebelum akun ujian terkunci otomatis (*Auto-Lock*).
   - Snapshot tangkapan layar otomatis dikirim ke server saat terjadi pelanggaran sebagai bukti audit.
-- **Server Mandiri Berbasis HTTPS (Port 443)**:
-  - Pembuatan `server.js` standalone dengan dukungan port 443 (HTTPS) dan auto-redirect dari port 80 (HTTP).
+- **Server Mandiri Berbasis HTTPS (Port 8443)**:
+  - Pembuatan `server.js` standalone dengan dukungan port 8443 (HTTPS) dan auto-redirect dari port 8080 (HTTP).
   - Otomatis membuat sertifikat SSL/TLS mandiri (*self-signed certificate*) mencakup `localhost`, `127.0.0.1`, dan seluruh IP adapter jaringan lokal.
   - Memastikan *Secure Context* aktif sehingga fitur *Screen Sharing* Google Chrome (`getDisplayMedia`) tidak terblokir di komputer siswa.
 - **Dashboard & CCTV Proktor**:

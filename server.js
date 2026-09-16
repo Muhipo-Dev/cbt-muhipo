@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const next = require('next');
-const selfsigned = require('selfsigned');
 
 if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = 'production';
@@ -13,8 +12,8 @@ const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev, dir: __dirname });
 const handle = app.getRequestHandler();
 
-const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || '443', 10);
-const HTTP_PORT = parseInt(process.env.HTTP_PORT || '80', 10);
+const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || '8443', 10);
+const HTTP_PORT = parseInt(process.env.HTTP_PORT || '8080', 10);
 
 // Direktori penyimpanan sertifikat lokal
 const certDir = path.join(__dirname, 'certificates');
@@ -53,6 +52,7 @@ async function getOrCreateCertificates() {
   }
 
   console.log('[SSL] Menghasilkan sertifikat SSL/TLS mandiri untuk Jaringan Lokal & Localhost...');
+  const selfsigned = require('selfsigned');
   const ips = getLocalIpAddresses();
   const altNames = [
     { type: 2, value: 'localhost' },
@@ -87,7 +87,7 @@ async function getOrCreateCertificates() {
 app.prepare().then(async () => {
   const { key, cert } = await getOrCreateCertificates();
 
-  // 1. Server Utama: HTTPS (Port 443 / HTTPS_PORT)
+  // 1. Server Utama: HTTPS (Port 8443 / HTTPS_PORT)
   const httpsServer = https.createServer({ key, cert }, (req, res) => {
     handle(req, res);
   });
@@ -111,7 +111,7 @@ app.prepare().then(async () => {
     console.log('================================================================\n');
   });
 
-  // 2. Server Pengalih: HTTP (Port 80 / HTTP_PORT) -> Otomatis Redirect ke HTTPS
+  // 2. Server Pengalih: HTTP (Port 8080 / HTTP_PORT) -> Otomatis Redirect ke HTTPS
   const redirectServer = http.createServer((req, res) => {
     const host = req.headers.host ? req.headers.host.split(':')[0] : 'localhost';
     const targetPort = HTTPS_PORT === 443 ? '' : `:${HTTPS_PORT}`;

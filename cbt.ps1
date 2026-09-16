@@ -7,7 +7,7 @@ param(
 #   Muhipo Dev (C) 2026
 #   
 #   PORT CBT STANDALONE:
-#   - CBT Web App & API  : Port Mutlak 80 (Port Utama HTTP)
+#   - CBT Web App & API  : Port 8443 (HTTPS) & Port 8080 (HTTP Auto-Redirect)
 #   - Prisma Studio (DB) : Port Mutlak 5560
 # ==============================================================================
 
@@ -17,8 +17,8 @@ $PRISMA_LOG     = Join-Path $ROOT "prisma-studio.log"
 $APP_PID_FILE   = Join-Path $ROOT ".cbt-app.pid"
 $PRISMA_PID_FILE= Join-Path $ROOT ".prisma-studio.pid"
 
-$CBT_PORT       = 443
-$HTTP_PORT      = 80
+$CBT_PORT       = 8443
+$HTTP_PORT      = 8080
 $STUDIO_PORT    = 5560
 
 # ─── HELPERS ────────────────────────────────────────────────
@@ -114,8 +114,8 @@ function Show-Status {
     Write-Host "  +--------------------+------------------------+" -ForegroundColor DarkGray
     Write-Host "  | Database SQLite    | " -NoNewline
     Write-Host ($dStatus + "   |") -ForegroundColor $dColor
-    Write-Host "  | CBT Web HTTPS (:443)| " -NoNewline
-    Write-Host ($aStatus + " :$CBT_PORT    |") -ForegroundColor $aColor
+    Write-Host "  | CBT Web HTTPS(:8443)| " -NoNewline
+    Write-Host ($aStatus + " :$CBT_PORT   |") -ForegroundColor $aColor
     Write-Host "  | Prisma Studio (:5560)| " -NoNewline
     Write-Host ($pStatus + " :$STUDIO_PORT     |") -ForegroundColor $pColor
     Write-Host "  +--------------------+------------------------+" -ForegroundColor DarkGray
@@ -137,13 +137,13 @@ function Start-CBTApp {
     }
 
     Write-Status "Menjalankan CBT Web App Secure HTTPS pada port $CBT_PORT (Auto-Redirect di Port $HTTP_PORT)..." "Cyan"
-    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c cd /d `"$ROOT`" && node server.js > `"$APP_LOG`" 2>&1" -PassThru -WindowStyle Hidden
+    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c cd /d `"$ROOT`" && set HTTPS_PORT=$CBT_PORT && set HTTP_PORT=$HTTP_PORT && node server.js > `"$APP_LOG`" 2>&1" -PassThru -WindowStyle Hidden
     
     $proc.Id | Out-File $APP_PID_FILE -Force -Encoding ASCII
     Start-Sleep -Seconds 3
 
     if (Test-PortListening $CBT_PORT) {
-        Write-Ok "CBT Web App HTTPS berhasil aktif di https://localhost"
+        Write-Ok "CBT Web App HTTPS berhasil aktif di https://localhost:$CBT_PORT"
     } else {
         Write-Info "Server sedang inisialisasi di latar belakang (cek $APP_LOG)"
     }
@@ -225,9 +225,9 @@ while ($true) {
     Write-Host "  PILIHAN MENU MANAJEMEN CBT STANDALONE:" -ForegroundColor White
     Write-Host "  [1] Jalankan Semua Layanan (CBT App + Prisma Studio)" -ForegroundColor Green
     Write-Host "  [2] Hentikan Semua Layanan" -ForegroundColor Red
-    Write-Host "  [3] Jalankan CBT Web App Saja (:80)" -ForegroundColor Cyan
+    Write-Host "  [3] Jalankan CBT Web App Saja (:8443 & :8080)" -ForegroundColor Cyan
     Write-Host "  [4] Jalankan Prisma Studio GUI Saja (:5560)" -ForegroundColor Cyan
-    Write-Host "  [5] Buka Browser CBT Web App (http://localhost)" -ForegroundColor Yellow
+    Write-Host "  [5] Buka Browser CBT Web App (https://localhost:8443)" -ForegroundColor Yellow
     Write-Host "  [6] Inisialisasi Ulang Skema Database (Prisma db push & seed)" -ForegroundColor Magenta
     Write-Host "  [7] Rebuild Sistem (Prisma generate + Next.js build)" -ForegroundColor Cyan
     Write-Host "  [0] Keluar" -ForegroundColor DarkGray
@@ -239,7 +239,7 @@ while ($true) {
         "2" { Stop-AllServices; Read-Host "  Tekan Enter untuk kembali ke menu..." }
         "3" { Start-CBTApp; Read-Host "  Tekan Enter untuk kembali ke menu..." }
         "4" { Start-PrismaStudio; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "5" { Start-Process "http://localhost" }
+        "5" { Start-Process "https://localhost:8443" }
         "6" {
             Write-Status "Inisialisasi database..." "Cyan"
             cmd.exe /c "cd /d `"$ROOT`" && npx prisma db push && npx tsx prisma/seed.ts"
