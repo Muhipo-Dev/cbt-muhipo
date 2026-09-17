@@ -8,7 +8,7 @@ color 0B
 
 set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0;C:\xampp\mysql\bin;D:\xampp\mysql\bin;E:\xampp\mysql\bin;C:\Program Files\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\nodejs;C:\Program Files (x86)\nodejs;%PATH%"
 set "NODE_ENV=production"
-set "HTTPS_PORT=8443"
+set "PORT=8080"
 set "HTTP_PORT=8080"
 
 cls
@@ -61,9 +61,9 @@ if not exist ".env" (
     echo # KONFIGURASI BASIS DATA CBT MUHIPO > ".env"
     echo DATABASE_URL="mysql://root:@127.0.0.1:3306/cbt_muhipo" >> ".env"
     echo JWT_SECRET="cbt-muhipo-super-secret-key-2026-production-ready" >> ".env"
-    echo HTTPS_PORT=8443 >> ".env"
+    echo PORT=8080 >> ".env"
     echo HTTP_PORT=8080 >> ".env"
-    echo NEXT_PUBLIC_APP_URL="https://localhost:8443" >> ".env"
+    echo NEXT_PUBLIC_APP_URL="http://localhost:8080" >> ".env"
     echo NEXT_PUBLIC_APP_NAME="CBT SMA Muhammadiyah 1 Ponorogo" >> ".env"
     echo NEXT_PUBLIC_SCHOOL_NAME="SMA Muhammadiyah 1 Ponorogo" >> ".env"
     echo NEXT_PUBLIC_SCHOOL_ADDRESS="Jl. Batoro Katong No. 6 Ponorogo, Jawa Timur" >> ".env"
@@ -113,13 +113,13 @@ if not exist ".next" (
 )
 
 set "INIT_PID="
-for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr /R /C:":8443 " ^| findstr "LISTENING"') do set "INIT_PID=%%a"
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr /R /C:":8080 " ^| findstr "LISTENING"') do set "INIT_PID=%%a"
 if not defined INIT_PID call :SUB_START_SERVER
 
 :MENU_LOOP
 cls
 set "SERVER_PID="
-for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr /R /C:":8443 " ^| findstr "LISTENING"') do set "SERVER_PID=%%a"
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr /R /C:":8080 " ^| findstr "LISTENING"') do set "SERVER_PID=%%a"
 
 set "DB_PID="
 for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr /R /C:":3306 " ^| findstr "LISTENING"') do set "DB_PID=%%a"
@@ -139,14 +139,14 @@ if defined DB_PID (
 )
 
 echo ==============================================================================
-echo            CBT MUHIPO - SECURE HTTPS SERVER CONTROLLER
+echo            CBT MUHIPO - HTTP SERVER CONTROLLER (PORT 8080)
 echo            Muhipo Dev (C) 2026 - SMA Muhammadiyah 1 Ponorogo
 echo ==============================================================================
 echo.
 echo  STATUS SERVER : !SRV_TXT!
 echo  DATABASE MYSQL: !DB_TXT!
-echo  PORT UTAMA    : 8443 (HTTPS Secure) dan 8080 (HTTP Auto-Redirect)
-echo  AKSES PROKTOR : https://localhost:8443
+echo  PORT UTAMA    : 8080 (HTTP Server)
+echo  AKSES PROKTOR : http://localhost:8080
 echo.
 echo  ALAMAT IP JARINGAN (UNTUK AKSES PESERTA / SISWA DI RUANGAN / LAB):
 set "LAST_IP="
@@ -154,20 +154,19 @@ for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /i "IPv4"') do (
     set "raw_ip=%%i"
     set "clean_ip=!raw_ip: =!"
     set "LAST_IP=!clean_ip!"
-    echo    -^> https://!clean_ip!:8443
+    echo    -^> http://!clean_ip!:8080
 )
 echo.
-echo  [Info Akses]: Siswa membuka https://[IP_KOMPUTER]:8443 atau http://[IP_KOMPUTER]:8080
-echo  Browser siswa: Jika muncul peringatan SSL mandiri, klik Lanjutan lalu Lanjutkan.
+echo  [Info Akses]: Siswa membuka browser dan ketik http://[IP_KOMPUTER]:8080
 echo.
 echo ==============================================================================
 echo  PILIHAN KONTROL SERVER CBT:
 echo ==============================================================================
-echo    [1] RESTART SERVER      - Mulai ulang server HTTPS
+echo    [1] RESTART SERVER      - Mulai ulang server CBT di Port 8080
 echo    [2] MATIKAN SERVER      - Hentikan server CBT
-echo    [3] NYALAKAN SERVER     - Jalankan server CBT
+echo    [3] NYALAKAN SERVER     - Jalankan server CBT di Port 8080
 echo    [4] REBUILD SISTEM      - Build ulang source code + Restart server
-echo    [5] BUKA DI BROWSER     - Buka https://localhost:8443 di browser
+echo    [5] BUKA DI BROWSER     - Buka http://localhost:8080 di browser
 echo    [6] LIHAT LOG AKTIF     - Tampilkan 30 baris terakhir log aktivitas server
 echo    [7] REFRESH STATUS      - Segarkan status koneksi dan IP jaringan
 echo    [8] BACKUP DAN RESTORE  - Buka Menu Cadangan dan Pemulihan Basis Data
@@ -205,7 +204,7 @@ echo.
 echo ==============================================================================
 echo [1/2] Menghentikan server CBT...
 call :SUB_STOP_SERVER
-echo [2/2] Menyalakan server CBT Mode Secure HTTPS di Port 8443 dan 8080...
+echo [2/2] Menyalakan server CBT Mode HTTP di Port 8080...
 call :SUB_START_SERVER
 echo.
 echo [SUKSES] Server CBT berhasil direstart!
@@ -257,16 +256,16 @@ if %errorlevel% neq 0 (
     goto MENU_LOOP
 )
 echo.
-echo [4/4] Menyalakan ulang server CBT Secure HTTPS di Port 8443...
+echo [4/4] Menyalakan ulang server CBT di Port 8080...
 call :SUB_START_SERVER
 echo.
-echo [SUKSES] Sistem CBT berhasil di-rebuild dan dijalankan ulang di HTTPS Port 8443!
+echo [SUKSES] Sistem CBT berhasil di-rebuild dan dijalankan ulang di Port 8080!
 ping 127.0.0.1 -n 3 >nul
 goto MENU_LOOP
 
 
 :DO_BROWSER
-start https://localhost:8443
+start http://localhost:8080
 goto MENU_LOOP
 
 
@@ -304,18 +303,16 @@ REM SUBROUTINES
 REM ==============================================================================
 
 :SUB_START_SERVER
-echo [..] Menjalankan server CBT di Port 8443 dan 8080...
+echo [..] Menjalankan server CBT di Port 8080...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c node server.js > cbt-app.log 2>&1' -WorkingDirectory '%~dp0.' -WindowStyle Hidden" >nul 2>&1
 ping 127.0.0.1 -n 3 >nul
 goto :eof
 
 :SUB_STOP_SERVER
-echo [..] Menghentikan service pada Port 8443 dan 8080...
-for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /R /C:":8443 " ^| findstr "LISTENING"') do (
-    taskkill /F /PID %%p >nul 2>&1
-)
+echo [..] Menghentikan service pada Port 8080...
 for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /R /C:":8080 " ^| findstr "LISTENING"') do (
     taskkill /F /PID %%p >nul 2>&1
 )
 ping 127.0.0.1 -n 2 >nul
 goto :eof
+

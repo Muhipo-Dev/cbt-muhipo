@@ -74,8 +74,7 @@ Platform ini beroperasi secara *standalone* menggunakan file database SQLite lok
 | **Frontend** | React 19 + TypeScript | UI interaktif, type-safe, dan modular |
 | **Styling** | Tailwind CSS v4 | Desain antarmuka responsif dan clean |
 | **Database** | SQLite + Prisma ORM 5.22 | Penyimpanan database lokal bebas konfigurasi (*zero-config*) |
-| **Keamanan Server** | Custom Node.js Server (`server.js`) | Dual-listener: Port 8443 (HTTPS) & Port 8080 (HTTP Auto-Redirect) |
-| **Sertifikat SSL** | `selfsigned` | Otomatis men-generate sertifikat TLS untuk localhost dan seluruh IP lokal |
+| **Keamanan Server** | Custom Node.js Server (`server.js`) | Standalone High-Performance HTTP Server Port 8080 |
 | **Matematika/Formula** | KaTeX | Render notasi matematika & sains instan di browser |
 | **Spreadsheet** | ExcelJS & XLSX | Generator dan parser data Excel untuk soal, peserta, dan rekap nilai |
 
@@ -92,7 +91,6 @@ CBT MUHIPO dilengkapi dengan sistem pengamanan berlapis untuk menjamin integrita
 5. **Batas Toleransi & Auto-Lock**: Toleransi maksimal **5 kali pelanggaran**. Jika terlampaui, akun ujian otomatis terkunci dan hanya dapat dibuka oleh Proktor.
 6. **Alarm Suara & Buzzer**: Peringatan suara otomatis dalam Bahasa Indonesia menggunakan Web Speech API dan peringatan nada buzzer.
 7. **Bukti Audit Snapshot Layar**: Pengambilan tangkapan layar otomatis saat pelanggaran terjadi sebagai bukti bagi pengawas/proktor.
-8. **Secure Context HTTPS Enforced**: Mengaktifkan protokol HTTPS secara mandiri agar API browser modern seperti *Screen Sharing* (`getDisplayMedia`) di Google Chrome berfungsi tanpa kendala perizinan.
 
 ---
 
@@ -108,7 +106,7 @@ Cukup jalankan berkas batch yang telah disediakan:
 ```cmd
 setup-cbt-windows.bat
 ```
-*Skrip ini akan otomatis melakukan instalasi dependensi, migrasi skema SQLite (`dev.db`), dan menanamkan data awal (seeding).*
+*Skrip ini akan otomatis melakukan instalasi dependensi, migrasi skema database, dan menanamkan data awal (seeding).*
 
 ### 3. Menjalankan Server CBT
 Jalankan berkas peluncur server:
@@ -121,12 +119,11 @@ Atau melalui PowerShell:
 ```
 
 Server akan aktif pada:
-- **HTTPS (Port 8443)**: `https://localhost:8443` *(Rekomendasi Utama)*
-- **HTTP (Port 8080)**: `http://localhost:8080` *(Otomatis dialihkan ke HTTPS Port 8443)*
-- **Prisma Studio (Port 5560)**: `http://localhost:5560` *(GUI Database SQLite)*
+- **HTTP (Port 8080)**: `http://localhost:8080` *(Akses Utama Server CBT)*
+- **Prisma Studio (Port 5560)**: `http://localhost:5560` *(GUI Database)*
 
 > 💡 **Akses Komputer Klien (Siswa & Proktor):**
-> Komputer siswa cukup membuka browser dan mengakses alamat IP Server: `https://[IP_SERVER]:8443` (contoh: `https://192.168.1.100:8443`).
+> Komputer siswa cukup membuka browser dan mengakses alamat IP Server: `http://[IP_SERVER]:8080` (contoh: `http://192.168.1.100:8080`).
 
 ---
 

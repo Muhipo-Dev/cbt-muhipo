@@ -18,9 +18,9 @@ echo Langkah Pemeriksaan & Instalasi Otomatis:
 echo  1. Runtime & Package Manager   : Node.js LTS, NPM, Git
 echo  2. Layanan Basis Data (Backend): MySQL / MariaDB (Port 3306)
 echo  3. Database & Skema Penyimpanan: Basis data cbt_muhipo
-echo  4. Konfigurasi Sistem          : File .env (MySQL, Port, Secrets)
+echo  4. Konfigurasi Sistem          : File .env (MySQL, Port 8080, Secrets)
 echo  5. Dependensi Backend/Frontend : npm install (Next.js, React, Prisma, Tailwind)
-echo  6. Sertifikat SSL/TLS Lokal    : HTTPS Port 8443 & HTTP Port 8080
+echo  6. Konfigurasi Protokol Server : HTTP Port 8080 Standalone
 echo  7. Backend ORM & Data Seeder   : Prisma Client, Skema Sync, Default Master
 echo  8. Frontend Production Compile : Next.js 16 Optimized Production Build
 echo ==============================================================================
@@ -180,9 +180,9 @@ if not exist ".env" (
         echo # ==============================================================================
         echo DATABASE_URL="mysql://root:@127.0.0.1:3306/cbt_muhipo"
         echo JWT_SECRET="cbt-muhipo-super-secret-key-2026-production-ready"
-        echo HTTPS_PORT=8443
+        echo PORT=8080
         echo HTTP_PORT=8080
-        echo NEXT_PUBLIC_APP_URL="https://localhost:8443"
+        echo NEXT_PUBLIC_APP_URL="http://localhost:8080"
         echo NEXT_PUBLIC_APP_NAME="CBT SMA Muhammadiyah 1 Ponorogo"
         echo NEXT_PUBLIC_SCHOOL_NAME="SMA Muhammadiyah 1 Ponorogo"
         echo NEXT_PUBLIC_SCHOOL_ADDRESS="Jl. Batoro Katong No. 6 Ponorogo, Jawa Timur"
@@ -221,19 +221,11 @@ if defined NEED_INSTALL (
 )
 
 :: -----------------------------------------------------------------------------
-:: [6/8] PEMERIKSAAN SERTIFIKAT SSL/TLS LOKAL (HTTPS 8443)
+:: [6/8] KONFIGURASI PROTOKOL HTTP (PORT 8080)
 :: -----------------------------------------------------------------------------
 echo.
-echo [6/8] Memeriksa sertifikat SSL/TLS lokal (HTTPS Port 8443)...
-if not exist "certificates" mkdir "certificates"
-
-if not exist "certificates\cbt-local.crt" (
-    echo [INFO] Menghasilkan sertifikat SSL/TLS mandiri untuk akses jaringan lokal...
-    node -e "const { getOrCreateCertificates } = require('./server.js');" >nul 2>&1
-    echo [OK] Folder sertifikat SSL siap digunakan.
-) else (
-    echo [OK] Sertifikat SSL/TLS lokal sudah tersedia.
-)
+echo [6/8] Memeriksa konfigurasi protokol HTTP Port 8080...
+echo [OK] Server siap berjalan langsung dengan protokol HTTP pada port 8080.
 
 :: -----------------------------------------------------------------------------
 :: [7/8] MENYELARASKAN ORM PRISMA & SEED DATA MASTER
@@ -242,9 +234,6 @@ echo.
 echo [7/8] Menyelaraskan tabel database MySQL CBT MUHIPO...
 
 :: Matikan proses lama yang mungkin masih mengunci port/database
-for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /R /C:":8443 " ^| findstr "LISTENING"') do (
-    taskkill /F /PID %%p >nul 2>&1
-)
 for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /R /C:":8080 " ^| findstr "LISTENING"') do (
     taskkill /F /PID %%p >nul 2>&1
 )
@@ -304,13 +293,14 @@ echo  --------------------------------------------------------------------------
 echo  * Runtime       : Node.js (!NODE_VER!) & NPM (v!NPM_VER!)
 echo  * Database      : MySQL / MariaDB (cbt_muhipo @ 127.0.0.1:3306)
 echo  * Mode          : Database Eksisting (Data Aman Terpelihara)
-echo  * Port Akses    : HTTPS 8443 (Utama) dan HTTP 8080 (Auto-Redirect)
+echo  * Port Akses    : HTTP Port 8080
 echo  * Frontend/API  : Next.js Production Ready (Standar Concurrency Tinggi)
 echo  --------------------------------------------------------------------------
 echo.
 echo  Langkah Selanjutnya:
 echo  1. Jalankan start-cbt-server.bat untuk menyalakan server produksi.
-echo  2. Buka browser proktor / admin pada URL: https://localhost:8443
+echo  2. Buka browser proktor / admin pada URL: http://localhost:8080
 echo ==============================================================================
 echo.
 pause
+

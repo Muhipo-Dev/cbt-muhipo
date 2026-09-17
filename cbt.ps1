@@ -7,7 +7,7 @@ param(
 #   Muhipo Dev (C) 2026
 #   
 #   PORT CBT STANDALONE:
-#   - CBT Web App & API  : Port 8443 (HTTPS) & Port 8080 (HTTP Auto-Redirect)
+#   - CBT Web App & API  : Port 8080 (HTTP Server)
 #   - Prisma Studio (DB) : Port Mutlak 5560
 # ==============================================================================
 
@@ -17,8 +17,7 @@ $PRISMA_LOG     = Join-Path $ROOT "prisma-studio.log"
 $APP_PID_FILE   = Join-Path $ROOT ".cbt-app.pid"
 $PRISMA_PID_FILE= Join-Path $ROOT ".prisma-studio.pid"
 
-$CBT_PORT       = 8443
-$HTTP_PORT      = 8080
+$CBT_PORT       = 8080
 $STUDIO_PORT    = 5560
 
 # ─── HELPERS ────────────────────────────────────────────────
@@ -29,7 +28,7 @@ function Write-Banner {
     Write-Host "  +==================================================+" -ForegroundColor Cyan
     Write-Host "  |       CBT MUHIPO STANDALONE - Muhipo Dev         |" -ForegroundColor Cyan
     Write-Host "  |    Sistem CBT SMA Muhammadiyah 1 Ponorogo        |" -ForegroundColor Cyan
-    Write-Host "  |  Port Server: :$CBT_PORT (HTTPS) & :$STUDIO_PORT (Studio) |" -ForegroundColor DarkCyan
+    Write-Host "  |  Port Server: :$CBT_PORT (HTTP) & :$STUDIO_PORT (Studio)  |" -ForegroundColor DarkCyan
     Write-Host "  +==================================================+" -ForegroundColor Cyan
     Write-Host ""
 }
@@ -99,7 +98,7 @@ function Show-Status {
     $prismaRunning = ($null -ne $prismaPid -and (Test-ProcessRunning $prismaPid)) -or (Test-PortListening $STUDIO_PORT)
     $dbConnected   = Test-DatabaseConnection
 
-    $aStatus = if ($appRunning)    { "AKTIF (HTTPS)".PadRight(15) } else { "MATI/OFF".PadRight(15) }
+    $aStatus = if ($appRunning)    { "AKTIF (HTTP)".PadRight(15) } else { "MATI/OFF".PadRight(15) }
     $pStatus = if ($prismaRunning) { "AKTIF".PadRight(15) } else { "MATI/OFF".PadRight(15) }
     $dStatus = if ($dbConnected)   { "TERHUBUNG (:3306)".PadRight(16) } else { "TERPUTUS (:3306)".PadRight(16) }
 
@@ -112,7 +111,7 @@ function Show-Status {
     Write-Host "  +--------------------+------------------------+" -ForegroundColor DarkGray
     Write-Host "  | Database MySQL     | " -NoNewline
     Write-Host ($dStatus + "   |") -ForegroundColor $dColor
-    Write-Host "  | CBT Web HTTPS(:8443)| " -NoNewline
+    Write-Host "  | CBT Web HTTP (:8080)| " -NoNewline
     Write-Host ($aStatus + " :$CBT_PORT   |") -ForegroundColor $aColor
     Write-Host "  | Prisma Studio (:5560)| " -NoNewline
     Write-Host ($pStatus + " :$STUDIO_PORT     |") -ForegroundColor $pColor
@@ -123,9 +122,8 @@ function Show-Status {
 # ─── SERVICE ACTIONS ────────────────────────────────────────
 
 function Start-CBTApp {
-    Write-Status "Memeriksa port $CBT_PORT dan port $HTTP_PORT..." "Cyan"
+    Write-Status "Memeriksa port $CBT_PORT..." "Cyan"
     Stop-PortProcess $CBT_PORT
-    Stop-PortProcess $HTTP_PORT
     if (Test-Path $APP_PID_FILE) { Remove-Item $APP_PID_FILE -Force }
 
     $nextFolder = Join-Path $ROOT ".next"
@@ -134,25 +132,24 @@ function Start-CBTApp {
         cmd.exe /c "cd /d `"$ROOT`" && npm run build"
     }
 
-    Write-Status "Menjalankan CBT Web App Secure HTTPS pada port $CBT_PORT (Auto-Redirect di Port $HTTP_PORT)..." "Cyan"
-    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c cd /d `"$ROOT`" && set HTTPS_PORT=$CBT_PORT && set HTTP_PORT=$HTTP_PORT && node server.js > `"$APP_LOG`" 2>&1" -PassThru -WindowStyle Hidden
+    Write-Status "Menjalankan CBT Web App HTTP pada port $CBT_PORT..." "Cyan"
+    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c cd /d `"$ROOT`" && set PORT=$CBT_PORT && set HTTP_PORT=$CBT_PORT && node server.js > `"$APP_LOG`" 2>&1" -PassThru -WindowStyle Hidden
     
     $proc.Id | Out-File $APP_PID_FILE -Force -Encoding ASCII
     Start-Sleep -Seconds 3
 
     if (Test-PortListening $CBT_PORT) {
-        Write-Ok "CBT Web App HTTPS berhasil aktif di https://localhost:$CBT_PORT"
+        Write-Ok "CBT Web App HTTP berhasil aktif di http://localhost:$CBT_PORT"
     } else {
         Write-Info "Server sedang inisialisasi di latar belakang (cek $APP_LOG)"
     }
 }
 
 function Stop-CBTApp {
-    Write-Status "Menghentikan CBT Web App (Port $CBT_PORT & $HTTP_PORT)..." "Yellow"
+    Write-Status "Menghentikan CBT Web App (Port $CBT_PORT)..." "Yellow"
     $appPid = Get-StoredPid $APP_PID_FILE
     if ($appPid) { Stop-ProcessById $appPid }
     Stop-PortProcess $CBT_PORT
-    Stop-PortProcess $HTTP_PORT
     if (Test-Path $APP_PID_FILE) { Remove-Item $APP_PID_FILE -Force }
     Write-Ok "CBT Web App dihentikan."
 }
@@ -223,9 +220,9 @@ while ($true) {
     Write-Host "  PILIHAN MENU MANAJEMEN CBT STANDALONE:" -ForegroundColor White
     Write-Host "  [1] Jalankan Semua Layanan (CBT App + Prisma Studio)" -ForegroundColor Green
     Write-Host "  [2] Hentikan Semua Layanan" -ForegroundColor Red
-    Write-Host "  [3] Jalankan CBT Web App Saja (:8443 & :8080)" -ForegroundColor Cyan
+    Write-Host "  [3] Jalankan CBT Web App Saja (:8080)" -ForegroundColor Cyan
     Write-Host "  [4] Jalankan Prisma Studio GUI Saja (:5560)" -ForegroundColor Cyan
-    Write-Host "  [5] Buka Browser CBT Web App (https://localhost:8443)" -ForegroundColor Yellow
+    Write-Host "  [5] Buka Browser CBT Web App (http://localhost:8080)" -ForegroundColor Yellow
     Write-Host "  [6] Inisialisasi Ulang Skema Database (Prisma db push & seed)" -ForegroundColor Magenta
     Write-Host "  [7] Rebuild Sistem (Prisma generate + Next.js build)" -ForegroundColor Cyan
     Write-Host "  [0] Keluar" -ForegroundColor DarkGray
@@ -237,7 +234,7 @@ while ($true) {
         "2" { Stop-AllServices; Read-Host "  Tekan Enter untuk kembali ke menu..." }
         "3" { Start-CBTApp; Read-Host "  Tekan Enter untuk kembali ke menu..." }
         "4" { Start-PrismaStudio; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "5" { Start-Process "https://localhost:8443" }
+        "5" { Start-Process "http://localhost:8080" }
         "6" {
             Write-Status "Inisialisasi database..." "Cyan"
             cmd.exe /c "cd /d `"$ROOT`" && npx prisma db push && npx tsx prisma/seed.ts"
@@ -254,3 +251,4 @@ while ($true) {
         default { Write-Err "Pilihan tidak valid."; Start-Sleep -Seconds 1 }
     }
 }
+
