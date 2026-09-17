@@ -68,8 +68,8 @@ export function TesTambahView({
 
   const handleSaveTes = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.kodeUjian || !form.judul || !form.mataPelajaranId) {
-      showNotification('Peringatan', 'Kode Ujian, Judul Tes, dan Topik / Mata Pelajaran wajib diisi', 'warning')
+    if (!form.judul || !form.mataPelajaranId) {
+      showNotification('Peringatan', 'Judul Tes dan Topik / Mata Pelajaran wajib diisi', 'warning')
       return
     }
     if (form.kelasIds.length === 0) {
@@ -79,12 +79,14 @@ export function TesTambahView({
 
     try {
       setSaving(true)
+      const finalKode = form.kodeUjian || `TES-${Date.now().toString().slice(-6)}`
       const res = await fetch('/api/admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'CREATE_UJIAN',
           ...form,
+          kodeUjian: finalKode,
         }),
       })
 
@@ -119,20 +121,6 @@ export function TesTambahView({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Kode Ujian / Kode Tes *
-            </label>
-            <input
-              type="text"
-              required
-              value={form.kodeUjian}
-              onChange={(e) => setForm({ ...form, kodeUjian: e.target.value.toUpperCase() })}
-              placeholder="Contoh: PAS-MTK-2026"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-mono font-bold uppercase focus:outline-none focus:border-blue-500 text-slate-900 dark:text-white"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
               Pilih Topik / Mata Pelajaran *
             </label>
             <select
@@ -158,33 +146,20 @@ export function TesTambahView({
               })}
             </select>
           </div>
-        </div>
 
-        <div>
-          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-            Judul Lengkap Tes Ujian *
-          </label>
-          <input
-            type="text"
-            required
-            value={form.judul}
-            onChange={(e) => setForm({ ...form, judul: e.target.value })}
-            placeholder="Contoh: Penilaian Akhir Semester Ganjil - Matematika Wajib Kelas X"
-            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-            Petunjuk / Deskripsi Tes (Opsional)
-          </label>
-          <textarea
-            rows={2}
-            value={form.deskripsi}
-            onChange={(e) => setForm({ ...form, deskripsi: e.target.value })}
-            placeholder="Tuliskan petunjuk pengerjaan soal..."
-            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-          />
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Judul Lengkap Tes Ujian *
+            </label>
+            <input
+              type="text"
+              required
+              value={form.judul}
+              onChange={(e) => setForm({ ...form, judul: e.target.value })}
+              placeholder="Contoh: Penilaian Akhir Semester Ganjil - Matematika Wajib Kelas X"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
         </div>
 
         {/* Waktu & Durasi */}

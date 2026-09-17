@@ -866,7 +866,22 @@ export default function LembarUjianPage({
         origin: { y: 0.6 },
       });
 
-      alert(isAuto ? 'Waktu habis! Jawaban Anda telah otomatis dikumpulkan.' : 'Ujian berhasil diselesaikan!');
+      const tampilkanHasil = data?.data?.tampilkanHasil !== false;
+      const nilaiTotal = data?.data?.nilaiTotal ?? data?.data?.nilaiPG;
+
+      if (isAuto) {
+        if (tampilkanHasil && nilaiTotal !== undefined) {
+          alert(`Waktu habis! Jawaban Anda telah otomatis dikumpulkan.\n\nNilai Anda: ${nilaiTotal}/100`);
+        } else {
+          alert('Waktu habis! Jawaban Anda telah otomatis dikumpulkan.');
+        }
+      } else {
+        if (tampilkanHasil && nilaiTotal !== undefined) {
+          alert(`Ujian berhasil diselesaikan!\n\nNilai Perolehan: ${nilaiTotal}/100`);
+        } else {
+          alert('Ujian berhasil diselesaikan!\n\nJawaban Anda telah tersimpan aman.');
+        }
+      }
       router.push('/siswa');
     } catch (e) {
       isSubmittedRef.current = false;

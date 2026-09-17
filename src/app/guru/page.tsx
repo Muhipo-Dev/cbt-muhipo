@@ -139,6 +139,7 @@ export default function GuruDashboardPage() {
     lockBrowser: true,
     acakSoal: true,
     acakOpsi: true,
+    tampilkanHasil: false,
   });
 
   // Monitoring Pengerjaan Peserta / Pengawas Live State (Auto-Refresh 2 Detik)
@@ -349,12 +350,14 @@ export default function GuruDashboardPage() {
   const handleCreateBankSoal = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const finalKodeBank = newBankForm.kodeBank || `BS-${Date.now().toString().slice(-6)}`;
       const res = await fetch('/api/guru/soal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'CREATE_BANK_SOAL',
           ...newBankForm,
+          kodeBank: finalKodeBank,
         }),
       });
       const json = await res.json();
@@ -1909,6 +1912,7 @@ export default function GuruDashboardPage() {
                                 lockBrowser: true,
                                 acakSoal: true,
                                 acakOpsi: true,
+                                tampilkanHasil: false,
                               });
                             }}
                             className="flex-1 py-1.5 px-2 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 border border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 cursor-pointer"
@@ -1942,7 +1946,7 @@ export default function GuruDashboardPage() {
                 {selectedBankSoal ? (
                   <div className="space-y-6">
                     {/* Header Info Bank Terpilih */}
-                    <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 shadow-sm dark:shadow-xl backdrop-blur-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 shadow-sm dark:shadow-xl backdrop-blur-xl flex flex-col sm:row justify-between items-start sm:items-center gap-3">
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md">
@@ -1995,6 +1999,7 @@ export default function GuruDashboardPage() {
                               lockBrowser: true,
                               acakSoal: true,
                               acakOpsi: true,
+                              tampilkanHasil: false,
                             });
                           }}
                           className="px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md"
@@ -3384,19 +3389,7 @@ export default function GuruDashboardPage() {
             <h3 className="text-base font-bold text-slate-900 dark:text-white">Buat Bank Soal Baru</h3>
             <form onSubmit={handleCreateBankSoal} className="space-y-3">
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Kode Bank Soal</label>
-                <input
-                  type="text"
-                  required
-                  value={newBankForm.kodeBank}
-                  onChange={(e) => setNewBankForm({ ...newBankForm, kodeBank: e.target.value.toUpperCase() })}
-                  placeholder="Contoh: BS-MTK-XII-2026"
-                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono uppercase"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Nama Bank Soal</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Nama Bank Soal *</label>
                 <input
                   type="text"
                   required
@@ -3562,17 +3555,7 @@ export default function GuruDashboardPage() {
             </div>
             <form onSubmit={handleUpdateBankSoal} className="space-y-3">
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Kode Bank</label>
-                <input
-                  type="text"
-                  required
-                  value={editBankModal.kodeBank}
-                  onChange={(e) => setEditBankModal({ ...editBankModal, kodeBank: e.target.value })}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Nama Bank Soal</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Nama Bank Soal *</label>
                 <input
                   type="text"
                   required
@@ -3848,11 +3831,11 @@ export default function GuruDashboardPage() {
             </div>
 
             <form onSubmit={handleExecuteKirimKeKelas} className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Tipe Ujian</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Tipe / Kategori Ujian</label>
                   <select
-                    value={distributeForm.tipeUjian || 'PAS'}
+                    value={distributeForm.tipeUjian}
                     onChange={(e) => {
                       const newTipe = e.target.value;
                       setDistributeForm({
@@ -3872,17 +3855,7 @@ export default function GuruDashboardPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Kode Ujian</label>
-                  <input
-                    type="text"
-                    required
-                    value={distributeForm.kodeUjian}
-                    onChange={(e) => setDistributeForm({ ...distributeForm, kodeUjian: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Judul Ujian</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Judul Ujian *</label>
                   <input
                     type="text"
                     required
@@ -4031,32 +4004,52 @@ export default function GuruDashboardPage() {
                 )}
               </div>
 
-              {/* Opsi Anti-Cheat & Acak */}
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                <label className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={distributeForm.lockBrowser}
-                    onChange={(e) => setDistributeForm({ ...distributeForm, lockBrowser: e.target.checked })}
-                  />
-                  <span>Anti-Cheat</span>
+              {/* Opsi Pengerjaan & Keamanan Anti-Cheat */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Opsi Pengerjaan & Keamanan Anti-Cheat:
                 </label>
-                <label className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={distributeForm.acakSoal}
-                    onChange={(e) => setDistributeForm({ ...distributeForm, acakSoal: e.target.checked })}
-                  />
-                  <span>Acak Soal</span>
-                </label>
-                <label className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={distributeForm.acakOpsi}
-                    onChange={(e) => setDistributeForm({ ...distributeForm, acakOpsi: e.target.checked })}
-                  />
-                  <span>Acak Opsi</span>
-                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={distributeForm.acakSoal}
+                      onChange={(e) => setDistributeForm({ ...distributeForm, acakSoal: e.target.checked })}
+                      className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 w-4 h-4"
+                    />
+                    <span>Acak Butir Soal</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={distributeForm.acakOpsi}
+                      onChange={(e) => setDistributeForm({ ...distributeForm, acakOpsi: e.target.checked })}
+                      className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 w-4 h-4"
+                    />
+                    <span>Acak Opsi Pilihan</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={distributeForm.lockBrowser}
+                      onChange={(e) => setDistributeForm({ ...distributeForm, lockBrowser: e.target.checked })}
+                      className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 w-4 h-4"
+                    />
+                    <span>Lockdown Browser</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={distributeForm.tampilkanHasil}
+                      onChange={(e) => setDistributeForm({ ...distributeForm, tampilkanHasil: e.target.checked })}
+                      className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 w-4 h-4"
+                    />
+                    <span>Tampilkan Nilai ke Siswa</span>
+                  </label>
+                </div>
               </div>
 
               <div className="flex gap-3 pt-3">

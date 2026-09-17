@@ -483,6 +483,7 @@ export async function POST(request: NextRequest) {
         lockBrowser,
         acakSoal,
         acakOpsi,
+        tampilkanHasil,
       } = body;
 
       const targetMapelId = mataPelajaranId || topikId || bankSoalId;
@@ -511,6 +512,7 @@ export async function POST(request: NextRequest) {
           lockBrowser: lockBrowser !== false,
           acakSoal: acakSoal !== false,
           acakOpsi: acakOpsi !== false,
+          tampilkanHasil: tampilkanHasil === true,
           status: 'DIJADWALKAN',
           ujianKelas: {
             create: kelasIds.map((kId: string) => ({ kelasId: kId })),

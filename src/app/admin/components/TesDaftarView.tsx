@@ -524,26 +524,13 @@ export function TesDaftarView({
       {/* Modal Edit Tes */}
       {showEditModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-6 w-full max-w-2xl shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
             <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
               Edit Pengaturan Tes Ujian
             </h3>
 
-            <form onSubmit={handleSaveEdit} className="space-y-3.5">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Kode Ujian *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editForm.kodeUjian}
-                    onChange={(e) => setEditForm({ ...editForm, kodeUjian: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-mono font-bold uppercase focus:outline-none focus:border-blue-500 text-slate-900 dark:text-white"
-                  />
-                </div>
-
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Topik / Mata Pelajaran *
@@ -561,25 +548,25 @@ export function TesDaftarView({
                     ))}
                   </select>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Judul Tes *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editForm.judul}
-                  onChange={(e) => setEditForm({ ...editForm, judul: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Durasi (Menit)
+                    Judul Tes *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.judul}
+                    onChange={(e) => setEditForm({ ...editForm, judul: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Durasi (Menit) *
                   </label>
                   <input
                     type="number"
@@ -592,32 +579,139 @@ export function TesDaftarView({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Waktu Mulai
+                    Waktu Mulai *
                   </label>
                   <input
                     type="datetime-local"
                     required
                     value={editForm.waktuMulai}
                     onChange={(e) => setEditForm({ ...editForm, waktuMulai: e.target.value })}
-                    className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Waktu Selesai
+                    Waktu Selesai *
                   </label>
                   <input
                     type="datetime-local"
                     required
                     value={editForm.waktuSelesai}
                     onChange={(e) => setEditForm({ ...editForm, waktuSelesai: e.target.value })}
-                    className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3">
+              {/* Opsi Pengerjaan & Keamanan Anti-Cheat */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/5 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Opsi Pengerjaan & Keamanan Anti-Cheat:
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={editForm.acakSoal}
+                      onChange={(e) => setEditForm({ ...editForm, acakSoal: e.target.checked })}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                    />
+                    <span>Acak Butir Soal</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={editForm.acakOpsi}
+                      onChange={(e) => setEditForm({ ...editForm, acakOpsi: e.target.checked })}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                    />
+                    <span>Acak Opsi Pilihan</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={editForm.lockBrowser}
+                      onChange={(e) => setEditForm({ ...editForm, lockBrowser: e.target.checked })}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                    />
+                    <span>Lockdown Browser</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={editForm.tampilkanHasil}
+                      onChange={(e) => setEditForm({ ...editForm, tampilkanHasil: e.target.checked })}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                    />
+                    <span>Tampilkan Nilai ke Siswa</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Pemilihan Group / Kelas Peserta */}
+              {kelasList && kelasList.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Group / Kelas yang Mengikuti ({editForm.kelasIds.length} Dipilih)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editForm.kelasIds.length === kelasList.length) {
+                          setEditForm({ ...editForm, kelasIds: [] })
+                        } else {
+                          setEditForm({ ...editForm, kelasIds: kelasList.map((k) => k.id) })
+                        }
+                      }}
+                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      {editForm.kelasIds.length === kelasList.length ? 'Batalkan Semua' : 'Pilih Semua Group'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 custom-scrollbar">
+                    {kelasList.map((k) => {
+                      const isSelected = editForm.kelasIds.includes(k.id)
+                      return (
+                        <label
+                          key={k.id}
+                          className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition ${
+                            isSelected
+                              ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-400 text-blue-900 dark:text-blue-200 font-bold'
+                              : 'border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              if (isSelected) {
+                                setEditForm({
+                                  ...editForm,
+                                  kelasIds: editForm.kelasIds.filter((id: string) => id !== k.id),
+                                })
+                              } else {
+                                setEditForm({
+                                  ...editForm,
+                                  kelasIds: [...editForm.kelasIds, k.id],
+                                })
+                              }
+                            }}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                          />
+                          <span className="truncate">{k.nama}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-white/10">
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
