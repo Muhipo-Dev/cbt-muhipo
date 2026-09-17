@@ -84,12 +84,14 @@ export default function LembarUjianPage({
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>('normal');
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('saved');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [cheatWarning, setCheatWarning] = useState<string | null>(null);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const textDebounceRef = useRef<Record<string, NodeJS.Timeout>>({});
   const isSubmittedRef = useRef<boolean>(false);
   const securityUnlockedAtRef = useRef<number | null>(null);
   const lastViolationTimeRef = useRef<number>(0);
@@ -749,43 +751,71 @@ export default function LembarUjianPage({
     }
   };
 
-  // 4. Autosave Jawaban ke Server & Local Backup
-  const saveJawaban = async (soalId: string, value: string, ragu: boolean) => {
-    const nextState = {
-      ...jawabanMap,
+  // 4. Autosave Jawaban ke Server Realtime & Local State
+  const saveJawaban = async (soalId: string, value: string, ragu: boolean, immediate = true) => {
+    // 1. Update local state secara instan
+    setJawabanMap((prev) => ({
+      ...prev,
       [soalId]: {
         jawabanDipilih: value,
         raguRagu: ragu,
       },
-    };
-    setJawabanMap(nextState);
+    }));
 
-    // Kirim ke API Background
-    try {
-      await fetch(`/api/siswa/ujian/${ujianId}/jawaban`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          soalId,
-          jawabanDipilih: value,
-          raguRagu: ragu,
-          sisaDetik,
-        }),
-      });
-    } catch (e) {
-      console.warn('Gagal sync jawaban ke server, tersimpan lokal.');
+    // Fungsi kirim payload ke server
+    const sendPayload = async () => {
+      setSyncStatus('saving');
+      try {
+        const res = await fetch(`/api/siswa/ujian/${ujianId}/jawaban`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            soalId,
+            jawabanDipilih: value,
+            raguRagu: ragu,
+            sisaDetik,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setSyncStatus('saved');
+        } else {
+          setSyncStatus('error');
+        }
+      } catch (e) {
+        console.warn('Gagal sync jawaban ke server, tersimpan lokal.');
+        setSyncStatus('error');
+      }
+    };
+
+    if (immediate) {
+      // Untuk Pilihan Ganda / Kompleks / Menjodohkan / Ragu-ragu: Kirim seketika
+      if (textDebounceRef.current[soalId]) {
+        clearTimeout(textDebounceRef.current[soalId]);
+      }
+      sendPayload();
+    } else {
+      // Untuk Ketik Teks Isian/Esai: Debounce 400ms agar hemat request tapi tetap realtime saat selesai mengetik
+      if (textDebounceRef.current[soalId]) {
+        clearTimeout(textDebounceRef.current[soalId]);
+      }
+      textDebounceRef.current[soalId] = setTimeout(() => {
+        sendPayload();
+      }, 400);
     }
   };
 
   // Toggle Pilihan Ganda Biasa / Benar-Salah
   const handleSelectOpsi = (soalId: string, opsiId: string) => {
+    if (submitting || isSubmittedRef.current) return;
     const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
     const nextVal = curr.jawabanDipilih === opsiId ? '' : opsiId;
-    saveJawaban(soalId, nextVal, curr.raguRagu);
+    saveJawaban(soalId, nextVal, curr.raguRagu, true);
   };
 
   // Toggle Pilihan Ganda Kompleks (Bisa pilih multiple)
   const handleSelectOpsiKompleks = (soalId: string, opsiId: string) => {
+    if (submitting || isSubmittedRef.current) return;
     const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
     let currentIds: string[] = [];
     try {
@@ -800,25 +830,28 @@ export default function LembarUjianPage({
       currentIds.push(opsiId);
     }
 
-    saveJawaban(soalId, JSON.stringify(currentIds), curr.raguRagu);
+    saveJawaban(soalId, JSON.stringify(currentIds), curr.raguRagu, true);
   };
 
   // Toggle Ragu-Ragu
   const handleToggleRagu = () => {
+    if (submitting || isSubmittedRef.current) return;
     const currentSoal = soalList[currentIndex];
     if (!currentSoal) return;
     const curr = jawabanMap[currentSoal.id] || { jawabanDipilih: '', raguRagu: false };
-    saveJawaban(currentSoal.id, curr.jawabanDipilih, !curr.raguRagu);
+    saveJawaban(currentSoal.id, curr.jawabanDipilih, !curr.raguRagu, true);
   };
 
   // Input Teks untuk Isian / Esai
   const handleInputTeks = (soalId: string, text: string) => {
+    if (submitting || isSubmittedRef.current) return;
     const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
-    saveJawaban(soalId, text, curr.raguRagu);
+    saveJawaban(soalId, text, curr.raguRagu, false);
   };
 
   // Pilih Pasangan Pencocokan / Menjodohkan
   const handleSelectMatching = (soalId: string, leftText: string, rightText: string) => {
+    if (submitting || isSubmittedRef.current) return;
     const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
     let mapping: Record<string, string> = {};
     try {
@@ -835,7 +868,7 @@ export default function LembarUjianPage({
       mapping[leftText] = rightText;
     }
 
-    saveJawaban(soalId, JSON.stringify(mapping), curr.raguRagu);
+    saveJawaban(soalId, JSON.stringify(mapping), curr.raguRagu, true);
   };
 
   // Submit / Selesai Ujian
@@ -960,16 +993,53 @@ export default function LembarUjianPage({
           </div>
         </div>
 
-        {/* Center: Realtime Countdown Timer */}
-        <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl shadow-2xs shrink-0">
-          <Clock className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${sisaDetik < 300 ? 'text-rose-600 animate-pulse' : 'text-emerald-600 dark:text-emerald-400'}`} />
-          <span
-            className={`font-mono text-xs sm:text-base font-extrabold tracking-wider ${
-              sisaDetik < 300 ? 'text-rose-600 font-black' : 'text-slate-800 dark:text-slate-200'
+        {/* Center: Realtime Countdown Timer & Sync Indicator */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl shadow-2xs">
+            <Clock className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${sisaDetik < 300 ? 'text-rose-600 animate-pulse' : 'text-emerald-600 dark:text-emerald-400'}`} />
+            <span
+              className={`font-mono text-xs sm:text-base font-extrabold tracking-wider ${
+                sisaDetik < 300 ? 'text-rose-600 font-black' : 'text-slate-800 dark:text-slate-200'
+              }`}
+            >
+              {formatTime(sisaDetik)}
+            </span>
+          </div>
+
+          {/* Autosave Server Sync Status Indicator */}
+          <div
+            className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all ${
+              syncStatus === 'saving'
+                ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/80 animate-pulse'
+                : syncStatus === 'error'
+                ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/80'
+                : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/80'
             }`}
+            title={
+              syncStatus === 'saving'
+                ? 'Menyimpan jawaban ke server...'
+                : syncStatus === 'error'
+                ? 'Koneksi lambat, tersimpan lokal'
+                : 'Semua jawaban tersimpan aman di server'
+            }
           >
-            {formatTime(sisaDetik)}
-          </span>
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                syncStatus === 'saving'
+                  ? 'bg-amber-500 animate-ping'
+                  : syncStatus === 'error'
+                  ? 'bg-rose-500'
+                  : 'bg-emerald-500'
+              }`}
+            />
+            <span>
+              {syncStatus === 'saving'
+                ? 'Menyimpan...'
+                : syncStatus === 'error'
+                ? 'Tersimpan Lokal'
+                : 'Autosave Aktif'}
+            </span>
+          </div>
         </div>
 
         {/* Right: Quick Tools (ThemeToggle, Font size, Grid Modal, Fullscreen) */}
