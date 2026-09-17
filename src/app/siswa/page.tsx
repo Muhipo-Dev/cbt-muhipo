@@ -126,7 +126,7 @@ export default function SiswaPortalPage() {
     }
   };
 
-  const activeBg = pengaturan?.backgroundUrl || '/muhipo-front.jpg';
+  const activeBg = pengaturan?.backgroundUrl || '/muhipo-log.jpg';
   const academicYear = pengaturan?.academicYear || '2026/2027';
   const semester = pengaturan?.semester || 'Ganjil';
 

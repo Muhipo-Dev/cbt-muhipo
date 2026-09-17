@@ -74,7 +74,7 @@ export default function GuruDashboardPage() {
     academicYear: '2026/2027',
     semester: 'Ganjil',
     logoUrl: '/pic_logo.png',
-    backgroundUrl: '/muhipo-front.jpg',
+    backgroundUrl: '/muhipo-log.jpg',
   });
 
   // Bank Soal State
@@ -261,7 +261,7 @@ export default function GuruDashboardPage() {
             academicYear: pJson.data.academicYear || '2026/2027',
             semester: pJson.data.semester || 'Ganjil',
             logoUrl: pJson.data.logoUrl || '/pic_logo.png',
-            backgroundUrl: pJson.data.backgroundUrl || '/muhipo-front.jpg',
+            backgroundUrl: pJson.data.backgroundUrl || '/muhipo-log.jpg',
           });
         }
       } catch (err) {
@@ -1200,7 +1200,7 @@ export default function GuruDashboardPage() {
     );
   }, [bankSoalList, searchQuery]);
 
-  const activeBg = settingsForm.backgroundUrl || '/muhipo-front.jpg';
+  const activeBg = settingsForm.backgroundUrl || '/muhipo-log.jpg';
 
   // Quick stats summary
   const totalBankSoal = bankSoalList.length;

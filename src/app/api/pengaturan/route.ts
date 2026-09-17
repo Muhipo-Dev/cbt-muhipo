@@ -59,7 +59,7 @@ export async function GET() {
           timezone: 'Asia/Jakarta',
           serverLocation: 'Ponorogo, Jawa Timur',
           logoUrl: '/pic_logo.png',
-          backgroundUrl: '/muhipo-front.jpg',
+          backgroundUrl: '/muhipo-log.jpg',
           timeSyncOffsetMs: 0,
         },
       });
@@ -106,7 +106,7 @@ export async function GET() {
         timezone: 'Asia/Jakarta',
         serverLocation: 'Ponorogo, Jawa Timur',
         logoUrl: '/pic_logo.png',
-        backgroundUrl: '/muhipo-front.jpg',
+        backgroundUrl: '/muhipo-log.jpg',
         timeSyncOffsetMs: 0,
       },
       serverTime: {
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
         timezone: timezone?.trim() || 'Asia/Jakarta',
         serverLocation: serverLocation?.trim() || 'Ponorogo, Jawa Timur',
         logoUrl: logoUrl || '/pic_logo.png',
-        backgroundUrl: backgroundUrl || '/muhipo-front.jpg',
+        backgroundUrl: backgroundUrl || '/muhipo-log.jpg',
         timeSyncOffsetMs: Number(timeSyncOffsetMs) || 0,
       },
     });

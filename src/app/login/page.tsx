@@ -25,7 +25,7 @@ export default function SingleSignInLoginPage() {
   const [settings, setSettings] = useState({
     schoolName: 'SMA Muhammadiyah 1 Ponorogo',
     appTitle: 'CBT SMA MUHIPO',
-    backgroundUrl: '/muhipo-front.jpg',
+    backgroundUrl: '/muhipo-log.jpg',
     logoUrl: '/pic_logo.png',
   });
 
@@ -39,7 +39,7 @@ export default function SingleSignInLoginPage() {
           setSettings({
             schoolName: json.data.schoolName || 'SMA Muhammadiyah 1 Ponorogo',
             appTitle: json.data.appTitle || 'CBT SMA MUHIPO',
-            backgroundUrl: json.data.backgroundUrl || '/muhipo-front.jpg',
+            backgroundUrl: json.data.backgroundUrl || '/muhipo-log.jpg',
             logoUrl: json.data.logoUrl || '/pic_logo.png',
           });
         }
@@ -91,7 +91,7 @@ export default function SingleSignInLoginPage() {
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0 transform scale-100 transition-transform duration-1000 opacity-60 dark:opacity-40 pointer-events-none"
         style={{
-          backgroundImage: `url('${settings.backgroundUrl || '/muhipo-front.jpg'}')`,
+          backgroundImage: `url('${settings.backgroundUrl || '/muhipo-log.jpg'}')`,
         }}
       />
       {/* Overlay Transparan Halus */}
