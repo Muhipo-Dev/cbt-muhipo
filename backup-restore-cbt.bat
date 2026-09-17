@@ -18,11 +18,7 @@ set "DB_HOST=127.0.0.1"
 set "DB_PORT=3306"
 set "DB_NAME=cbt_muhipo"
 
-if exist ".env" (
-    for /f "usebackq tokens=*" %%L in (`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '.env') { $content = Get-Content '.env' -Raw; if ($content -match 'DATABASE_URL\s*=\s*[\x22\x27]?mysql:\/\/([^:]+):?([^@]*)@([^:\/]+):?(\d*)\/([^?\x22\x27\s]+)') { Write-Output ('DB_USER=' + $Matches[1]); Write-Output ('DB_PASS=' + $Matches[2]); Write-Output ('DB_HOST=' + (if($Matches[3]){$Matches[3]}else{'127.0.0.1'})); Write-Output ('DB_PORT=' + (if($Matches[4]){$Matches[4]}else{'3306'})); Write-Output ('DB_NAME=' + $Matches[5]); } }"`) do (
-        set "%%L"
-    )
-)
+if exist ".env" call :SUB_PARSE_ENV
 
 :MENU_BACKUP
 cls
@@ -283,3 +279,13 @@ goto MENU_BACKUP
 start "" "%BACKUP_DIR%"
 goto MENU_BACKUP
 
+
+REM ==============================================================================
+REM SUBROUTINES
+REM ==============================================================================
+
+:SUB_PARSE_ENV
+for /f "usebackq tokens=*" %%L in (`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$c = Get-Content '.env' -Raw; if ($c -match 'DATABASE_URL\s*=\s*[\x22\x27]?mysql:\/\/([^:]+):?([^@]*)@([^:\/]+):?(\d*)\/([^?\x22\x27\s]+)') { Write-Output ('DB_USER=' + $Matches[1]); Write-Output ('DB_PASS=' + $Matches[2]); $h = if($Matches[3]){$Matches[3]}else{'127.0.0.1'}; Write-Output ('DB_HOST=' + $h); $p = if($Matches[4]){$Matches[4]}else{'3306'}; Write-Output ('DB_PORT=' + $p); Write-Output ('DB_NAME=' + $Matches[5]); }"`) do (
+    set "%%L"
+)
+goto :eof
