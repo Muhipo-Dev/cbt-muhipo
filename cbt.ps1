@@ -86,9 +86,7 @@ function Test-PortListening {
 }
 
 function Test-DatabaseConnection {
-    $dbFile = Join-Path $ROOT "prisma\dev.db"
-    $dbFileRoot = Join-Path $ROOT "dev.db"
-    return (Test-Path $dbFile) -or (Test-Path $dbFileRoot)
+    return (Test-PortListening 3306)
 }
 
 # ─── STATUS PANEL ───────────────────────────────────────────
@@ -103,16 +101,16 @@ function Show-Status {
 
     $aStatus = if ($appRunning)    { "AKTIF (HTTPS)".PadRight(15) } else { "MATI/OFF".PadRight(15) }
     $pStatus = if ($prismaRunning) { "AKTIF".PadRight(15) } else { "MATI/OFF".PadRight(15) }
-    $dStatus = if ($dbConnected)   { "TERHUBUNG (SIAP)".PadRight(16) } else { "BELUM SEED".PadRight(16) }
+    $dStatus = if ($dbConnected)   { "TERHUBUNG (:3306)".PadRight(16) } else { "TERPUTUS (:3306)".PadRight(16) }
 
     $aColor = if ($appRunning)    { "Green" } else { "Red" }
     $pColor = if ($prismaRunning) { "Green" } else { "DarkGray" }
-    $dColor = if ($dbConnected)   { "Green" } else { "Yellow" }
+    $dColor = if ($dbConnected)   { "Green" } else { "Red" }
 
     Write-Host "  +--------------------+------------------------+" -ForegroundColor DarkGray
     Write-Host "  | Komponen Layanan   | Status                 |" -ForegroundColor DarkGray
     Write-Host "  +--------------------+------------------------+" -ForegroundColor DarkGray
-    Write-Host "  | Database SQLite    | " -NoNewline
+    Write-Host "  | Database MySQL     | " -NoNewline
     Write-Host ($dStatus + "   |") -ForegroundColor $dColor
     Write-Host "  | CBT Web HTTPS(:8443)| " -NoNewline
     Write-Host ($aStatus + " :$CBT_PORT   |") -ForegroundColor $aColor

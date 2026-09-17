@@ -134,8 +134,9 @@ Server akan aktif pada:
 
 | Role | Username Default | Password Default | URL Halaman | Deskripsi |
 | :--- | :--- | :--- | :--- | :--- |
-| **Super Admin** | `nailar` | `nailar` | `/admin` | Akses penuh ke seluruh modul, bank soal, peserta, tes, cetak dokumen, dan pengaturan |
-| **Proktor (Pengawas)** | `niam` | `niam` | `/proktor` | Akses pengawasan langsung, CCTV layar siswa, reset login, dan penambahan waktu |
+| **Super Admin** | `nailar` | `nailar` | `/admin` | Hak akses penuh ke seluruh modul, topik/mapel, grup/kelas, bank soal, peserta, tes, cetak dokumen, dan pengaturan sistem |
+
+> 📌 **Catatan Setup Awal:** Group/Kelas, Modul, Topik/Mata Pelajaran, Butir Soal, Jadwal Ujian, Siswa, Guru, dan Proktor berada dalam kondisi bersih/kosong secara default sehingga siap dikonfigurasi mandiri oleh Administrator.
 
 ---
 

@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { Home, ChevronRight, Download, Upload, FileSpreadsheet, RefreshCw, CheckCircle2, AlertCircle, Sparkles, Eye, Sigma } from 'lucide-react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { Home, ChevronRight, Download, Upload, FileSpreadsheet, RefreshCw, CheckCircle2, AlertCircle, Sparkles, Eye, Sigma, BookOpen } from 'lucide-react'
 import ExcelJS from 'exceljs'
 import * as XLSX from 'xlsx'
 import { convertEquationToKatex, hasEquationOrFormula } from '@/lib/katexConverter'
@@ -34,7 +34,20 @@ export function ModulImportView({
     }
   }, [items, selectedMapelId])
 
-  // Unduh Template Excel Soal Resmi (Semua Tipe: Q, Q2, Q3, Q4, Q5, Q6 + Otomatis KaTeX / Rumus)
+  const selectedMapel = items.find((item: any) => item.id === selectedMapelId)
+  const isArabicTopic = useMemo(() => {
+    if (!selectedMapel) return false
+    const nameStr = `${selectedMapel.nama || ''} ${selectedMapel.kode || ''} ${selectedMapel.deskripsi || ''} ${selectedMapel.namaModul || selectedMapel.modul?.nama || ''}`.toLowerCase()
+    return nameStr.includes('arab') || nameStr.includes('arabic') || nameStr.includes('qur') || nameStr.includes('pai') || nameStr.includes('agama') || nameStr.includes('hijaiyah')
+  }, [selectedMapel])
+
+  const isJavaneseTopic = useMemo(() => {
+    if (!selectedMapel) return false
+    const nameStr = `${selectedMapel.nama || ''} ${selectedMapel.kode || ''} ${selectedMapel.deskripsi || ''} ${selectedMapel.namaModul || selectedMapel.modul?.nama || ''}`.toLowerCase()
+    return nameStr.includes('jawa') || nameStr.includes('hanacaraka') || nameStr.includes('javanese')
+  }, [selectedMapel])
+
+  // Unduh Template Excel Soal Resmi (Otomatis menyesuaikan jika topik Bahasa Arab, Bahasa Jawa, atau Umum/Math)
   const handleDownloadTemplate = async () => {
     try {
       const workbook = new ExcelJS.Workbook()
@@ -46,8 +59,8 @@ export function ModulImportView({
         { key: 'col1', width: 8 },   // No.
         { key: 'col2', width: 26 },  // Keterangan
         { key: 'col3', width: 10 },  // Tipe
-        { key: 'col4', width: 75 },  // Isi Soal / Jawaban
-        { key: 'col5', width: 24 },  // Status Jawaban
+        { key: 'col4', width: 80 },  // Isi Soal / Jawaban
+        { key: 'col5', width: 26 },  // Status Jawaban
       ]
 
       const thinBorder: Partial<ExcelJS.Borders> = {
@@ -67,26 +80,34 @@ export function ModulImportView({
       // Baris 1: Judul Utama
       ws.mergeCells('A1:E1')
       const titleCell = ws.getCell('A1')
-      titleCell.value = 'TEMPLATE IMPORT SOAL CBT (MENDUKUNG RUMUS KATEX / WORD EQUATION)'
-      titleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } }
+      titleCell.value = isArabicTopic
+        ? 'TEMPLATE IMPORT SOAL CBT — KHUSUS BAHASA ARAB / PAI (OTOMATIS RTL & HARAKAT)'
+        : isJavaneseTopic
+        ? 'TEMPLATE IMPORT SOAL CBT — KHUSUS BAHASA JAWA (AKSARA JAWA & LATIN)'
+        : 'TEMPLATE IMPORT SOAL CBT (MENDUKUNG RUMUS KATEX / BAHASA ARAB / AKSARA JAWA)'
+      titleCell.font = { name: isArabicTopic ? 'Traditional Arabic' : 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } }
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
       titleCell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF4338CA' },
+        fgColor: { argb: isArabicTopic ? 'FF065F46' : isJavaneseTopic ? 'FF92400E' : 'FF4338CA' },
       }
       ws.getRow(1).height = 28
 
       // Baris 2: Sub-judul / Keterangan Tipe
       ws.mergeCells('A2:E2')
       const subCell = ws.getCell('A2')
-      subCell.value = 'Tipe: Q (Pilihan Ganda), Q2 (Esai), Q3 (Jawaban Singkat), Q4 (PG Kompleks), Q5 (Benar/Salah), Q6 (Menjodohkan). Rumus Word / Excel otomatis dikonversi ke KaTeX.'
+      subCell.value = isArabicTopic
+        ? 'Tipe: Q (Pilihan Ganda), Q2 (Esai), Q3 (Jawaban Singkat), Q4 (PG Kompleks), Q5 (Benar/Salah), Q6 (Menjodohkan). Teks Arab harakat & Al-Qur\'an didukung penuh.'
+        : isJavaneseTopic
+        ? 'Tipe: Q (Pilihan Ganda), Q2 (Esai), Q3 (Jawaban Singkat), Q4 (PG Kompleks), Q5 (Benar/Salah), Q6 (Menjodohkan). Aksara Jawa Unicode didukung penuh.'
+        : 'Tipe: Q (Pilihan Ganda), Q2 (Esai), Q3 (Jawaban Singkat), Q4 (PG Kompleks), Q5 (Benar/Salah), Q6 (Menjodohkan). Rumus KaTeX, Arab, & Aksara Jawa otomatis dideteksi.'
       subCell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF1E293B' } }
       subCell.alignment = { horizontal: 'center', vertical: 'middle' }
       subCell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FFE0E7FF' },
+        fgColor: { argb: isArabicTopic ? 'FFD1FAE5' : isJavaneseTopic ? 'FFFEF3C7' : 'FFE0E7FF' },
       }
       ws.getRow(2).height = 22
 
@@ -100,7 +121,7 @@ export function ModulImportView({
       headerRow.height = 26
       headerRow.eachCell((cell, colNumber) => {
         cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
-        cell.alignment = { horizontal: colNumber === 4 ? 'left' : 'center', vertical: 'middle' }
+        cell.alignment = { horizontal: colNumber === 4 ? (isArabicTopic ? 'right' : 'left') : 'center', vertical: 'middle' }
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
@@ -109,49 +130,108 @@ export function ModulImportView({
         cell.border = tableBorder
       })
 
-      // Data Baris Soal & Jawaban (Format Menurun) dengan contoh rumus matematika nyata
-      const rowsData = [
-        // No 1: PG Umum
-        { row: [1, 'Soal Pilihan Ganda', 'Q', 'Ibu kota negara Indonesia adalah...', ''], bg: 'FFE0E7FF', isBold: true },
-        { row: ['', 'Jawaban Benar', 'A', 'Jakarta', 1], bg: 'FFDCFCE7', isBold: false },
-        { row: ['', '', 'A', 'Surabaya', 0], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', '', 'A', 'Bandung', 0], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', '', 'A', 'Yogyakarta', 0], bg: 'FFFFFFFF', isBold: false },
-        // No 2: PG Matematika (Auto KaTeX / Equation)
-        { row: [2, 'Soal PG Rumus Math', 'Q', 'Tentukan himpunan penyelesaian dari persamaan kuadrat $2x^2 - 4x + 2 = 0$ atau $\\frac{1}{2}x = 4$!', ''], bg: 'FFE0E7FF', isBold: true },
-        { row: ['', 'Jawaban Benar', 'A', '$x = 1$ atau $x = 8$', 1], bg: 'FFDCFCE7', isBold: false },
-        { row: ['', '', 'A', '$x = 2$ atau $x = 4$', 0], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', '', 'A', '$x = -1$ atau $x = 6$', 0], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', '', 'A', '$x = 0$ atau $x = 2$', 0], bg: 'FFFFFFFF', isBold: false },
-        // No 3: Esai
-        { row: [3, 'Soal Esai', 'Q2', 'Jelaskan rumus luas lingkaran $L = \\pi r^2$ dan berikan contoh perhitungannya jika jari-jari $r = 7\\text{ cm}$!', ''], bg: 'FFE0F2FE', isBold: true },
-        // No 4: Jawaban Singkat
-        { row: [4, 'Jawaban Singkat', 'Q3', 'Berapakah nilai dari $\\sqrt{144} \\times 2^3$?', '96'], bg: 'FFFEF3C7', isBold: true },
-        // No 5: PG Kompleks
-        { row: [5, 'Soal PG Kompleks', 'Q4', 'Manakah di antara rumus fisika berikut yang merupakan besaran turunan?', ''], bg: 'FFFCE7F3', isBold: true },
-        { row: ['', 'Jawaban Benar', 'A', 'Kecepatan ($v = \\frac{s}{t}$)', 1], bg: 'FFDCFCE7', isBold: false },
-        { row: ['', '', 'A', 'Massa ($m$)', 0], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', 'Jawaban Benar', 'A', 'Gaya ($F = m \\times a$)', 1], bg: 'FFDCFCE7', isBold: false },
-        // No 6: Benar/Salah
-        { row: [6, 'Soal Benar/Salah', 'Q5', 'Nilai dari $\\sin(30^\\circ) = \\frac{1}{2}$ adalah bernilai BENAR.', ''], bg: 'FFFFE4E6', isBold: true },
-        { row: ['', 'Pernyataan BENAR', 'A', 'Benar', 1], bg: 'FFDCFCE7', isBold: false },
-        // No 7: Menjodohkan
-        { row: [7, 'Soal Menjodohkan', 'Q6', 'Pasangkan rumus fisika di kolom kiri dengan besaran yang sesuai di kolom kanan!', ''], bg: 'FFF3E8FF', isBold: true },
-        { row: ['', 'Premis -> Respons', 'A', '$E_k = \\frac{1}{2}mv^2$', 'Energi Kinetik'], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', 'Premis -> Respons', 'A', '$E_p = mgh$', 'Energi Potensial'], bg: 'FFFFFFFF', isBold: false },
-        { row: ['', 'Premis -> Respons', 'A', '$W = F \\times s$', 'Usaha / Kerja'], bg: 'FFFFFFFF', isBold: false },
-      ]
+      // Data Baris Soal & Jawaban berdasarkan jenis topik
+      const rowsData = isArabicTopic
+        ? [
+            // No 1: PG Bahasa Arab
+            { row: [1, 'Soal Pilihan Ganda Arab', 'Q', 'مَا مَعْنَى كَلِمَةِ «مَدْرَسَةٌ» فِي اللُّغَةِ الإِنْدُوْنِيْسِيَّةِ؟', ''], bg: 'FFDCFCE7', isBold: true, isArabic: true },
+            { row: ['', 'Jawaban Benar', 'A', 'Sekolah', 1], bg: 'FFDCFCE7', isBold: false },
+            { row: ['', '', 'A', 'Rumah Sakit', 0], bg: 'FFFFFFFF', isBold: false },
+            { row: ['', '', 'A', 'Perpustakaan', 0], bg: 'FFFFFFFF', isBold: false },
+            { row: ['', '', 'A', 'Masjid', 0], bg: 'FFFFFFFF', isBold: false },
+            // No 2: PG Teks Arab Lengkap Harakat
+            { row: [2, 'Soal PG Kalimat Arab', 'Q', 'أَكْمِلِ الجُمْلَةَ الآتِيَةَ: أَحْمَدُ ... إِلَى المَسْجِدِ صَبَاحًا.', ''], bg: 'FFDCFCE7', isBold: true, isArabic: true },
+            { row: ['', 'Jawaban Benar', 'A', 'يَذْهَبُ', 1], bg: 'FFDCFCE7', isBold: false, isArabic: true },
+            { row: ['', '', 'A', 'تَذْهَبُ', 0], bg: 'FFFFFFFF', isBold: false, isArabic: true },
+            { row: ['', '', 'A', 'نَذْهَبُ', 0], bg: 'FFFFFFFF', isBold: false, isArabic: true },
+            { row: ['', '', 'A', 'أَذْهَبُ', 0], bg: 'FFFFFFFF', isBold: false, isArabic: true },
+            // No 3: Esai Bahasa Arab
+            { row: [3, 'Soal Esai Bahasa Arab', 'Q2', 'تَرْجِمْ هَذِهِ الجُمْلَةَ إِلَى اللُّغَةِ العَرَبِيَّةِ المُنَاسِبَةِ: "Saya belajar Bahasa Arab di SMA Muhammadiyah 1 Ponorogo."', ''], bg: 'FFE0F2FE', isBold: true, isArabic: true },
+            // No 4: Jawaban Singkat Arab
+            { row: [4, 'Jawaban Singkat Arab', 'Q3', 'مَا هُوَ ضِدُّ كَلِمَةِ «كَبِيْرٌ»؟', 'صَغِيْرٌ'], bg: 'FFFEF3C7', isBold: true, isArabic: true },
+            // No 5: PG Kompleks Bahasa Arab
+            { row: [5, 'Soal PG Kompleks Arab', 'Q4', 'اخْتَرْ جَمِيْعَ الكَلِمَاتِ الَّتِي تَدُلُّ عَلَى اسْمِ المَكَانِ:', ''], bg: 'FFFCE7F3', isBold: true, isArabic: true },
+            { row: ['', 'Jawaban Benar', 'A', 'مَسْجِدٌ (Masjid)', 1], bg: 'FFDCFCE7', isBold: false, isArabic: true },
+            { row: ['', '', 'A', 'قَلَمٌ (Pena)', 0], bg: 'FFFFFFFF', isBold: false, isArabic: true },
+            { row: ['', 'Jawaban Benar', 'A', 'فَصْلٌ (Kelas)', 1], bg: 'FFDCFCE7', isBold: false, isArabic: true },
+            // No 6: Benar/Salah Arab
+            { row: [6, 'Soal Benar/Salah Arab', 'Q5', 'كَلِمَةُ «كِتَابٌ» فِي اللُّغَةِ العَرَبِيَّةِ اسْمٌ مُذَكَّرٌ.', ''], bg: 'FFFFE4E6', isBold: true, isArabic: true },
+            { row: ['', 'Pernyataan BENAR', 'A', 'Benar', 1], bg: 'FFDCFCE7', isBold: false },
+            // No 7: Menjodohkan Arab
+            { row: [7, 'Soal Menjodohkan Arab', 'Q6', 'Pasangkan kosakata bahasa Arab berikut dengan artinya dalam bahasa Indonesia!', ''], bg: 'FFF3E8FF', isBold: true },
+            { row: ['', 'Premis -> Respons', 'A', 'بَابٌ', 'Pintu'], bg: 'FFFFFFFF', isBold: false, isArabic: true },
+            { row: ['', 'Premis -> Respons', 'A', 'نَافِذَةٌ', 'Jendela'], bg: 'FFFFFFFF', isBold: false, isArabic: true },
+            { row: ['', 'Premis -> Respons', 'A', 'مَكْتَبٌ', 'Meja'], bg: 'FFFFFFFF', isBold: false, isArabic: true },
+          ]
+        : isJavaneseTopic
+        ? [
+            // No 1: PG Aksara Jawa
+            { row: [1, 'Soal PG Aksara Jawa', 'Q', 'Wacanen Aksara Jawa ing ngisor iki: ꦲꦤꦕꦫꦏ', ''], bg: 'FFFEF3C7', isBold: true, isJavanese: true },
+            { row: ['', 'Jawaban Benar', 'A', 'Hanacaraka', 1], bg: 'FFDCFCE7', isBold: false },
+            { row: ['', '', 'A', 'Datasawala', 0], bg: 'FFFFFFFF', isBold: false },
+            { row: ['', '', 'A', 'Padhajayanya', 0], bg: 'FFFFFFFF', isBold: false },
+            { row: ['', '', 'A', 'Magabathanga', 0], bg: 'FFFFFFFF', isBold: false },
+            // No 2: PG Aksara Jawa Pasangan
+            { row: [2, 'Soal PG Aksara Jawa', 'Q', 'Tulisan Aksara Jawa kanggo tembung "Siswa Pintar" yaiku...', ''], bg: 'FFFEF3C7', isBold: true },
+            { row: ['', 'Jawaban Benar', 'A', 'ꦱꦶꦱ꧀ꦮꦥꦶꦤ꧀ꦠꦂ', 1], bg: 'FFDCFCE7', isBold: false, isJavanese: true },
+            { row: ['', '', 'A', 'ꦱꦶꦱ꧀ꦮꦩꦸꦫꦶꦢ꧀', 0], bg: 'FFFFFFFF', isBold: false, isJavanese: true },
+            { row: ['', '', 'A', 'ꦱꦼꦏꦺꦴꦭꦃ', 0], bg: 'FFFFFFFF', isBold: false, isJavanese: true },
+            { row: ['', '', 'A', 'ꦧꦱꦗꦮ', 0], bg: 'FFFFFFFF', isBold: false, isJavanese: true },
+            // No 3: Esai Jawa
+            { row: [3, 'Soal Esai Bahasa Jawa', 'Q2', 'Salinen ukara ing ngisor iki nganggo Aksara Jawa: "Kula sinau basa Jawa wonten ing SMA Muhammadiyah 1 Ponorogo."', ''], bg: 'FFE0F2FE', isBold: true },
+            // No 4: Jawaban Singkat Jawa
+            { row: [4, 'Jawaban Singkat Jawa', 'Q3', 'Aksara swara "u" ing aksara Jawa diarani sandhangan apa?', 'Suku ( ꦸ )'], bg: 'FFFEF3C7', isBold: true },
+            // No 5: Menjodohkan Jawa
+            { row: [5, 'Soal Menjodohkan Jawa', 'Q6', 'Pasangna sandhangan swara ing sisih kiwa karo unine ing sisih tengen!', ''], bg: 'FFF3E8FF', isBold: true },
+            { row: ['', 'Premis -> Respons', 'A', 'Wulu ( ꦶ )', 'Swara i'], bg: 'FFFFFFFF', isBold: false, isJavanese: true },
+            { row: ['', 'Premis -> Respons', 'A', 'Suku ( ꦸ )', 'Swara u'], bg: 'FFFFFFFF', isBold: false, isJavanese: true },
+            { row: ['', 'Premis -> Respons', 'A', 'Taling ( ꦺ )', 'Swara e'], bg: 'FFFFFFFF', isBold: false, isJavanese: true },
+          ]
+        : [
+            // No 1: PG Umum
+            { row: [1, 'Soal Pilihan Ganda', 'Q', 'Ibu kota negara Indonesia adalah...', ''], bg: 'FFE0E7FF', isBold: true },
+            { row: ['', 'Jawaban Benar', 'A', 'Jakarta', 1], bg: 'FFDCFCE7', isBold: false },
+            { row: ['', '', 'A', 'Surabaya', 0], bg: 'FFFFFFFF', isBold: false },
+            { row: ['', '', 'A', 'Bandung', 0], bg: 'FFFFFFFF', isBold: false },
+            { row: ['', '', 'A', 'Yogyakarta', 0], bg: 'FFFFFFFF', isBold: false },
+            // No 2: PG Matematika (Auto KaTeX / Equation)
+            { row: [2, 'Soal PG Rumus Math', 'Q', 'Tentukan himpunan penyelesaian dari persamaan kuadrat $2x^2 - 4x + 2 = 0$ atau $\\frac{1}{2}x = 4$!', ''], bg: 'FFE0E7FF', isBold: true },
+            { row: ['', 'Jawaban Benar', 'A', '$x = 1$ atau $x = 8$', 1], bg: 'FFDCFCE7', isBold: false },
+            { row: ['', '', 'A', '$x = 2$ atau $x = 4$', 0], bg: 'FFFFFFFF', isBold: false },
+            { row: ['', '', 'A', '$x = -1$ atau $x = 6$', 0], bg: 'FFFFFFFF', isBold: false },
+            { row: ['', '', 'A', '$x = 0$ atau $x = 2$', 0], bg: 'FFFFFFFF', isBold: false },
+            // No 3: Esai
+            { row: [3, 'Soal Esai', 'Q2', 'Jelaskan rumus luas lingkaran $L = \\pi r^2$ dan berikan contoh perhitungannya jika jari-jari $r = 7\\text{ cm}$!', ''], bg: 'FFE0F2FE', isBold: true },
+            // No 4: Jawaban Singkat
+            { row: [4, 'Jawaban Singkat', 'Q3', 'Berapakah nilai dari $\\sqrt{144} \\times 2^3$?', '96'], bg: 'FFFEF3C7', isBold: true },
+            // No 5: PG Kompleks
+            { row: [5, 'Soal PG Kompleks', 'Q4', 'Manakah di antara rumus fisika berikut yang merupakan besaran turunan?', ''], bg: 'FFFCE7F3', isBold: true },
+            { row: ['', 'Jawaban Benar', 'A', 'Kecepatan ($v = \\frac{s}{t}$)', 1], bg: 'FFDCFCE7', isBold: false },
+            { row: ['', '', 'A', 'Massa ($m$)', 0], bg: 'FFFFFFFF', isBold: false },
+            { row: ['', 'Jawaban Benar', 'A', 'Gaya ($F = m \\times a$)', 1], bg: 'FFDCFCE7', isBold: false },
+            // No 6: Benar/Salah
+            { row: [6, 'Soal Benar/Salah', 'Q5', 'Nilai dari $\\sin(30^\\circ) = \\frac{1}{2}$ adalah bernilai BENAR.', ''], bg: 'FFFFE4E6', isBold: true },
+            { row: ['', 'Pernyataan BENAR', 'A', 'Benar', 1], bg: 'FFDCFCE7', isBold: false },
+            // No 7: Menjodohkan
+            { row: [7, 'Soal Menjodohkan', 'Q6', 'Pasangkan rumus fisika di kolom kiri dengan besaran yang sesuai di kolom kanan!', ''], bg: 'FFF3E8FF', isBold: true },
+            { row: ['', 'Premis -> Respons', 'A', '$E_k = \\frac{1}{2}mv^2$', 'Energi Kinetik'], bg: 'FFFFFFFF', isBold: false },
+            { row: ['', 'Premis -> Respons', 'A', '$E_p = mgh$', 'Energi Potensial'], bg: 'FFFFFFFF', isBold: false },
+            { row: ['', 'Premis -> Respons', 'A', '$W = F \\times s$', 'Usaha / Kerja'], bg: 'FFFFFFFF', isBold: false },
+          ]
 
-      rowsData.forEach((item, idx) => {
+      rowsData.forEach((item: any, idx) => {
         const rowIdx = 6 + idx
         const row = ws.getRow(rowIdx)
         row.values = item.row
-        row.height = 20
+        row.height = item.isArabic ? 28 : (item.isJavanese ? 26 : 20)
 
         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-          cell.font = { name: 'Calibri', size: 10, bold: item.isBold }
+          const fontName = item.isArabic ? 'Traditional Arabic' : (item.isJavanese ? 'Noto Sans Javanese' : 'Calibri')
+          const fontSize = item.isArabic ? 13 : (item.isJavanese ? 12 : 10)
+          
+          cell.font = { name: fontName, size: fontSize, bold: item.isBold }
           cell.alignment = {
-            horizontal: colNumber === 4 ? 'left' : (colNumber === 2 ? 'left' : 'center'),
+            horizontal: colNumber === 4 ? (item.isArabic ? 'right' : 'left') : (colNumber === 2 ? 'left' : 'center'),
             vertical: 'middle',
           }
           if (item.bg !== 'FFFFFFFF') {
@@ -172,11 +252,12 @@ export function ModulImportView({
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'Template_Import_Soal_CBT.xlsx'
+      const filePrefix = isArabicTopic ? 'Template_Soal_Bahasa_Arab' : (isJavaneseTopic ? 'Template_Soal_Bahasa_Jawa' : 'Template_Import_Soal_CBT')
+      a.download = `${filePrefix}.xlsx`
       a.click()
       window.URL.revokeObjectURL(url)
 
-      showNotification('Berhasil', 'Template format Excel soal berhasil diunduh.', 'success')
+      showNotification('Berhasil', `Template Excel ${isArabicTopic ? 'Bahasa Arab (RTL)' : (isJavaneseTopic ? 'Bahasa Jawa' : 'Standar CBT')} berhasil diunduh.`, 'success')
     } catch (err: any) {
       showNotification('Error', 'Gagal membuat template Excel: ' + err.message, 'error')
     }
@@ -485,6 +566,31 @@ export function ModulImportView({
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
               Pilih terlebih dahulu Topik yang akan digunakan sebelum melakukan import soal
             </p>
+
+            {/* Language & Script Detection Info */}
+            {isArabicTopic && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded text-xs space-y-1 text-emerald-950 dark:text-emerald-200">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-300">
+                  <span className="font-arabic text-base">ع</span>
+                  <span>Terdeteksi Topik Bahasa Arab:</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-emerald-900/90 dark:text-emerald-200/90">
+                  Sistem otomatis mengaktifkan rendering RTL, font <strong>Amiri / Noto Arabic (Offline)</strong>, dan template Excel yang diunduh akan otomatis berisi contoh soal Bahasa Arab berharakat lengkap.
+                </p>
+              </div>
+            )}
+
+            {isJavaneseTopic && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded text-xs space-y-1 text-amber-950 dark:text-amber-200">
+                <div className="flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-300">
+                  <span className="font-javanese text-base">ꦲ</span>
+                  <span>Terdeteksi Topik Bahasa Jawa:</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-900/90 dark:text-amber-200/90">
+                  Sistem otomatis mengaktifkan rendering <strong>Aksara Jawa Hanacaraka (Offline)</strong>, dan template Excel yang diunduh akan otomatis berisi format soal Aksara & Latin Jawa.
+                </p>
+              </div>
+            )}
 
             <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 rounded text-xs space-y-1.5 text-indigo-950 dark:text-indigo-200">
               <div className="flex items-center gap-1.5 font-bold text-indigo-700 dark:text-indigo-300">

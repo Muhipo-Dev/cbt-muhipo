@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -16,7 +16,7 @@ model User {
   role          String    @default("SISWA") // SUPERADMIN, ADMIN, GURU, PROKTOR, SISWA
   nip           String?   @unique
   jenisKelamin  String?   // L / P
-  foto          String?
+  foto          String?   @db.Text
   nomorPeserta  String?   @unique // Dipertahankan sebagai alias opsional
   ruangUjian    String?
   sesiUjian     Int?      @default(1)
@@ -79,7 +79,7 @@ model UjianKelas {
 model Modul {
   id            String              @id @default(cuid())
   nama          String              @unique // Contoh: Default, Ujian Sekolah, Asesmen Mandiri, Tryout TKA
-  deskripsi     String?
+  deskripsi     String?             @db.Text
   topikList     MataPelajaran[]
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
@@ -133,19 +133,19 @@ model Soal {
   
   nomorUrut       Int              @default(1)
   tipeSoal        String           @default("PG") // PG, PG_KOMPLEKS, BENAR_SALAH, MENJODOHKAN, ISIAN, ESAI
-  pertanyaan      String
-  mediaAudio      String?          // URL atau path audio untuk listening
-  mediaGambar     String?          // URL atau path gambar ilustrasi
+  pertanyaan      String           @db.LongText
+  mediaAudio      String?          @db.Text // URL atau path audio untuk listening
+  mediaGambar     String?          @db.LongText // URL atau base64 gambar ilustrasi
   bobot           Float            @default(1.0) // Poin / bobot per butir soal
   
   // Opsi untuk PG & PG Kompleks / Pernyataan Benar Salah
   opsiJawaban     OpsiJawaban[]
   
   // Jawaban untuk Isian Singkat & Essay (Kunci teks / rubrik)
-  kunciJawabanTeks String?
+  kunciJawabanTeks String?         @db.LongText
   
   // Pasangan Menjodohkan (JSON string: [{ left: "...", right: "..." }])
-  matchingData     String?
+  matchingData     String?         @db.LongText
 
   jawabanPeserta   JawabanPeserta[]
   
@@ -158,8 +158,8 @@ model OpsiJawaban {
   soalId      String
   soal        Soal     @relation(fields: [soalId], references: [id], onDelete: Cascade)
   label       String   // A, B, C, D, E atau 1, 2, 3
-  konten      String
-  gambar      String?
+  konten      String   @db.LongText
+  gambar      String?  @db.LongText
   isBenar     Boolean  @default(false)
   
   createdAt   DateTime @default(now())
@@ -170,7 +170,7 @@ model Ujian {
   id                String         @id @default(cuid())
   kodeUjian         String         @unique // Contoh: PAS-2026-MTK
   judul             String         // Penilaian Akhir Semester Ganjil 2026/2027
-  deskripsi         String?
+  deskripsi         String?        @db.Text
   
   mataPelajaranId   String
   mataPelajaran     MataPelajaran  @relation(fields: [mataPelajaranId], references: [id])
@@ -214,10 +214,10 @@ model PesertaUjian {
   isKoreksiSelesai Boolean         @default(false)
   
   ipAddress       String?
-  userAgent       String?
+  userAgent       String?          @db.Text
   
   // Urutan soal teracak khusus untuk peserta ini (JSON Array ID Soal)
-  urutanSoalIds   String?
+  urutanSoalIds   String?          @db.LongText
   
   jawabanPeserta  JawabanPeserta[]
   logs            LogAktivitasUjian[]
@@ -237,12 +237,12 @@ model JawabanPeserta {
   soal            Soal           @relation(fields: [soalId], references: [id], onDelete: Cascade)
   
   // Jawaban yang dipilih (ID Opsi / Array ID Opsi JSON / Teks Jawaban / JSON Menjodohkan)
-  jawabanDipilih  String?
+  jawabanDipilih  String?        @db.LongText
   raguRagu        Boolean        @default(false)
   
   isBenar         Boolean?
   skor            Float          @default(0.0)
-  catatanKoreksi  String?
+  catatanKoreksi  String?        @db.Text
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -259,8 +259,8 @@ model LogAktivitasUjian {
   user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   aktivitas       String         // Contoh: "LOGIN", "MULAI_UJIAN", "TAB_SWITCH_ALERT", "FULLSCREEN_EXIT", "SELESAI_UJIAN"
-  detail          String?
-  fotoBukti       String?        // Base64 screenshot snapshot saat pelanggaran terjadi
+  detail          String?        @db.Text
+  fotoBukti       String?        @db.LongText // Base64 screenshot snapshot saat pelanggaran terjadi
   
   createdAt       DateTime       @default(now())
 }
@@ -273,8 +273,9 @@ model PengaturanSistem {
   semester        String         @default("Ganjil")
   timezone        String         @default("Asia/Jakarta")
   serverLocation  String         @default("Ponorogo, Jawa Timur")
-  logoUrl         String?        @default("/pic_logo.png")
-  backgroundUrl   String?        @default("/muhipo-front.jpg")
+  logoUrl         String?        @default("/pic_logo.png") @db.Text
+  backgroundUrl   String?        @default("/muhipo-front.jpg") @db.Text
   timeSyncOffsetMs Int           @default(0) // Koreksi offset milidetik sinkronisasi waktu
   updatedAt       DateTime       @updatedAt
 }
+

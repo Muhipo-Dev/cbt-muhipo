@@ -98,7 +98,7 @@ export default function SingleSignInLoginPage() {
       <div className="absolute inset-0 bg-slate-950/20 dark:bg-slate-950/50 backdrop-blur-[1px] z-0 pointer-events-none" />
 
       {/* Top Header Navbar */}
-      <header className="w-full px-4 sm:px-6 lg:px-10 py-3 sm:py-3.5 border-b border-white/20 dark:border-white/10 bg-white/75 dark:bg-slate-950/75 backdrop-blur-md flex items-center justify-between z-10 shadow-sm">
+      <header className="w-full px-4 sm:px-6 lg:px-10 py-3 sm:py-3.5 border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md flex items-center justify-between z-10 shadow-xs">
         <SchoolBrandHeader
           subtitle="Portal Ujian SMA Muhammadiyah 1 Ponorogo"
           logoUrl={settings.logoUrl}
@@ -107,7 +107,7 @@ export default function SingleSignInLoginPage() {
         <div className="flex items-center gap-2.5 sm:gap-4 text-xs font-medium">
           <ThemeToggle />
           {/* Format Waktu & Tanggal Persis Sidebar */}
-          <div className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 backdrop-blur-md shadow-xs" suppressHydrationWarning>
+          <div className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 backdrop-blur-md shadow-xs" suppressHydrationWarning>
             <div className="p-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
               <Clock className="w-4 h-4 animate-pulse" />
             </div>
@@ -129,9 +129,9 @@ export default function SingleSignInLoginPage() {
 
       {/* Main Login Card */}
       <main className="flex-1 flex items-center justify-center p-3.5 sm:p-6 z-10">
-        <div className="w-full max-w-md bg-white/80 dark:bg-slate-900/75 border border-white/40 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6">
+        <div className="w-full max-w-md bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6">
           {/* Toggle Tab Portal: Siswa vs Admin/Guru */}
-          <div className="grid grid-cols-2 gap-1.5 bg-slate-100/70 dark:bg-slate-950/60 p-1.5 rounded-2xl border border-slate-200/60 dark:border-white/5 text-xs font-bold backdrop-blur-sm">
+          <div className="grid grid-cols-2 gap-1.5 bg-slate-100/90 dark:bg-slate-950/80 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold backdrop-blur-sm">
             <button
               type="button"
               onClick={() => {

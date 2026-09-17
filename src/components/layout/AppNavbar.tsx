@@ -42,7 +42,7 @@ export function AppNavbar({
 
   return (
     <header
-      className={`print:hidden h-14 sm:h-16 lg:h-20 flex items-center justify-between px-3 sm:px-5 lg:px-8 xl:px-12 sticky top-0 z-40 shadow-xs transition-colors duration-300 bg-white/85 dark:bg-slate-950/85 border-b border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white backdrop-blur-xl shrink-0 w-full overflow-x-clip ${className}`}
+      className={`print:hidden h-14 sm:h-16 lg:h-20 flex items-center justify-between px-3 sm:px-5 lg:px-8 xl:px-12 sticky top-0 z-40 shadow-xs transition-colors duration-300 bg-white/95 dark:bg-slate-950/95 border-b border-slate-200/90 dark:border-slate-800 text-slate-900 dark:text-white backdrop-blur-xl shrink-0 w-full overflow-x-clip ${className}`}
     >
       {/* SISI KIRI: Logo & Nama Aplikasi CBT */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">

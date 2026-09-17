@@ -114,6 +114,8 @@ export function ModulSoalView({
 
   // KaTeX Assistant & Live Preview
   const [showKatexAssistant, setShowKatexAssistant] = useState(true)
+  const [showArabicAssistant, setShowArabicAssistant] = useState(false)
+  const [showJavaneseAssistant, setShowJavaneseAssistant] = useState(false)
   const [showLivePreview, setShowLivePreview] = useState(true)
   const [katexModalOpen, setKatexModalOpen] = useState(false)
   const [customKatexInput, setCustomKatexInput] = useState('')
@@ -446,6 +448,63 @@ export function ModulSoalView({
     { label: 'Pi (π)', snippet: '$\\pi$ ', preview: 'π' },
     { label: 'Delta (Δ)', snippet: '$\\Delta$ ', preview: 'Δ' },
     { label: 'Omega (Ω)', snippet: '$\\Omega$ ', preview: 'Ω' },
+  ]
+
+  // Quick Arabic Characters & Harakat Templates
+  const arabicQuickTemplates = [
+    { label: 'Bismillah', snippet: 'بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ ' },
+    { label: 'Fathah', snippet: ' \u064E' },
+    { label: 'Kasrah', snippet: ' \u0650' },
+    { label: 'Dhammah', snippet: ' \u064F' },
+    { label: 'Fathatain', snippet: ' \u064B' },
+    { label: 'Kasratain', snippet: ' \u064D' },
+    { label: 'Dhammatain', snippet: ' \u064C' },
+    { label: 'Sukun', snippet: ' \u0652' },
+    { label: 'Tasydid', snippet: ' \u0651' },
+    { label: 'Tanda Ayat', snippet: ' ۝ ' },
+    { label: 'Alif Khanjariyah', snippet: '\u0670' },
+    { label: 'Hamzah', snippet: 'ء' },
+    { label: 'Ta Marbuthah', snippet: 'ة' },
+    { label: 'Alif Maqshurah', snippet: 'ى' },
+    { label: 'Tanda Tanya Arab', snippet: '؟' },
+    { label: 'Koma Arab', snippet: '،' },
+    { label: 'Titik Koma Arab', snippet: '؛' },
+  ]
+
+  // Quick Aksara Jawa Unicode Templates (Hanacaraka & Sandhangan)
+  const javaneseQuickTemplates = [
+    { label: 'Ha', char: 'ꦲ' },
+    { label: 'Na', char: 'ꦤ' },
+    { label: 'Ca', char: 'ꦕ' },
+    { label: 'Ra', char: 'ꦫ' },
+    { label: 'Ka', char: 'ꦏ' },
+    { label: 'Da', char: 'ꦢ' },
+    { label: 'Ta', char: 'ꦠ' },
+    { label: 'Sa', char: 'ꦱ' },
+    { label: 'Wa', char: 'ꦮ' },
+    { label: 'La', char: 'ꦭ' },
+    { label: 'Pa', char: 'ꦥ' },
+    { label: 'Dha', char: 'ꦝ' },
+    { label: 'Ja', char: 'ꦗ' },
+    { label: 'Ya', char: 'ꦪ' },
+    { label: 'Nya', char: 'ꦚ' },
+    { label: 'Ma', char: 'ꦩ' },
+    { label: 'Ga', char: 'ꦒ' },
+    { label: 'Ba', char: 'ꦧ' },
+    { label: 'Tha', char: 'ꦛ' },
+    { label: 'Nga', char: 'ꦔ' },
+    { label: 'Pangkon (Mati)', char: '꧀' },
+    { label: 'Wulu (i)', char: 'ꦶ' },
+    { label: 'Suku (u)', char: 'ꦸ' },
+    { label: 'Taling (e)', char: 'ꦺ' },
+    { label: 'Pepet (ê)', char: 'ꦼ' },
+    { label: 'Taling Tarung (o)', char: 'ꦺꦴ' },
+    { label: 'Wignyan (h)', char: 'ꦃ' },
+    { label: 'Layar (r)', char: 'ꦂ' },
+    { label: 'Cecak (ng)', char: 'ꦁ' },
+    { label: 'Pada Adeg (Awal)', char: '꧋' },
+    { label: 'Pada Lingsa (Koma)', char: '꧈' },
+    { label: 'Pada Lungsi (Titik)', char: '꧉' },
   ]
 
   // Upload Audio Handler
@@ -945,7 +1004,37 @@ export function ModulSoalView({
                   title="Tampilkan / Sembunyikan Bantuan Formula Rekomendasi KaTeX"
                 >
                   <Calculator className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>{showKatexAssistant ? 'Tutup KaTeX' : 'Bantuan KaTeX'}</span>
+                  <span>{showKatexAssistant ? 'KaTeX' : 'Bantuan KaTeX'}</span>
+                </button>
+
+                {/* Bahasa Arab Quick Assistant Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowArabicAssistant(!showArabicAssistant)}
+                  className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1 border cursor-pointer transition ${
+                    showArabicAssistant
+                      ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700'
+                      : 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border-slate-300 dark:border-slate-600 hover:bg-emerald-50'
+                  }`}
+                  title="Bantuan Penulisan Bahasa Arab & Harakat (Offline)"
+                >
+                  <span className="font-arabic text-sm leading-none">ع</span>
+                  <span>{showArabicAssistant ? 'Tutup Arab' : 'Bahasa Arab'}</span>
+                </button>
+
+                {/* Bahasa Jawa Quick Assistant Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowJavaneseAssistant(!showJavaneseAssistant)}
+                  className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1 border cursor-pointer transition ${
+                    showJavaneseAssistant
+                      ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700'
+                      : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border-slate-300 dark:border-slate-600 hover:bg-amber-50'
+                  }`}
+                  title="Bantuan Penulisan Aksara Jawa Hanacaraka (Offline)"
+                >
+                  <span className="font-javanese text-sm leading-none">ꦲ</span>
+                  <span>{showJavaneseAssistant ? 'Tutup Jawa' : 'Aksara Jawa'}</span>
                 </button>
 
                 <button
@@ -975,13 +1064,13 @@ export function ModulSoalView({
                 </button>
               </div>
 
-              {/* KaTeX Quick Math Bar (Bantuan Rekomendasi Penulisan Matematika) */}
+              {/* KaTeX Quick Math Bar */}
               {showKatexAssistant && (
                 <div className="p-2.5 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 rounded-md space-y-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-indigo-900 dark:text-indigo-300 font-bold">
                     <span className="flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Rekomendasi KaTeX (Opsional, klik simbol untuk menyisipkan rumus):</span>
+                      <span>Rekomendasi KaTeX (Klik simbol untuk menyisipkan rumus):</span>
                     </span>
                     <div className="flex items-center gap-2">
                       <button
@@ -1013,6 +1102,90 @@ export function ModulSoalView({
                       >
                         <span className="font-sans font-semibold mr-1 text-[10px] text-slate-500">{t.label}:</span>
                         <span className="font-bold">{t.preview}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Bahasa Arab Assistant Bar (Keyboard & Harakat Helper) */}
+              {showArabicAssistant && (
+                <div className="p-2.5 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-md space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-emerald-900 dark:text-emerald-300 font-bold">
+                    <span className="flex items-center gap-1.5">
+                      <span className="font-arabic text-sm">ع</span>
+                      <span>Bantuan Input Bahasa Arab & Harakat (Offline):</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => insertTextAtCursor('<div class="font-arabic dir-rtl" style="font-size: 1.3em; line-height: 2;">كَتَبَ النَّصَّ هُنَا</div>')}
+                        className="text-[10px] px-2 py-0.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer font-medium"
+                      >
+                        + Sisipkan Blok Teks RTL Arab
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowArabicAssistant(false)}
+                        className="text-[10px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
+                      >
+                        ✕ Tutup
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {arabicQuickTemplates.map((t, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => insertTextAtCursor(t.snippet)}
+                        className="px-2.5 py-1 rounded bg-white dark:bg-slate-900 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 shadow-2xs transition cursor-pointer flex items-center gap-1"
+                        title={`Sisipkan: ${t.label}`}
+                      >
+                        <span className="text-[10px] text-slate-500 font-sans">{t.label}:</span>
+                        <span className="font-arabic font-bold text-sm">{t.snippet}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Aksara Jawa Assistant Bar (Hanacaraka & Sandhangan) */}
+              {showJavaneseAssistant && (
+                <div className="p-2.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-md space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-amber-900 dark:text-amber-300 font-bold">
+                    <span className="flex items-center gap-1.5">
+                      <span className="font-javanese text-sm">ꦲ</span>
+                      <span>Palette Aksara Jawa Hanacaraka & Sandhangan (Offline):</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => insertTextAtCursor('<span class="font-javanese" style="font-size: 1.25em;">ꦲꦤꦕꦫꦏ</span>')}
+                        className="text-[10px] px-2 py-0.5 rounded bg-amber-600 text-white hover:bg-amber-700 cursor-pointer font-medium"
+                      >
+                        + Sisipkan Format Aksara Jawa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowJavaneseAssistant(false)}
+                        className="text-[10px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
+                      >
+                        ✕ Tutup
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1 max-h-36 overflow-y-auto custom-scrollbar p-1">
+                    {javaneseQuickTemplates.map((t, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => insertTextAtCursor(t.char)}
+                        className="px-2 py-1 rounded bg-white dark:bg-slate-900 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 shadow-2xs transition cursor-pointer flex items-center gap-1"
+                        title={`Aksara ${t.label}: ${t.char}`}
+                      >
+                        <span className="text-[10px] text-slate-500 font-sans">{t.label}:</span>
+                        <span className="font-javanese font-bold text-base">{t.char}</span>
                       </button>
                     ))}
                   </div>

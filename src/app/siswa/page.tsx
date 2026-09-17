@@ -185,7 +185,7 @@ export default function SiswaPortalPage() {
       {/* 4. Main Content Dashboard Siswa */}
       <main className="p-3.5 sm:p-6 lg:p-8 max-w-5xl w-full mx-auto space-y-6 flex-1 relative z-10">
         {/* Banner Identitas Peserta Ujian Compact & Bersih */}
-        <div className="bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 rounded-2xl p-4 sm:p-5 shadow-xs dark:shadow-lg backdrop-blur-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs dark:shadow-lg backdrop-blur-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-11 h-11 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 border border-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black shrink-0">
               <UserCheck className="w-6 h-6" />
@@ -225,7 +225,7 @@ export default function SiswaPortalPage() {
         )}
 
         {/* Informasi Pengawasan & Izin Aplikasi Chrome */}
-        <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 dark:border-amber-500/30 rounded-2xl p-3.5 sm:p-4 backdrop-blur-xl">
+        <div className="bg-white/95 dark:bg-slate-900/95 border border-amber-500/30 dark:border-amber-500/30 rounded-2xl p-3.5 sm:p-4 shadow-xs backdrop-blur-xl">
           <div className="flex items-center gap-2.5 mb-2.5">
             <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <span className="text-xs font-bold text-amber-900 dark:text-amber-200 tracking-wide">
@@ -236,19 +236,19 @@ export default function SiswaPortalPage() {
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-xs">
-            <div className="flex items-center gap-2 p-2 rounded-xl bg-blue-50/60 dark:bg-slate-950/50 border border-blue-100/80 dark:border-white/5">
+            <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800">
               <span className="w-5 h-5 rounded-lg bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">1</span>
               <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Wajib gunakan Chrome</span>
             </div>
-            <div className="flex items-center gap-2 p-2 rounded-xl bg-amber-50/60 dark:bg-slate-950/50 border border-amber-100/80 dark:border-white/5">
+            <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800">
               <span className="w-5 h-5 rounded-lg bg-amber-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">2</span>
               <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Izinkan semua pesan chrome setelah klik kerjakan</span>
             </div>
-            <div className="flex items-center gap-2 p-2 rounded-xl bg-emerald-50/60 dark:bg-slate-950/50 border border-emerald-100/80 dark:border-white/5">
+            <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800">
               <span className="w-5 h-5 rounded-lg bg-emerald-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">3</span>
               <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Kerjakan langsung di layar penuh</span>
             </div>
-            <div className="flex items-center gap-2 p-2 rounded-xl bg-purple-50/60 dark:bg-slate-950/50 border border-purple-100/80 dark:border-white/5">
+            <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800">
               <span className="w-5 h-5 rounded-lg bg-purple-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">4</span>
               <span className="text-slate-700 dark:text-slate-300 text-[11px] font-medium leading-tight">Pelanggaran dicatat langsung oleh sistem</span>
             </div>
@@ -257,7 +257,7 @@ export default function SiswaPortalPage() {
 
         {/* Section: Filter Tab & Daftar Jadwal Ujian */}
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 dark:bg-slate-900/75 border border-slate-200/80 dark:border-white/10 rounded-2xl p-3 sm:p-4 backdrop-blur-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xs backdrop-blur-xl">
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -350,7 +350,7 @@ export default function SiswaPortalPage() {
                   return (
                     <div
                       key={ujian.ujianId || ujian.id}
-                      className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl space-y-4 hover:border-blue-500/50 transition-all flex flex-col justify-between backdrop-blur-xl group"
+                      className="bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs dark:shadow-xl space-y-4 hover:border-blue-500/50 transition-all flex flex-col justify-between backdrop-blur-xl group"
                     >
                       <div className="space-y-2.5">
                         <div className="flex justify-between items-start gap-2">
@@ -519,7 +519,7 @@ export default function SiswaPortalPage() {
                   return (
                     <div
                       key={ujian.pesertaUjianId || ujian.ujianId}
-                      className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl space-y-4 flex flex-col justify-between backdrop-blur-xl opacity-90 hover:opacity-100 transition-opacity"
+                      className="bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xs dark:shadow-xl space-y-4 flex flex-col justify-between backdrop-blur-xl transition-all"
                     >
                       <div className="space-y-2.5">
                         <div className="flex justify-between items-start gap-2">

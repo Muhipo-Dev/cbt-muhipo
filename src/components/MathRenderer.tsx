@@ -7,12 +7,22 @@ interface MathRendererProps {
   className?: string;
 }
 
+// Regex range Unicode untuk aksara Arab (termasuk harakat, tanda baca Al-Quran, dan Arab Pegon)
+const ARABIC_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
+// Regex range Unicode untuk Aksara Jawa (Hanacaraka, Sandhangan, Angka Jawa)
+const JAVANESE_REGEX = /[\uA980-\uA9DF]/;
+
 /**
  * Komponen untuk merender teks campuran Formula KaTeX ($...$ / $$...$$),
+ * teks Bahasa Arab (dengan tata letak & harakat optimal), Aksara Jawa (Hanacaraka),
  * serta media embed (gambar, audio, video, dan YouTube iframe).
  */
 export const MathRenderer: React.FC<MathRendererProps> = ({ content, className = '' }) => {
   if (!content) return null;
+
+  const hasArabic = ARABIC_REGEX.test(content);
+  const hasJavanese = JAVANESE_REGEX.test(content);
 
   const renderContentWithMathAndMedia = (text: string) => {
     // 1. Ganti block math $$...$$
@@ -63,15 +73,34 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
       `<img src="$2" alt="$1" class="my-2 rounded-xl max-h-72 max-w-full mx-auto border border-slate-200 dark:border-slate-700 shadow-xs object-contain" />`
     );
 
-    // 7. Dukung line breaks (spasi ke bawah / baris baru)
+    // 7. Auto-wrap raw Aksara Jawa yang belum dibungkus tag HTML
+    formatted = formatted.replace(
+      /(?<!<[^>]*)([\uA980-\uA9DF][\uA980-\uA9DF\s\uA9C0-\uA9CF]*[\uA980-\uA9DF]|[\uA980-\uA9DF])/g,
+      `<span class="font-javanese-inline">$1</span>`
+    );
+
+    // 8. Auto-wrap raw Teks Arab yang belum dibungkus tag HTML agar harakat dan arah RTL sempurna
+    formatted = formatted.replace(
+      /(?<!<[^>]*)([\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF][\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s\u060C\u061B\u061F\u0640]*[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]|[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])/g,
+      `<bdi class="font-arabic-inline dir-rtl" dir="rtl">$1</bdi>`
+    );
+
+    // 9. Dukung line breaks (spasi ke bawah / baris baru)
     formatted = formatted.replace(/\n/g, '<br />');
 
     return formatted;
   };
 
+  // Tentukan class penyesuaian untuk Arab / Aksara Jawa jika terdapat aksara
+  const extraClasses = [
+    hasArabic ? 'font-arabic-support' : '',
+    hasJavanese ? 'font-javanese-support' : '',
+  ].filter(Boolean).join(' ');
+
   return (
     <div
-      className={`prose max-w-none text-slate-800 dark:text-slate-100 leading-relaxed font-sans ${className}`}
+      dir="auto"
+      className={`prose max-w-none text-slate-800 dark:text-slate-100 leading-relaxed font-sans ${extraClasses} ${className}`}
       dangerouslySetInnerHTML={{ __html: renderContentWithMathAndMedia(content) }}
     />
   );

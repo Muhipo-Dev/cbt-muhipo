@@ -1,10 +1,30 @@
 @import "tailwindcss";
 
+/* 1. Offline Fonts: Bahasa Indonesia & English (Latin Script) */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/inter/800.css";
+
+/* 2. Offline Fonts: Bahasa Arab (Arabic Script & Pegon) */
+@import "@fontsource/amiri/400.css";
+@import "@fontsource/amiri/700.css";
+@import "@fontsource/noto-sans-arabic/400.css";
+@import "@fontsource/noto-sans-arabic/600.css";
+@import "@fontsource/noto-sans-arabic/700.css";
+
+/* 3. Offline Fonts: Bahasa & Aksara Jawa (Hanacaraka & Pasangan) */
+@import "@fontsource/noto-sans-javanese/400.css";
+@import "@fontsource/noto-sans-javanese/700.css";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
+  --font-sans: "Inter", var(--font-geist-sans), "Amiri", "Noto Sans Arabic", "Noto Sans Javanese", "Segoe UI", "Tahoma", -apple-system, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
+  --font-arabic: "Amiri", "Noto Sans Arabic", "Scheherazade New", "Traditional Arabic", "KFGQPC Uthman Taha Naskh", "Geeza Pro", "Al Bayan", "Sakkal Majalla", "Segoe UI Historic", "Arial", serif;
+  --font-javanese: "Noto Sans Javanese", "Tuladha Jejeg", "Javanese Text", "Yogya", "Segoe UI Historic", "Prada", sans-serif;
 }
 
 :root {
@@ -22,6 +42,96 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* =========================================================================
+   OFFLINE MULTILINGUAL SUPPORT: BAHASA ARAB & AKSARA JAWA (HANACARAKA)
+   Dioptimalkan untuk semua versi Chrome (Win XP, 7, 8, 10, 11, Android, iOS)
+   Mencegah harakat & sandhangan terpotong serta menjaga arah teks LTR/RTL
+   ========================================================================= */
+
+/* Blok Teks Arab Murni (Ayat Al-Qur'an, Hadits, Paragraf Arab) */
+.font-arabic,
+.font-arabic-block {
+  font-family: var(--font-arabic) !important;
+  direction: rtl;
+  text-align: right;
+  line-height: 2.1 !important;
+  font-size: 1.28em;
+  padding-top: 0.15em;
+  padding-bottom: 0.15em;
+  word-spacing: 0.1em;
+  font-feature-settings: "cv01" 1, "cv02" 1, "liga" 1, "clig" 1, "calt" 1, "kern" 1;
+  text-rendering: optimizeLegibility;
+}
+
+/* Potongan Kata/Frasa Arab di Tengah Kalimat Bahasa Indonesia */
+.font-arabic-inline {
+  font-family: var(--font-arabic) !important;
+  direction: rtl;
+  unicode-bidi: isolate;
+  font-size: 1.2em;
+  line-height: 1.9 !important;
+  display: inline-block;
+  vertical-align: middle;
+  padding: 0 0.25em;
+  font-feature-settings: "cv01" 1, "cv02" 1, "liga" 1, "clig" 1, "calt" 1, "kern" 1;
+}
+
+/* Aksara Jawa (Hanacaraka, Pasangan, Sandhangan, Angka Jawa) */
+.font-javanese,
+.font-javanese-block {
+  font-family: var(--font-javanese) !important;
+  line-height: 2.4 !important;
+  font-size: 1.26em;
+  letter-spacing: 0.03em;
+  padding-top: 0.2em;
+  padding-bottom: 0.2em;
+  font-feature-settings: "liga" 1, "clig" 1, "calt" 1, "kern" 1;
+  text-rendering: optimizeLegibility;
+}
+
+/* Potongan Aksara Jawa di Tengah Kalimat Latin */
+.font-javanese-inline {
+  font-family: var(--font-javanese) !important;
+  line-height: 2.1 !important;
+  font-size: 1.18em;
+  letter-spacing: 0.02em;
+  unicode-bidi: isolate;
+  display: inline-block;
+  vertical-align: middle;
+  padding: 0 0.2em;
+  font-feature-settings: "liga" 1, "clig" 1, "calt" 1, "kern" 1;
+}
+
+/* Arah Teks Universal (BIDI Isolation) */
+.dir-rtl {
+  direction: rtl !important;
+  text-align: right !important;
+  unicode-bidi: isolate;
+}
+
+.dir-ltr {
+  direction: ltr !important;
+  text-align: left !important;
+  unicode-bidi: isolate;
+}
+
+/* Kontainer dengan Teks Campuran (Arab + Indonesia / Jawa + Indonesia) */
+.font-arabic-support {
+  line-height: 2.1 !important;
+  unicode-bidi: plaintext;
+}
+
+.font-javanese-support {
+  line-height: 2.3 !important;
+  unicode-bidi: plaintext;
+}
+
+/* Isolasi BDI otomatis untuk aksara campuran */
+bdi,
+[dir="auto"] {
+  unicode-bidi: isolate;
 }
 
 /* Custom scrollbar matching SIMASMUH */
@@ -119,4 +229,75 @@ body {
     page-break-inside: avoid !important;
   }
 }
+
+/* =========================================================================
+   LEGACY OS & LOW-SPEC COMFORT OPTIMIZATIONS (WINDOWS XP / 7 / 8 / 10-)
+   Fixes glassmorphism glitches, washed-out text, and lack of backdrop-filter
+   ========================================================================= */
+
+/* Font smoothing & ClearType sharpness for legacy Windows monitors */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Fallback ketika browser/OS TIDAK mendukung backdrop-filter (Chrome < 76, Win XP, Win 7 tanpa GPU) */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  [class*="backdrop-blur"],
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl,
+  .backdrop-blur-2xl {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: #ffffff !important;
+    border-color: #cbd5e1 !important; /* border-slate-300 */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  .dark [class*="backdrop-blur"],
+  .dark .backdrop-blur-sm,
+  .dark .backdrop-blur-md,
+  .dark .backdrop-blur-lg,
+  .dark .backdrop-blur-xl,
+  .dark .backdrop-blur-2xl {
+    background-color: #0f172a !important; /* dark:bg-slate-900 */
+    border-color: #334155 !important; /* dark:border-slate-700 */
+  }
+
+  /* Overlay modal & background dimmer pada browser lawas */
+  div.fixed.inset-0[class*="bg-slate-950"],
+  div.fixed.inset-0[class*="bg-slate-900"] {
+    background-color: rgba(15, 23, 42, 0.85) !important;
+  }
+
+  /* Hilangkan wallpaper blur overlay ganda yang membuat silau */
+  .fixed.inset-0.-z-20 {
+    background-color: #f1f5f9 !important;
+  }
+  .dark .fixed.inset-0.-z-20 {
+    background-color: #020617 !important;
+  }
+}
+
+/* Preferensi Kenyamanan Visual & Pengurangan Transparansi */
+@media (prefers-reduced-transparency: reduce) {
+  [class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: #ffffff !important;
+  }
+  .dark [class*="backdrop-blur"] {
+    background-color: #0f172a !important;
+  }
+}
+
+/* Peningkatan kontras teks pada kartu glassmorphism agar tetap tegas di layar LCD lab */
+[class*="backdrop-blur"] {
+  /* Pastikan kartu punya soliditas dasar dan teks tidak pudar */
+  contain: paint;
+}
+
 
