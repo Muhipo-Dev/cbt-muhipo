@@ -19,18 +19,43 @@ echo ===========================================================================
 echo.
 
 where node >nul 2>&1
-if %errorlevel% neq 0 goto ERR_NODE
-goto OK_NODE
+if %errorlevel% neq 0 (
+    echo [INFO] Node.js belum terpasang pada komputer ini.
+    echo [INFO] Memulai proses instalasi otomatis Node.js LTS...
+    
+    set "NODE_INSTALLED="
+    where winget >nul 2>&1
+    if !errorlevel! equ 0 (
+        echo [INFO] Menginstal Node.js LTS via winget...
+        winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements --silent >nul 2>&1
+        if !errorlevel! equ 0 set "NODE_INSTALLED=1"
+    )
 
-:ERR_NODE
-color 0C
-echo [ERROR] Node.js tidak ditemukan di sistem ini.
-echo Silakan instal Node.js LTS dari https://nodejs.org/
-echo.
-pause
-exit /b 1
+    if not defined NODE_INSTALLED (
+        echo [INFO] Mengunduh installer resmi Node.js LTS dari nodejs.org...
+        set "NODE_MSI=%TEMP%\nodejs_installer.msi"
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi', '%TEMP%\nodejs_installer.msi')" >nul 2>&1
+        
+        if exist "!NODE_MSI!" (
+            echo [INFO] Memasang Node.js LTS secara otomatis (Silent Install)...
+            msiexec.exe /i "!NODE_MSI!" /qn /norestart
+            del "!NODE_MSI!" >nul 2>&1
+        )
+    )
 
-:OK_NODE
+    set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0;C:\Program Files\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\nodejs;C:\Program Files (x86)\nodejs;C:\xampp\mysql\bin;D:\xampp\mysql\bin;E:\xampp\mysql\bin;%PATH%"
+
+    where node >nul 2>&1
+    if !errorlevel! neq 0 (
+        color 0C
+        echo [ERROR] Node.js tidak ditemukan di sistem ini.
+        echo Silakan unduh dan instal Node.js LTS dari https://nodejs.org/
+        echo.
+        pause
+        exit /b 1
+    )
+    echo [OK] Node.js berhasil dipasang secara otomatis!
+)
 if not exist ".env" (
     echo [INFO] File .env belum ada, membuat konfigurasi standar otomatis...
     echo # KONFIGURASI BASIS DATA CBT MUHIPO > ".env"
