@@ -556,7 +556,7 @@ export function TesDaftarView({
                   >
                     {itemsMapel.map((bs) => (
                       <option key={bs.id} value={bs.id}>
-                        [{bs.kode || bs.kodeBank}] {bs.nama}
+                        {bs.nama}
                       </option>
                     ))}
                   </select>

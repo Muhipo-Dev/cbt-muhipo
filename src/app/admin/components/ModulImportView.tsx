@@ -557,7 +557,7 @@ export function ModulImportView({
                   const soalCount = bs._count?.soalList ?? bs.soalList?.length ?? 0
                   return (
                     <option key={bs.id} value={bs.id}>
-                      {bs.kode || bs.kodeBank || 'Default'} - {bs.nama} [{soalCount}]
+                      {bs.nama} [{soalCount}]
                     </option>
                   )
                 })}

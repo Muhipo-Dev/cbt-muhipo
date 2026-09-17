@@ -145,7 +145,7 @@ export function ModulDaftarView({
   }
   const totalSoalCount = mapelData?.soalList?.length ?? currentTopic?._count?.soalList ?? currentTopic?.soalList?.length ?? 0
   const topicDisplayName = currentTopic
-    ? `${currentTopic.kode ? currentTopic.kode + ' - ' : ''}${currentTopic.nama || 'Topik'} [${totalSoalCount}]`
+    ? `${currentTopic.nama || 'Topik'} [${totalSoalCount}]`
     : 'Topik Terpilih'
 
   // Open Edit Soal Modal
@@ -399,7 +399,7 @@ export function ModulDaftarView({
                     const isArchived = bs.status === 'NONAKTIF'
                     return (
                       <option key={bs.id} value={bs.id}>
-                        {isArchived ? '[ARSIP] ' : ''}{bs.kode || bs.kodeBank || 'Default'} - {bs.nama} [{itemModul}] [{soalCount} Soal]
+                        {isArchived ? '[ARSIP] ' : ''}{bs.nama} [{itemModul}] [{soalCount} Soal]
                       </option>
                     )
                   })}

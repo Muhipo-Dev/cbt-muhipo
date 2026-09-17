@@ -152,7 +152,7 @@ export function TesTambahView({
                 const isArchived = bs.status === 'NONAKTIF'
                 return (
                   <option key={bs.id} value={bs.id}>
-                    {isArchived ? '[ARSIP] ' : ''}[{bs.kode || bs.kodeBank}] {bs.nama} - {bs._count?.soalList ?? 0} Butir Soal (Kls {bs.tingkat || 10})
+                    {isArchived ? '[ARSIP] ' : ''}{bs.nama} - {bs._count?.soalList ?? 0} Butir Soal (Kls {bs.tingkat || 10})
                   </option>
                 )
               })}

@@ -65,8 +65,6 @@ export function ModulTopikView({
   const [editingModul, setEditingModul] = useState<any | null>(null)
   const [modulForm, setModulForm] = useState({
     nama: '',
-    kode: '',
-    deskripsi: '',
   })
   const [savingModul, setSavingModul] = useState(false)
 
@@ -77,7 +75,6 @@ export function ModulTopikView({
     modul: 'Default',
     kode: '',
     nama: '',
-    deskripsi: '',
     status: 'Aktif',
     tingkat: 10,
     durasiMenit: 90,
@@ -89,8 +86,6 @@ export function ModulTopikView({
     setEditingModul(null)
     setModulForm({
       nama: '',
-      kode: '',
-      deskripsi: '',
     })
     setShowModulModal(true)
   }
@@ -181,7 +176,6 @@ export function ModulTopikView({
       modul: selectedModul || 'Default',
       kode: `TPK-${Date.now().toString().slice(-4)}`,
       nama: '',
-      deskripsi: `Tryout TKA SMA Muhammadiyah 1 Ponorogo, Modul ${selectedModul}`,
       status: 'Aktif',
       tingkat: 10,
       durasiMenit: 90,
@@ -194,11 +188,8 @@ export function ModulTopikView({
     setEditingItem(item)
     setForm({
       modul: item.namaModul || item.modul?.nama || selectedModul || 'Default',
-      kode: item.kode || '',
+      kode: item.kode || `TPK-${Date.now().toString().slice(-4)}`,
       nama: item.nama || '',
-      deskripsi: item.jurusan && item.jurusan !== 'UMUM'
-        ? item.jurusan
-        : `Tryout TKA kelas ${item.tingkat || 'XII'} SMA Muhammadiyah 1 Ponorogo, Tahun Pelajaran 2026/2027`,
       status: item.status === 'NONAKTIF' ? 'Nonaktif' : 'Aktif',
       tingkat: item.tingkat || 10,
       durasiMenit: item.durasiMenit || 90,
@@ -209,8 +200,8 @@ export function ModulTopikView({
   // Save Topik
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.nama.trim() || !form.kode.trim()) {
-      showNotification('Peringatan', 'Kode dan Nama Topik wajib diisi', 'warning')
+    if (!form.nama.trim()) {
+      showNotification('Peringatan', 'Nama Topik wajib diisi', 'warning')
       return
     }
 
@@ -218,9 +209,10 @@ export function ModulTopikView({
       setSaving(true)
       const action = editingItem ? 'UPDATE_MAPEL' : 'CREATE_MAPEL'
       const statusValue = form.status === 'Nonaktif' ? 'NONAKTIF' : 'AKTIF'
+      const finalKode = form.kode?.trim() || `TPK-${Date.now().toString().slice(-4)}`
       const payload = editingItem
-        ? { action, id: editingItem.id, ...form, status: statusValue, namaModul: form.modul }
-        : { action, ...form, status: statusValue, namaModul: form.modul }
+        ? { action, id: editingItem.id, ...form, kode: finalKode, status: statusValue, namaModul: form.modul }
+        : { action, ...form, kode: finalKode, status: statusValue, namaModul: form.modul }
 
       const res = await fetch('/api/admin', {
         method: 'POST',
@@ -253,8 +245,8 @@ export function ModulTopikView({
     const action = isArchived ? 'UNARCHIVE_MAPEL' : 'ARCHIVE_MAPEL'
     const title = isArchived ? 'Aktifkan Kembali Topik?' : 'Arsipkan Topik?'
     const message = isArchived
-      ? `Aktifkan kembali topik "${item.nama}" (${item.kode})? Topik ini akan kembali berstatus aktif.`
-      : `Apakah Anda yakin ingin mengarsipkan topik "${item.nama}" (${item.kode})? Topik yang diarsipkan tidak akan muncul saat membuat tes baru, namun seluruh butir soal tetap aman.`
+      ? `Aktifkan kembali topik "${item.nama}"? Topik ini akan kembali berstatus aktif.`
+      : `Apakah Anda yakin ingin mengarsipkan topik "${item.nama}"? Topik yang diarsipkan tidak akan muncul saat membuat tes baru, namun seluruh butir soal tetap aman.`
 
     showConfirm(title, message, async () => {
       try {
@@ -308,7 +300,7 @@ export function ModulTopikView({
     )
   }
 
-  // Bulk Unarchive (Restore)
+  // Bulk Unarchive
   const handleBulkUnarchive = () => {
     if (selectedIds.length === 0) {
       showNotification('Peringatan', 'Pilih minimal 1 topik untuk diaktifkan kembali', 'warning')
@@ -327,7 +319,7 @@ export function ModulTopikView({
           })
           const json = await res.json()
           if (json.success) {
-            showNotification('Berhasil', json.message || 'Topik terpilih berhasil diaktifkan kembali', 'success')
+            showNotification('Berhasil', json.message || 'Topik terpilih berhasil diaktifkan', 'success')
             setSelectedIds([])
             onRefresh()
           } else {
@@ -340,11 +332,11 @@ export function ModulTopikView({
     )
   }
 
-  // Delete Single Topik
+  // Delete Single Topic
   const handleDeleteSingle = (item: any) => {
     showConfirm(
       'Hapus Topik?',
-      `Apakah Anda yakin ingin menghapus topik "${item.nama}" (${item.kode}) beserta seluruh butir soal yang ada di dalamnya?`,
+      `Apakah Anda yakin ingin menghapus topik "${item.nama}" beserta seluruh butir soal yang ada di dalamnya?`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -433,7 +425,7 @@ export function ModulTopikView({
   })
 
   const filteredItems = modulItems.filter((m: any) =>
-    m.nama ? m.nama.toLowerCase().includes(searchQuery.toLowerCase()) || m.kode?.toLowerCase().includes(searchQuery.toLowerCase()) : true
+    m.nama ? m.nama.toLowerCase().includes(searchQuery.toLowerCase()) : true
   )
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / entriesPerPage))
   const paginatedItems = filteredItems.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage)
@@ -607,7 +599,7 @@ export function ModulTopikView({
                     setSearchQuery(e.target.value)
                     setCurrentPage(1)
                   }}
-                  placeholder="Cari kode atau nama..."
+                  placeholder="Cari nama topik..."
                   className="px-2.5 py-1 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -619,9 +611,8 @@ export function ModulTopikView({
                 <thead>
                   <tr className="bg-slate-100/90 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-white/10">
                     <th className="py-2.5 px-3 w-10 text-center">No. ⇅</th>
-                    <th className="py-2.5 px-3">Kode & Nama Topik</th>
+                    <th className="py-2.5 px-3">Nama Topik</th>
                     <th className="py-2.5 px-3">Modul</th>
-                    <th className="py-2.5 px-3">Deskripsi</th>
                     <th className="py-2.5 px-3 text-center w-20">Jml. Soal</th>
                     <th className="py-2.5 px-3 text-center w-24">Status</th>
                     <th className="py-2.5 px-3 text-center w-40">Aksi</th>
@@ -630,7 +621,7 @@ export function ModulTopikView({
                 <tbody className="divide-y divide-slate-200 dark:divide-white/5">
                   {paginatedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                      <td colSpan={6} className="py-8 text-center text-slate-400">
                         {searchQuery || statusFilter !== 'SEMUA' ? (
                           'Tidak ada topik yang sesuai kriteria pencarian / filter status.'
                         ) : (
@@ -654,9 +645,6 @@ export function ModulTopikView({
                       const isArchived = item.status === 'NONAKTIF'
                       const soalCount = item._count?.soalList ?? item.soalList?.length ?? 0
                       const itemModul = item.namaModul || item.modul?.nama || 'Default'
-                      const deskripsiText = item.jurusan && item.jurusan !== 'UMUM'
-                        ? item.jurusan
-                        : `Tryout TKA kelas ${item.tingkat || 'XII'} SMA Muhammadiyah 1 Ponorogo, Tahun Pelajaran 2026/2027`
 
                       return (
                         <tr
@@ -677,17 +665,16 @@ export function ModulTopikView({
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-blue-600 dark:text-blue-400 font-mono">
-                              {item.kode} {item.tingkat ? `• Kelas ${item.tingkat}` : ''}
-                            </div>
+                            {item.tingkat ? (
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                                Kelas {item.tingkat}
+                              </div>
+                            ) : null}
                           </td>
                           <td className="py-2.5 px-3">
                             <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold text-[11px] border border-blue-200 dark:border-blue-900/40">
                               {itemModul}
                             </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300 max-w-xs truncate">
-                            {deskripsiText}
                           </td>
                           <td className="py-2.5 px-3 text-center">
                             <span className="inline-block px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs">
@@ -881,32 +868,6 @@ export function ModulTopikView({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Kode Modul (Opsional)
-                </label>
-                <input
-                  type="text"
-                  value={modulForm.kode}
-                  onChange={(e) => setModulForm({ ...modulForm, kode: e.target.value.toUpperCase() })}
-                  placeholder="Contoh: MOD-TKA, MOD-US"
-                  className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Deskripsi Modul
-                </label>
-                <textarea
-                  rows={2}
-                  value={modulForm.deskripsi}
-                  onChange={(e) => setModulForm({ ...modulForm, deskripsi: e.target.value })}
-                  placeholder="Keterangan mengenai modul ujian ini..."
-                  className="w-full p-2.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-white/10">
                 <button
                   type="button"
@@ -967,21 +928,6 @@ export function ModulTopikView({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Kode Topik *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={form.kode}
-                  onChange={(e) => setForm({ ...form, kode: e.target.value.toUpperCase() })}
-                  placeholder="Contoh: AIK-XII, MTK-10, BIND-12"
-                  className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                />
-                <p className="text-[10px] text-slate-500 mt-1">Kode unik pengenal topik / mapel</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Nama Topik / Mata Pelajaran *
                 </label>
                 <input
@@ -991,19 +937,6 @@ export function ModulTopikView({
                   onChange={(e) => setForm({ ...form, nama: e.target.value })}
                   placeholder="Contoh: Al-Islam & Kemuhammadiyahan XII"
                   className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Deskripsi Topik
-                </label>
-                <textarea
-                  rows={2}
-                  value={form.deskripsi}
-                  onChange={(e) => setForm({ ...form, deskripsi: e.target.value })}
-                  placeholder="Deskripsi singkat topik atau target jenjang/tingkat..."
-                  className="w-full p-2.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
 

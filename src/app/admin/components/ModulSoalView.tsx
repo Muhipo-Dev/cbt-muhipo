@@ -188,9 +188,7 @@ export function ModulSoalView({
     nama: 'Bahasa Indonesia dan Literasi',
     kode: 'Default',
   }
-  const topicDisplayName = currentTopic
-    ? `${currentTopic.kode ? currentTopic.kode + ' - ' : ''}${currentTopic.nama || 'Topik'}`
-    : 'Topik Terpilih'
+  const topicDisplayName = currentTopic?.nama || 'Topik Terpilih'
 
   // Automatic Math & Science Topic Detection
   const isMathTopic = useMemo(() => {
@@ -757,7 +755,7 @@ export function ModulSoalView({
                     const isArchived = bs.status === 'NONAKTIF'
                     return (
                       <option key={bs.id} value={bs.id}>
-                        {isArchived ? '[ARSIP] ' : ''}{bs.kode || bs.kodeBank || 'Default'} - {bs.nama} [{itemModul}]
+                        {isArchived ? '[ARSIP] ' : ''}{bs.nama} [{itemModul}]
                       </option>
                     )
                   })}
