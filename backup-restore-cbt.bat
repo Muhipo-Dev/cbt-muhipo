@@ -6,10 +6,23 @@ cd /d "%~dp0"
 title CBT MUHIPO - Database Backup and Restore Manager
 color 0B
 
-set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0;C:\xampp\mysql\bin;D:\xampp\mysql\bin;E:\xampp\mysql\bin;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\nodejs;C:\Program Files (x86)\nodejs;%PATH%"
+set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0;C:\Program Files\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\nodejs;C:\Program Files (x86)\nodejs;%NVM_HOME%;%NVM_SYMLINK%;C:\xampp\mysql\bin;D:\xampp\mysql\bin;E:\xampp\mysql\bin;F:\xampp\mysql\bin;C:\laragon\bin\mysql\current\bin;D:\laragon\bin\mysql\current\bin;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\MySQL\MySQL Server 8.4\bin;C:\Program Files\MySQL\MySQL Server 9.0\bin;C:\Program Files\MariaDB\bin;%PATH%"
 
 set "BACKUP_DIR=%~dp0backups"
 if not exist "%BACKUP_DIR%" mkdir "%BACKUP_DIR%"
+
+:: Deteksi parameter koneksi dari .env
+set "DB_USER=root"
+set "DB_PASS="
+set "DB_HOST=127.0.0.1"
+set "DB_PORT=3306"
+set "DB_NAME=cbt_muhipo"
+
+if exist ".env" (
+    for /f "usebackq tokens=*" %%L in (`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '.env') { $content = Get-Content '.env' -Raw; if ($content -match 'DATABASE_URL\s*=\s*[\x22\x27]?mysql:\/\/([^:]+):?([^@]*)@([^:\/]+):?(\d*)\/([^?\x22\x27\s]+)') { Write-Output ('DB_USER=' + $Matches[1]); Write-Output ('DB_PASS=' + $Matches[2]); Write-Output ('DB_HOST=' + (if($Matches[3]){$Matches[3]}else{'127.0.0.1'})); Write-Output ('DB_PORT=' + (if($Matches[4]){$Matches[4]}else{'3306'})); Write-Output ('DB_NAME=' + $Matches[5]); } }"`) do (
+        set "%%L"
+    )
+)
 
 :MENU_BACKUP
 cls
@@ -19,6 +32,7 @@ echo        SMA Muhammadiyah 1 Ponorogo - Muhipo Dev (C) 2026
 echo ==============================================================================
 echo.
 echo  DIREKTORI BACKUP : %BACKUP_DIR%
+echo  TARGET DATABASE  : %DB_NAME% @ %DB_HOST%:%DB_PORT% (User: %DB_USER%)
 echo.
 
 set "MYSQLDUMP_EXE="
@@ -33,20 +47,23 @@ if exist "C:\xampp\mysql\bin\mysqldump.exe" (
 ) else if exist "E:\xampp\mysql\bin\mysqldump.exe" (
     set "MYSQLDUMP_EXE=E:\xampp\mysql\bin\mysqldump.exe"
     set "MYSQL_EXE=E:\xampp\mysql\bin\mysql.exe"
+) else if exist "F:\xampp\mysql\bin\mysqldump.exe" (
+    set "MYSQLDUMP_EXE=F:\xampp\mysql\bin\mysqldump.exe"
+    set "MYSQL_EXE=F:\xampp\mysql\bin\mysql.exe"
 ) else (
     where mysqldump.exe >nul 2>&1
-    if %errorlevel% equ 0 set "MYSQLDUMP_EXE=mysqldump"
+    if !errorlevel! equ 0 set "MYSQLDUMP_EXE=mysqldump"
     where mysql.exe >nul 2>&1
-    if %errorlevel% equ 0 set "MYSQL_EXE=mysql"
+    if !errorlevel! equ 0 set "MYSQL_EXE=mysql"
 )
 
 set "MYSQL_ACTIVE="
-for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr /R /C:":3306 " ^| findstr "LISTENING"') do set "MYSQL_ACTIVE=%%a"
+for /f "tokens=5" %%a in ('netstat -ano -p tcp 2^>nul ^| findstr /R /C:":%DB_PORT% " ^| findstr "LISTENING"') do set "MYSQL_ACTIVE=%%a"
 
 if defined MYSQL_ACTIVE (
-    echo  STATUS DATABASE  : [ TERHUBUNG - MYSQL PORT 3306 AKTIF ]
+    echo  STATUS DATABASE  : [ TERHUBUNG - MYSQL PORT %DB_PORT% AKTIF ]
 ) else (
-    echo  STATUS DATABASE  : [ PERINGATAN - MYSQL PORT 3306 MATI / TIDAK AKTIF ]
+    echo  STATUS DATABASE  : [ PERINGATAN - MYSQL PORT %DB_PORT% MATI / TIDAK AKTIF ]
 )
 echo ==============================================================================
 echo.
@@ -86,8 +103,8 @@ echo.
 
 if not defined MYSQLDUMP_EXE (
     color 0C
-    echo [ERROR] mysqldump.exe tidak ditemukan di direktori XAMPP atau PATH sistem.
-    echo Silakan pastikan XAMPP MySQL terpasang dengan benar.
+    echo [ERROR] mysqldump.exe tidak ditemukan di direktori XAMPP/MySQL atau PATH sistem.
+    echo Silakan pastikan MySQL/XAMPP terpasang dengan benar.
     echo.
     pause
     color 0B
@@ -96,30 +113,34 @@ if not defined MYSQLDUMP_EXE (
 
 if not defined MYSQL_ACTIVE (
     color 0C
-    echo [ERROR] Layanan MySQL Port 3306 sedang mati. Menyalakan MySQL...
-    if exist "C:\xampp\mysql_start.bat" powershell.exe -NoProfile -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c C:\xampp\mysql_start.bat' -WindowStyle Hidden" >nul 2>&1
+    echo [ERROR] Layanan MySQL Port %DB_PORT% sedang mati. Mencoba menyalakan MySQL...
+    if exist "C:\xampp\mysql_start.bat" powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c C:\xampp\mysql_start.bat' -WindowStyle Hidden" >nul 2>&1
     ping 127.0.0.1 -n 4 >nul
 )
 
-for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value 2^>nul') do set "DT=%%I"
-if not defined DT set "DT=%date:~10,4%%date:~4,2%%date:~7,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
-set "TIMESTAMP=%DT:~0,8%_%DT:~8,6%"
+for /f "tokens=*" %%T in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-Date -Format 'yyyyMMdd_HHmmss'"') do set "TIMESTAMP=%%T"
+if not defined TIMESTAMP set "TIMESTAMP=%date:~10,4%%date:~4,2%%date:~7,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
+set "TIMESTAMP=%TIMESTAMP: =0%"
+
 set "BACKUP_FILE=%BACKUP_DIR%\cbt_muhipo_backup_%TIMESTAMP%.sql"
 
-echo [..] Mengekspor basis data 'cbt_muhipo' ke:
+echo [..] Mengekspor basis data '%DB_NAME%' ke:
 echo      %BACKUP_FILE%
 echo.
 
+set "AUTH_ARGS=-u %DB_USER% -h %DB_HOST% -P %DB_PORT%"
+if defined DB_PASS set "AUTH_ARGS=%AUTH_ARGS% -p%DB_PASS%"
+
 if defined MYSQLDUMP_EXE (
-    "%MYSQLDUMP_EXE%" -u root --routines --triggers --single-transaction cbt_muhipo > "%BACKUP_FILE%"
+    "%MYSQLDUMP_EXE%" %AUTH_ARGS% --routines --triggers --single-transaction "%DB_NAME%" > "%BACKUP_FILE%" 2>nul
 ) else (
-    mysqldump -u root --routines --triggers --single-transaction cbt_muhipo > "%BACKUP_FILE%"
+    mysqldump %AUTH_ARGS% --routines --triggers --single-transaction "%DB_NAME%" > "%BACKUP_FILE%" 2>nul
 )
 
 if %errorlevel% neq 0 (
     color 0C
     echo [ERROR] Gagal membuat file backup SQL.
-    echo Periksa apakah database 'cbt_muhipo' sudah dibuat.
+    echo Periksa apakah database '%DB_NAME%' sudah dibuat dan kredensial MySQL sesuai.
     echo.
 ) else (
     color 0A
@@ -206,25 +227,28 @@ if /i not "%CONFIRM%"=="Y" (
     goto MENU_BACKUP
 )
 
+set "AUTH_ARGS=-u %DB_USER% -h %DB_HOST% -P %DB_PORT%"
+if defined DB_PASS set "AUTH_ARGS=%AUTH_ARGS% -p%DB_PASS%"
+
 echo.
-echo [1/3] Memastikan database 'cbt_muhipo' siap...
+echo [1/3] Memastikan database '%DB_NAME%' siap...
 if defined MYSQL_EXE (
-    "%MYSQL_EXE%" -u root -e "CREATE DATABASE IF NOT EXISTS cbt_muhipo CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" >nul 2>&1
+    "%MYSQL_EXE%" %AUTH_ARGS% -e "CREATE DATABASE IF NOT EXISTS %DB_NAME% CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" >nul 2>&1
 ) else (
-    mysql -u root -e "CREATE DATABASE IF NOT EXISTS cbt_muhipo CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" >nul 2>&1
+    mysql %AUTH_ARGS% -e "CREATE DATABASE IF NOT EXISTS %DB_NAME% CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" >nul 2>&1
 )
 
 echo [2/3] Mengimpor data dari file backup...
 if defined MYSQL_EXE (
-    "%MYSQL_EXE%" -u root cbt_muhipo < "%TARGET_FILE%"
+    "%MYSQL_EXE%" %AUTH_ARGS% %DB_NAME% < "%TARGET_FILE%"
 ) else (
-    mysql -u root cbt_muhipo < "%TARGET_FILE%"
+    mysql %AUTH_ARGS% %DB_NAME% < "%TARGET_FILE%"
 )
 
 if %errorlevel% neq 0 (
     color 0C
     echo [ERROR] Gagal memulihkan database dari file SQL.
-    echo Periksa kompatibilitas file backup SQL.
+    echo Periksa kompatibilitas file backup SQL dan izin user MySQL.
     echo.
 ) else (
     echo [3/3] Menyelaraskan Prisma ORM Client...
@@ -258,3 +282,4 @@ goto MENU_BACKUP
 :DO_OPEN_FOLDER
 start "" "%BACKUP_DIR%"
 goto MENU_BACKUP
+
