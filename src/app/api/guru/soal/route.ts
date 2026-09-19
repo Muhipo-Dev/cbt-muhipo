@@ -338,50 +338,38 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 1c. Hapus Topik / Mata Pelajaran
+    // 1c. Hapus Topik / Mata Pelajaran (Khusus Admin / Proktor)
     if (action === 'DELETE_MAPEL' || action === 'DELETE_TOPIK' || action === 'DELETE_BANK_SOAL') {
       const { id, mataPelajaranId, bankSoalId } = body;
       const targetId = id || mataPelajaranId || bankSoalId;
 
+      if (user.role === 'GURU') {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'Penghapusan Topik / Bank Soal dibatasi hanya untuk Administrator & Proktor. Silakan gunakan fitur Arsipkan jika bank soal sudah tidak digunakan.',
+          },
+          { status: 403 }
+        );
+      }
+
       const existing = await prisma.mataPelajaran.findUnique({
         where: { id: targetId },
-        include: { gurus: true },
       });
       if (!existing) {
         return NextResponse.json({ success: false, message: 'Topik / Mata Pelajaran tidak ditemukan' }, { status: 404 });
       }
 
-      const isTeacherOfMapel = existing.gurus?.some((g) => g.guruId === user.userId);
-      if (user.role === 'GURU' && existing.pembuatId !== user.userId && !isTeacherOfMapel) {
-        return NextResponse.json({ success: false, message: 'Akses ditolak.' }, { status: 403 });
-      }
+      // Soft delete ke Tempat Sampah
+      await prisma.mataPelajaran.update({
+        where: { id: targetId },
+        data: { status: 'TERHAPUS' },
+      });
 
-      // Hapus soal & ujian terkait
-      const soalList = await prisma.soal.findMany({ where: { mataPelajaranId: targetId }, select: { id: true } });
-      const soalIds = soalList.map((s) => s.id);
-      if (soalIds.length > 0) {
-        await prisma.jawabanPeserta.deleteMany({ where: { soalId: { in: soalIds } } });
-        await prisma.opsiJawaban.deleteMany({ where: { soalId: { in: soalIds } } });
-        await prisma.soal.deleteMany({ where: { mataPelajaranId: targetId } });
-      }
-
-      const relatedUjian = await prisma.ujian.findMany({ where: { mataPelajaranId: targetId } });
-      for (const u of relatedUjian) {
-        const peserta = await prisma.pesertaUjian.findMany({ where: { ujianId: u.id }, select: { id: true } });
-        const pesertaIds = peserta.map((p) => p.id);
-        if (pesertaIds.length > 0) {
-          await prisma.jawabanPeserta.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
-          await prisma.logAktivitasUjian.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
-          await prisma.pesertaUjian.deleteMany({ where: { ujianId: u.id } });
-        }
-        await prisma.ujianKelas.deleteMany({ where: { ujianId: u.id } });
-        await prisma.ujian.delete({ where: { id: u.id } });
-      }
-
-      await prisma.guruMataPelajaran.deleteMany({ where: { mataPelajaranId: targetId } });
-      await prisma.mataPelajaran.delete({ where: { id: targetId } });
-
-      return NextResponse.json({ success: true, message: 'Topik / Mata Pelajaran beserta seluruh butir soalnya berhasil dihapus' });
+      return NextResponse.json({
+        success: true,
+        message: 'Topik / Bank Soal berhasil dipindahkan ke Tempat Sampah (Recycle Bin).',
+      });
     }
 
     // 1d. Import Soal Massal Langsung ke Topik / Mata Pelajaran

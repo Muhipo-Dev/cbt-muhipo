@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 
 interface ModulTopikViewProps {
+  currentUser?: any
   mapelList: any[]
   modulList?: any[]
   onRefresh: () => void
@@ -34,6 +35,7 @@ interface ModulTopikViewProps {
 }
 
 export function ModulTopikView({
+  currentUser,
   mapelList,
   modulList = [],
   onRefresh,
@@ -42,6 +44,8 @@ export function ModulTopikView({
   showNotification,
   showConfirm,
 }: ModulTopikViewProps) {
+  const userRole = (currentUser?.role || 'ADMIN').toUpperCase()
+  const canManageTrash = ['SUPERADMIN', 'SUPER ADMIN', 'ADMIN', 'PROKTOR'].includes(userRole)
   // Ambil list modul unik dari modulList atau dari relasi mapelList
   const rawModulNames = Array.from(
     new Set([
@@ -617,49 +621,51 @@ export function ModulTopikView({
         </div>
 
         {/* View Mode Switch Tabs (Daftar Topik vs Recycle Bin) */}
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg p-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-xs font-semibold shadow-xs">
-            <button
-              type="button"
-              onClick={() => handleSwitchViewMode('ACTIVE')}
-              className={`px-3.5 py-1.5 rounded-md flex items-center gap-1.5 transition cursor-pointer ${
-                viewMode === 'ACTIVE'
-                  ? 'bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Daftar Topik</span>
-              <span
-                className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+        {canManageTrash && (
+          <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-lg p-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-xs font-semibold shadow-xs">
+              <button
+                type="button"
+                onClick={() => handleSwitchViewMode('ACTIVE')}
+                className={`px-3.5 py-1.5 rounded-md flex items-center gap-1.5 transition cursor-pointer ${
                   viewMode === 'ACTIVE'
-                    ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 font-bold'
-                    : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                    ? 'bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs font-bold'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                {activeCount}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSwitchViewMode('TRASH')}
-              className={`px-3.5 py-1.5 rounded-md flex items-center gap-1.5 transition cursor-pointer ${
-                viewMode === 'TRASH'
-                  ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/40 shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400'
-              }`}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Tempat Sampah</span>
-              {trashCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-600 text-white font-bold animate-pulse">
-                  {trashCount}
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Daftar Topik</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    viewMode === 'ACTIVE'
+                      ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 font-bold'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {activeCount}
                 </span>
-              )}
-            </button>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSwitchViewMode('TRASH')}
+                className={`px-3.5 py-1.5 rounded-md flex items-center gap-1.5 transition cursor-pointer ${
+                  viewMode === 'TRASH'
+                    ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/40 shadow-xs font-bold'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400'
+                }`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Tempat Sampah</span>
+                {trashCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-600 text-white font-bold animate-pulse">
+                    {trashCount}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Info Notice Box */}
@@ -774,7 +780,7 @@ export function ModulTopikView({
                 <FolderPlus className="w-4 h-4 text-emerald-600" />
                 <span>Buat Modul Baru</span>
               </button>
-              {trashCount > 0 && viewMode === 'ACTIVE' && (
+              {trashCount > 0 && viewMode === 'ACTIVE' && canManageTrash && (
                 <button
                   type="button"
                   onClick={() => handleSwitchViewMode('TRASH')}
@@ -1067,14 +1073,16 @@ export function ModulTopikView({
                                     <Archive className="w-3.5 h-3.5" />
                                   )}
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteSingle(item)}
-                                  title="Pindahkan ke Tempat Sampah (Recycle Bin)"
-                                  className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {canManageTrash && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSingle(item)}
+                                    title="Pindahkan ke Tempat Sampah (Recycle Bin)"
+                                    className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                                 <input
                                   type="checkbox"
                                   checked={isSelected}
@@ -1163,15 +1171,17 @@ export function ModulTopikView({
               ) : (
                 /* Tombol Massal di Daftar Reguler: Hapus ke Sampah, Arsipkan, Aktifkan */
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleBulkDelete}
-                    disabled={selectedIds.length === 0}
-                    className="px-3.5 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1 shadow-xs"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Hapus ({selectedIds.length}) ke Tempat Sampah</span>
-                  </button>
+                  {canManageTrash && (
+                    <button
+                      type="button"
+                      onClick={handleBulkDelete}
+                      disabled={selectedIds.length === 0}
+                      className="px-3.5 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1 shadow-xs"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Hapus ({selectedIds.length}) ke Tempat Sampah</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"

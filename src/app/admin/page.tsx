@@ -588,6 +588,7 @@ export default function ComprehensiveAdminDashboard() {
           {/* TAB 2: DATA MODUL */}
           {activeTab === 'modul_topik' && (
             <ModulTopikView
+              currentUser={currentUser}
               mapelList={mapelList}
               modulList={modulList}
               onRefresh={fetchAllData}

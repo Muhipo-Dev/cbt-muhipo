@@ -46,6 +46,8 @@ import {
   Check,
   Compass,
   ArrowRight,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
@@ -409,31 +411,36 @@ export default function GuruDashboardPage() {
     }
   };
 
-  const handleDeleteBankSoal = async (bankSoalId: string, nama: string) => {
+  const handleArchiveBankSoal = async (bankSoalId: string, nama: string, isCurrentlyArchived?: boolean) => {
+    const action = isCurrentlyArchived ? 'UNARCHIVE_BANK_SOAL' : 'ARCHIVE_BANK_SOAL';
+    const title = isCurrentlyArchived ? 'Aktifkan Kembali Bank Soal' : 'Arsipkan Bank Soal';
+    const message = isCurrentlyArchived
+      ? `Aktifkan kembali bank soal "${nama}"?`
+      : `Arsipkan bank soal "${nama}"? Bank soal yang diarsipkan tidak akan muncul saat membuat tes baru, namun seluruh butir soal tetap aman dan tidak hilang.`;
+
     showConfirm(
-      'Hapus Bank Soal',
-      `Hapus Bank Soal "${nama}" beserta seluruh butir soal di dalamnya?`,
+      title,
+      message,
       async () => {
         try {
           const res = await fetch('/api/guru/soal', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'DELETE_BANK_SOAL', bankSoalId }),
+            body: JSON.stringify({ action, bankSoalId }),
           });
           const json = await res.json();
           if (json.success) {
-            showNotification('Bank Soal Dihapus', json.message, 'success');
-            if (selectedBankSoal?.id === bankSoalId) setSelectedBankSoal(null);
+            showNotification('Berhasil', json.message || 'Status bank soal diperbarui', 'success');
             fetchBankSoalData();
           } else {
-            showNotification('Gagal', json.message || 'Gagal menghapus bank soal', 'error');
+            showNotification('Gagal', json.message || 'Gagal mengubah status bank soal', 'error');
           }
         } catch (e) {
-          showNotification('Error', 'Gagal menghapus bank soal', 'error');
+          showNotification('Error', 'Gagal memproses arsip bank soal', 'error');
         }
       },
-      'error',
-      'Ya, Hapus Bank Soal'
+      'info',
+      isCurrentlyArchived ? 'Ya, Aktifkan' : 'Ya, Arsipkan'
     );
   };
 
@@ -1927,11 +1934,15 @@ export default function GuruDashboardPage() {
                             <Edit className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => handleDeleteBankSoal(bs.id, bs.nama)}
-                            className="p-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer"
-                            title="Hapus Bank Soal"
+                            onClick={() => handleArchiveBankSoal(bs.id, bs.nama, bs.status === 'NONAKTIF')}
+                            className={`p-1.5 rounded-xl cursor-pointer transition ${
+                              bs.status === 'NONAKTIF'
+                                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100'
+                                : 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 hover:bg-amber-100'
+                            }`}
+                            title={bs.status === 'NONAKTIF' ? 'Aktifkan Kembali Bank Soal' : 'Arsipkan Bank Soal'}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            {bs.status === 'NONAKTIF' ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </div>
