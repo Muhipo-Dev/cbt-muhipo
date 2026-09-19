@@ -746,15 +746,8 @@ export function ModulTopikView({
         )}
       </div>
 
-      {/* Info Notice Box */}
-      {viewMode === 'ACTIVE' ? (
-        <div className="p-3 rounded-lg bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 flex items-center gap-2.5 text-xs text-blue-900 dark:text-blue-200">
-          <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-          <span>
-            Topik yang dihapus akan tersimpan di <strong>Recycle Bin</strong> dan dapat dipulihkan kapan saja.
-          </span>
-        </div>
-      ) : (
+      {/* Info Notice Box (Khusus Mode Recycle Bin) */}
+      {viewMode === 'TRASH' && (
         <div className="p-3 rounded-lg bg-amber-50/90 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-900/50 flex items-center justify-between gap-3 text-xs text-amber-950 dark:text-amber-200">
           <div className="flex items-center gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
