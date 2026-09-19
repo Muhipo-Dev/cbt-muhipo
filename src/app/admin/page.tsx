@@ -79,7 +79,7 @@ export default function ComprehensiveAdminDashboard() {
     timezone: 'Asia/Jakarta',
     serverLocation: 'Ponorogo, Jawa Timur',
     logoUrl: '/pic_logo.png',
-    backgroundUrl: '/muhipo-front.jpg',
+    backgroundUrl: '/muhipo-log.jpg',
     timeSyncOffsetMs: 0,
   })
   const [savingSettings, setSavingSettings] = useState(false)
@@ -189,7 +189,7 @@ export default function ComprehensiveAdminDashboard() {
           timezone: settJson.data.timezone || 'Asia/Jakarta',
           serverLocation: settJson.data.serverLocation || 'Ponorogo, Jawa Timur',
           logoUrl: settJson.data.logoUrl || '/pic_logo.png',
-          backgroundUrl: settJson.data.backgroundUrl || '/muhipo-front.jpg',
+          backgroundUrl: settJson.data.backgroundUrl || '/muhipo-log.jpg',
           timeSyncOffsetMs: settJson.data.timeSyncOffsetMs ?? 0,
         })
       }
@@ -493,7 +493,7 @@ export default function ComprehensiveAdminDashboard() {
     return 'Dashboard'
   }
 
-  const activeBg = settingsForm.backgroundUrl || '/muhipo-front.jpg'
+  const activeBg = settingsForm.backgroundUrl || '/muhipo-log.jpg'
 
   return (
     <div className="min-h-screen relative flex flex-col justify-between selection:bg-blue-600 selection:text-white transition-colors duration-300 overflow-x-hidden print:overflow-visible print:bg-white print:text-black">

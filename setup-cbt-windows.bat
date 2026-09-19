@@ -10,18 +10,18 @@ set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemR
 
 cls
 echo ==============================================================================
-echo       SETUP & AUTO-INSTALLER SISTEM CBT MUHIPO (BACKEND & FRONTEND)
+echo       SETUP DAN AUTO-INSTALLER SISTEM CBT MUHIPO (BACKEND DAN FRONTEND)
 echo       SMA Muhammadiyah 1 Ponorogo - Muhipo Dev (C) 2026
 echo ==============================================================================
 echo.
-echo Langkah Pemeriksaan & Instalasi Otomatis:
-echo  1. Runtime & Package Manager   : Node.js LTS, NPM, Git
+echo Langkah Pemeriksaan dan Instalasi Otomatis:
+echo  1. Runtime dan Package Manager   : Node.js LTS, NPM, Git
 echo  2. Layanan Basis Data (Backend): MySQL / MariaDB (Port 3306)
-echo  3. Database & Skema Penyimpanan: Basis data cbt_muhipo
-echo  4. Konfigurasi Sistem          : File .env (MySQL, Port 8080, Secrets)
+echo  3. Database dan Skema Penyimpanan: Basis data cbt_muhipo
+echo  4. Konfigurasi Sistem          : File .env (MySQL, Port 80, Secrets)
 echo  5. Dependensi Backend/Frontend : npm install (Next.js, React, Prisma, Tailwind)
-echo  6. Konfigurasi Protokol Server : HTTP Port 8080 Standalone
-echo  7. Backend ORM & Data Seeder   : Prisma Client, Skema Sync, Default Master
+echo  6. Konfigurasi Protokol Server : HTTP Port 80 Standalone
+echo  7. Backend ORM dan Data Seeder : Prisma Client, Skema Sync, Default Master
 echo  8. Frontend Production Compile : Next.js 16 Optimized Production Build
 echo ==============================================================================
 echo.
@@ -32,61 +32,61 @@ echo.
 echo [1/8] Memeriksa Runtime Node.js, NPM, dan Git...
 
 where node >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [INFO] Node.js belum terdeteksi di PATH sistem.
-    echo [INFO] Mencari instalasi Node.js di direktori standar...
-    
-    set "FOUND_NODE="
-    if exist "C:\Program Files\nodejs\node.exe" set "PATH=C:\Program Files\nodejs;!PATH!" & set "FOUND_NODE=1"
-    if not defined FOUND_NODE if exist "%LOCALAPPDATA%\Programs\nodejs\node.exe" set "PATH=%LOCALAPPDATA%\Programs\nodejs;!PATH!" & set "FOUND_NODE=1"
-    if not defined FOUND_NODE if exist "C:\Program Files (x86)\nodejs\node.exe" set "PATH=C:\Program Files (x86)\nodejs;!PATH!" & set "FOUND_NODE=1"
+if %errorlevel% equ 0 goto NODE_READY
 
-    if not defined FOUND_NODE (
-        echo [INFO] Memulai proses instalasi otomatis Node.js LTS...
-        echo.
+echo [INFO] Node.js belum terdeteksi di PATH sistem.
+echo [INFO] Mencari instalasi Node.js di direktori standar...
 
-        set "NODE_INSTALLED="
-
-        :: Opsi 1: Coba install via winget (Windows Package Manager) jika tersedia
-        where winget >nul 2>&1
-        if !errorlevel! equ 0 (
-            echo [INFO] Menginstal Node.js LTS melalui Windows Package Manager (winget)...
-            winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements --silent >nul 2>&1
-            if !errorlevel! equ 0 set "NODE_INSTALLED=1"
-        )
-
-        :: Opsi 2: Jika winget tidak tersedia / gagal, download langsung installer resmi .msi Node.js LTS
-        if not defined NODE_INSTALLED (
-            echo [INFO] Mengunduh installer resmi Node.js LTS dari nodejs.org...
-            set "NODE_MSI=%TEMP%\nodejs_installer.msi"
-            powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi', '%TEMP%\nodejs_installer.msi')" >nul 2>&1
-            
-            if exist "!NODE_MSI!" (
-                echo [INFO] Memasang Node.js LTS secara otomatis (Silent Install)...
-                msiexec.exe /i "!NODE_MSI!" /qn /norestart
-                del "!NODE_MSI!" >nul 2>&1
-                set "NODE_INSTALLED=1"
-            )
-        )
-
-        set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0;C:\Program Files\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\nodejs;C:\Program Files (x86)\nodejs;%PATH%"
-    )
-
-    where node >nul 2>&1
-    if !errorlevel! neq 0 (
-        color 0C
-        echo.
-        echo [ERROR] Gagal menemukan/memasang Node.js secara otomatis.
-        echo Silakan unduh dan pasang Node.js LTS secara manual dari:
-        echo https://nodejs.org/ (pilih versi LTS Recommended)
-        echo Setelah selesai, jalankan kembali script setup ini.
-        echo.
-        pause
-        exit /b 1
-    )
-    echo [OK] Node.js berhasil disiapkan!
+if exist "C:\Program Files\nodejs\node.exe" (
+    set "PATH=C:\Program Files\nodejs;!PATH!"
+    goto NODE_READY
+)
+if exist "%LOCALAPPDATA%\Programs\nodejs\node.exe" (
+    set "PATH=%LOCALAPPDATA%\Programs\nodejs;!PATH!"
+    goto NODE_READY
+)
+if exist "C:\Program Files (x86)\nodejs\node.exe" (
+    set "PATH=C:\Program Files (x86)\nodejs;!PATH!"
+    goto NODE_READY
 )
 
+echo [INFO] Memulai proses instalasi otomatis Node.js LTS...
+echo.
+
+where winget >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [INFO] Menginstal Node.js LTS melalui Windows Package Manager (winget)...
+    winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements --silent >nul 2>&1
+)
+
+where node >nul 2>&1
+if %errorlevel% equ 0 goto NODE_READY
+
+echo [INFO] Mengunduh installer resmi Node.js LTS dari nodejs.org...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi', $env:TEMP + '\nodejs_installer.msi')" >nul 2>&1
+
+if exist "%TEMP%\nodejs_installer.msi" (
+    echo [INFO] Memasang Node.js LTS secara otomatis...
+    msiexec.exe /i "%TEMP%\nodejs_installer.msi" /qn /norestart
+    del "%TEMP%\nodejs_installer.msi" >nul 2>&1
+)
+
+set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0;C:\Program Files\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\nodejs;C:\Program Files (x86)\nodejs;%PATH%"
+
+where node >nul 2>&1
+if %errorlevel% neq 0 (
+    color 0C
+    echo.
+    echo [ERROR] Gagal menemukan/memasang Node.js secara otomatis.
+    echo Silakan unduh dan pasang Node.js LTS secara manual dari:
+    echo https://nodejs.org/
+    echo Setelah selesai, jalankan kembali script setup ini.
+    echo.
+    pause
+    exit /b 1
+)
+
+:NODE_READY
 for /f "tokens=*" %%v in ('node -v 2^>nul') do set "NODE_VER=%%v"
 for /f "tokens=*" %%v in ('npm -v 2^>nul') do set "NPM_VER=%%v"
 echo [OK] Node.js terdeteksi : !NODE_VER!
@@ -96,7 +96,7 @@ where git >nul 2>&1
 if %errorlevel% equ 0 (
     for /f "tokens=*" %%g in ('git --version 2^>nul') do echo [OK] Git terdeteksi    : %%g
 ) else (
-    echo [INFO] Git CLI opsional (tidak terpasang, sistem tetap dapat berjalan penuh).
+    echo [INFO] Git CLI opsional, sistem tetap dapat berjalan penuh.
 )
 
 :: -----------------------------------------------------------------------------
@@ -122,15 +122,14 @@ if not defined MYSQL_ACTIVE (
     echo [INFO] Port 3306 MySQL belum aktif. Mencoba menyalakan MySQL di latar belakang...
     if exist "C:\xampp\mysql_start.bat" (
         powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c C:\xampp\mysql_start.bat' -WindowStyle Hidden" >nul 2>&1
-    ) else if exist "D:\xampp\mysql_start.bat" (
-        powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c D:\xampp\mysql_start.bat' -WindowStyle Hidden" >nul 2>&1
-    ) else if exist "E:\xampp\mysql_start.bat" (
-        powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c E:\xampp\mysql_start.bat' -WindowStyle Hidden" >nul 2>&1
-    ) else if exist "C:\xampp\mysql\bin\mysqld.exe" (
-        powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'C:\xampp\mysql\bin\mysqld.exe' -ArgumentList '--defaults-file=C:\xampp\mysql\bin\my.ini --standalone' -WindowStyle Hidden" >nul 2>&1
-    ) else (
-        powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Service -Name 'MySQL', 'mysql', 'xamppmysql', 'MariaDB' -ErrorAction SilentlyContinue" >nul 2>&1
     )
+    if exist "D:\xampp\mysql_start.bat" (
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c D:\xampp\mysql_start.bat' -WindowStyle Hidden" >nul 2>&1
+    )
+    if exist "E:\xampp\mysql_start.bat" (
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c E:\xampp\mysql_start.bat' -WindowStyle Hidden" >nul 2>&1
+    )
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Service -Name 'MySQL', 'mysql', 'xamppmysql', 'MariaDB' -ErrorAction SilentlyContinue" >nul 2>&1
     
     echo Menunggu inisialisasi MySQL...
     ping 127.0.0.1 -n 6 >nul
@@ -167,11 +166,7 @@ set "DB_HOST=127.0.0.1"
 set "DB_PORT=3306"
 set "DB_NAME=cbt_muhipo"
 
-if exist ".env" (
-    for /f "usebackq tokens=*" %%L in (`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '.env') { $content = Get-Content '.env' -Raw; if ($content -match 'DATABASE_URL\s*=\s*[\x22\x27]?mysql:\/\/([^:]+):?([^@]*)@([^:\/]+):?(\d*)\/([^?\x22\x27\s]+)') { Write-Output ('DB_USER=' + $Matches[1]); Write-Output ('DB_PASS=' + $Matches[2]); Write-Output ('DB_HOST=' + (if($Matches[3]){$Matches[3]}else{'127.0.0.1'})); Write-Output ('DB_PORT=' + (if($Matches[4]){$Matches[4]}else{'3306'})); Write-Output ('DB_NAME=' + $Matches[5]); } }"`) do (
-        set "%%L"
-    )
-)
+if exist ".env" call :SUB_PARSE_ENV
 
 set "AUTH_ARGS=-u %DB_USER% -h %DB_HOST% -P %DB_PORT%"
 if defined DB_PASS set "AUTH_ARGS=%AUTH_ARGS% -p%DB_PASS%"
@@ -184,7 +179,7 @@ if defined MYSQL_EXE (
 )
 
 if defined DB_EXISTS (
-    echo [OK] Basis data '%DB_NAME%' sudah ada. Menggunakan database yang tersedia ^(tidak membuat baru^).
+    echo [OK] Basis data '%DB_NAME%' sudah ada. Menggunakan database yang tersedia.
 ) else (
     echo [INFO] Basis data '%DB_NAME%' belum ditemukan. Membuat database baru...
     if defined MYSQL_EXE (
@@ -208,9 +203,9 @@ if not exist ".env" (
         echo # ==============================================================================
         echo DATABASE_URL="mysql://root:@127.0.0.1:3306/cbt_muhipo"
         echo JWT_SECRET="cbt-muhipo-super-secret-key-2026-production-ready"
-        echo PORT=8080
-        echo HTTP_PORT=8080
-        echo NEXT_PUBLIC_APP_URL="http://localhost:8080"
+        echo PORT=80
+        echo HTTP_PORT=80
+        echo NEXT_PUBLIC_APP_URL="http://localhost"
         echo NEXT_PUBLIC_APP_NAME="CBT SMA Muhammadiyah 1 Ponorogo"
         echo NEXT_PUBLIC_SCHOOL_NAME="SMA Muhammadiyah 1 Ponorogo"
         echo NEXT_PUBLIC_SCHOOL_ADDRESS="Jl. Batoro Katong No. 6 Ponorogo, Jawa Timur"
@@ -234,7 +229,7 @@ if not exist "node_modules\react" set "NEED_INSTALL=1"
 
 if defined NEED_INSTALL (
     echo [INFO] Paket dependensi belum lengkap / belum terpasang.
-    echo Mengunduh dan menginstal seluruh dependensi backend & frontend...
+    echo Mengunduh dan menginstal seluruh dependensi backend dan frontend...
     echo.
     call npm install
     if %errorlevel% neq 0 (
@@ -249,11 +244,11 @@ if defined NEED_INSTALL (
 )
 
 :: -----------------------------------------------------------------------------
-:: [6/8] KONFIGURASI PROTOKOL HTTP (PORT 8080)
+:: [6/8] KONFIGURASI PROTOKOL HTTP (PORT 80)
 :: -----------------------------------------------------------------------------
 echo.
-echo [6/8] Memeriksa konfigurasi protokol HTTP Port 8080...
-echo [OK] Server siap berjalan langsung dengan protokol HTTP pada port 8080.
+echo [6/8] Memeriksa konfigurasi protokol HTTP Port 80...
+echo [OK] Server siap berjalan langsung dengan protokol HTTP pada port 80.
 
 :: -----------------------------------------------------------------------------
 :: [7/8] MENYELARASKAN ORM PRISMA & SEED DATA MASTER
@@ -262,7 +257,7 @@ echo.
 echo [7/8] Menyelaraskan tabel database MySQL CBT MUHIPO...
 
 :: Matikan proses lama yang mungkin masih mengunci port/database
-for /f "tokens=5" %%p in ('netstat -ano -p tcp 2^>nul ^| findstr /R /C:":8080 " ^| findstr "LISTENING"') do (
+for /f "tokens=5" %%p in ('netstat -ano -p tcp 2^>nul ^| findstr /R /C:":80 " ^| findstr "LISTENING"') do (
     taskkill /F /PID %%p >nul 2>&1
 )
 taskkill /F /IM node.exe >nul 2>&1
@@ -286,7 +281,7 @@ if %errorlevel% neq 0 (
 )
 echo [OK] Struktur tabel database MySQL berhasil diselaraskan tanpa menghapus data.
 
-echo Memeriksa data master dan akun default (Admin, Proktor, Guru, Siswa)...
+echo Memeriksa data master dan akun default...
 call npx tsx prisma/seed.ts
 if %errorlevel% neq 0 (
     color 0E
@@ -300,7 +295,7 @@ if %errorlevel% neq 0 (
 :: -----------------------------------------------------------------------------
 echo.
 echo [8/8] Melakukan compiling Next.js Production Build...
-echo Proses ini mengompilasi seluruh bundle Frontend & API Backend, mohon tunggu...
+echo Proses ini mengompilasi seluruh bundle Frontend dan API Backend, mohon tunggu...
 call npm run build
 if %errorlevel% neq 0 (
     color 0C
@@ -316,20 +311,30 @@ echo ===========================================================================
 echo              SETUP SISTEM CBT MUHIPO MYSQL BERHASIL 100 PERSEN
 echo ==============================================================================
 echo.
-echo  STATUS SISTEM & DEPENDENSI:
+echo  STATUS SISTEM DAN DEPENDENSI:
 echo  --------------------------------------------------------------------------
-echo  * Runtime       : Node.js (!NODE_VER!) & NPM (v!NPM_VER!)
+echo  * Runtime       : Node.js (!NODE_VER!) dan NPM (v!NPM_VER!)
 echo  * Database      : MySQL / MariaDB (%DB_NAME% @ %DB_HOST%:%DB_PORT%)
 echo  * Mode          : Database Eksisting (Data Aman Terpelihara)
-echo  * Port Akses    : HTTP Port 8080
+echo  * Port Akses    : HTTP Port 80
 echo  * Frontend/API  : Next.js Production Ready (Standar Concurrency Tinggi)
 echo  --------------------------------------------------------------------------
 echo.
 echo  Langkah Selanjutnya:
 echo  1. Jalankan start-cbt-server.bat untuk menyalakan server produksi.
-echo  2. Buka browser proktor / admin pada URL: http://localhost:8080
+echo  2. Buka browser proktor / admin pada URL: http://localhost
 echo ==============================================================================
 echo.
 pause
+exit /b 0
 
 
+REM ==============================================================================
+REM SUBROUTINES
+REM ==============================================================================
+
+:SUB_PARSE_ENV
+for /f "usebackq tokens=*" %%L in (`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$c = Get-Content '.env' -Raw; if ($c -match 'DATABASE_URL\s*=\s*[\x22\x27]?mysql:\/\/([^:]+):?([^@]*)@([^:\/]+):?(\d*)\/([^?\x22\x27\s]+)') { Write-Output ('DB_USER=' + $Matches[1]); Write-Output ('DB_PASS=' + $Matches[2]); $h = if($Matches[3]){$Matches[3]}else{'127.0.0.1'}; Write-Output ('DB_HOST=' + $h); $p = if($Matches[4]){$Matches[4]}else{'3306'}; Write-Output ('DB_PORT=' + $p); Write-Output ('DB_NAME=' + $Matches[5]); }"`) do (
+    set "%%L"
+)
+goto :eof

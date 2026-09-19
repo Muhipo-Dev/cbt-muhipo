@@ -1250,18 +1250,24 @@ export async function POST(request: NextRequest) {
 
       // Daftarkan siswa dari group/kelas terkait secara otomatis
       if (kelasIds && Array.isArray(kelasIds) && kelasIds.length > 0) {
+        const uniqueKelasIds = Array.from(new Set(kelasIds.filter(Boolean)));
         const siswaInKelas = await prisma.user.findMany({
-          where: { role: 'SISWA', kelasId: { in: kelasIds } },
+          where: { role: 'SISWA', kelasId: { in: uniqueKelasIds } },
         });
 
         if (siswaInKelas.length > 0) {
+          const uniqueSiswaMap = new Map();
+          siswaInKelas.forEach((s) => uniqueSiswaMap.set(s.id, s));
+          const uniqueSiswa = Array.from(uniqueSiswaMap.values());
+
           await prisma.pesertaUjian.createMany({
-            data: siswaInKelas.map((s) => ({
+            data: uniqueSiswa.map((s) => ({
               ujianId: newUjian.id,
               siswaId: s.id,
               status: 'BELUM_MULAI',
               sisaDetik: Number(durasiMenit || 90) * 60,
             })),
+            skipDuplicates: true,
           });
         }
       }
@@ -1316,25 +1322,43 @@ export async function POST(request: NextRequest) {
 
       if (kelasIds && Array.isArray(kelasIds)) {
         await prisma.ujianKelas.deleteMany({ where: { ujianId } });
-        if (kelasIds.length > 0) {
+        const uniqueKelasIds = Array.from(new Set(kelasIds.filter(Boolean)));
+        if (uniqueKelasIds.length > 0) {
           await prisma.ujianKelas.createMany({
-            data: kelasIds.map((kId: string) => ({ ujianId, kelasId: kId })),
+            data: uniqueKelasIds.map((kId: string) => ({ ujianId, kelasId: kId })),
+            skipDuplicates: true,
           });
           const siswaInKelas = await prisma.user.findMany({
-            where: { role: 'SISWA', kelasId: { in: kelasIds } },
+            where: { role: 'SISWA', kelasId: { in: uniqueKelasIds } },
           });
           if (siswaInKelas.length > 0) {
-            await prisma.pesertaUjian.deleteMany({
-              where: { ujianId, status: 'BELUM_MULAI' },
+            // Ambil semua siswaId yang sudah memiliki record pesertaUjian di ujian ini
+            const existingPeserta = await prisma.pesertaUjian.findMany({
+              where: { ujianId },
+              select: { siswaId: true },
             });
-            await prisma.pesertaUjian.createMany({
-              data: siswaInKelas.map((s) => ({
-                ujianId,
-                siswaId: s.id,
-                status: 'BELUM_MULAI',
-                sisaDetik: (updated.durasiMenit || 90) * 60,
-              })),
-            });
+            const existingSiswaIdSet = new Set(existingPeserta.map((p) => p.siswaId));
+
+            // Filter hanya siswa yang benar-benar belum terdaftar
+            const uniqueNewSiswaMap = new Map();
+            for (const s of siswaInKelas) {
+              if (!existingSiswaIdSet.has(s.id)) {
+                uniqueNewSiswaMap.set(s.id, s);
+              }
+            }
+            const newSiswaList = Array.from(uniqueNewSiswaMap.values());
+
+            if (newSiswaList.length > 0) {
+              await prisma.pesertaUjian.createMany({
+                data: newSiswaList.map((s) => ({
+                  ujianId,
+                  siswaId: s.id,
+                  status: 'BELUM_MULAI',
+                  sisaDetik: (updated.durasiMenit || 90) * 60,
+                })),
+                skipDuplicates: true,
+              });
+            }
           }
         }
       }

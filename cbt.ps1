@@ -7,7 +7,7 @@ param(
 #   Muhipo Dev (C) 2026
 #   
 #   PORT CBT STANDALONE:
-#   - CBT Web App & API  : Port 8080 (HTTP Server)
+#   - CBT Web App & API  : Port 80 (HTTP Server)
 #   - Prisma Studio (DB) : Port Mutlak 5560
 # ==============================================================================
 
@@ -17,7 +17,7 @@ $PRISMA_LOG     = Join-Path $ROOT "prisma-studio.log"
 $APP_PID_FILE   = Join-Path $ROOT ".cbt-app.pid"
 $PRISMA_PID_FILE= Join-Path $ROOT ".prisma-studio.pid"
 
-$CBT_PORT       = 8080
+$CBT_PORT       = 80
 $STUDIO_PORT    = 5560
 
 # ─── HELPERS ────────────────────────────────────────────────
@@ -111,8 +111,8 @@ function Show-Status {
     Write-Host "  +--------------------+------------------------+" -ForegroundColor DarkGray
     Write-Host "  | Database MySQL     | " -NoNewline
     Write-Host ($dStatus + "   |") -ForegroundColor $dColor
-    Write-Host "  | CBT Web HTTP (:8080)| " -NoNewline
-    Write-Host ($aStatus + " :$CBT_PORT   |") -ForegroundColor $aColor
+    Write-Host "  | CBT Web HTTP (:80)  | " -NoNewline
+    Write-Host ($aStatus + " :$CBT_PORT     |") -ForegroundColor $aColor
     Write-Host "  | Prisma Studio (:5560)| " -NoNewline
     Write-Host ($pStatus + " :$STUDIO_PORT     |") -ForegroundColor $pColor
     Write-Host "  +--------------------+------------------------+" -ForegroundColor DarkGray
@@ -139,7 +139,8 @@ function Start-CBTApp {
     Start-Sleep -Seconds 3
 
     if (Test-PortListening $CBT_PORT) {
-        Write-Ok "CBT Web App HTTP berhasil aktif di http://localhost:$CBT_PORT"
+        $appUrl = if ($CBT_PORT -eq 80) { "http://localhost" } else { "http://localhost:$CBT_PORT" }
+        Write-Ok "CBT Web App HTTP berhasil aktif di $appUrl"
     } else {
         Write-Info "Server sedang inisialisasi di latar belakang (cek $APP_LOG)"
     }
@@ -220,9 +221,9 @@ while ($true) {
     Write-Host "  PILIHAN MENU MANAJEMEN CBT STANDALONE:" -ForegroundColor White
     Write-Host "  [1] Jalankan Semua Layanan (CBT App + Prisma Studio)" -ForegroundColor Green
     Write-Host "  [2] Hentikan Semua Layanan" -ForegroundColor Red
-    Write-Host "  [3] Jalankan CBT Web App Saja (:8080)" -ForegroundColor Cyan
+    Write-Host "  [3] Jalankan CBT Web App Saja (:80)" -ForegroundColor Cyan
     Write-Host "  [4] Jalankan Prisma Studio GUI Saja (:5560)" -ForegroundColor Cyan
-    Write-Host "  [5] Buka Browser CBT Web App (http://localhost:8080)" -ForegroundColor Yellow
+    Write-Host "  [5] Buka Browser CBT Web App (http://localhost)" -ForegroundColor Yellow
     Write-Host "  [6] Inisialisasi Ulang Skema Database (Prisma db push & seed)" -ForegroundColor Magenta
     Write-Host "  [7] Rebuild Sistem (Prisma generate + Next.js build)" -ForegroundColor Cyan
     Write-Host "  [0] Keluar" -ForegroundColor DarkGray
@@ -234,7 +235,7 @@ while ($true) {
         "2" { Stop-AllServices; Read-Host "  Tekan Enter untuk kembali ke menu..." }
         "3" { Start-CBTApp; Read-Host "  Tekan Enter untuk kembali ke menu..." }
         "4" { Start-PrismaStudio; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "5" { Start-Process "http://localhost:8080" }
+        "5" { Start-Process "http://localhost" }
         "6" {
             Write-Status "Inisialisasi database..." "Cyan"
             cmd.exe /c "cd /d `"$ROOT`" && npx prisma db push && npx tsx prisma/seed.ts"

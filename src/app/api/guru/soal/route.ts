@@ -486,6 +486,7 @@ export async function POST(request: NextRequest) {
         lockBrowser,
         acakSoal,
         acakOpsi,
+        tampilkanHasil,
       } = body;
 
       const targetMapelId = mataPelajaranId || topikId || bankSoalId;
@@ -514,6 +515,7 @@ export async function POST(request: NextRequest) {
           lockBrowser: lockBrowser !== false,
           acakSoal: acakSoal !== false,
           acakOpsi: acakOpsi !== false,
+          tampilkanHasil: tampilkanHasil === true,
           status: 'DIJADWALKAN',
           ujianKelas: {
             create: kelasIds.map((kId: string) => ({ kelasId: kId })),
@@ -521,21 +523,27 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      const uniqueKelasIds = Array.from(new Set(kelasIds.filter(Boolean)));
       const targetSiswa = await prisma.user.findMany({
         where: {
           role: 'SISWA',
-          kelasId: { in: kelasIds },
+          kelasId: { in: uniqueKelasIds },
         },
       });
 
       if (targetSiswa.length > 0) {
+        const uniqueSiswaMap = new Map();
+        targetSiswa.forEach((s) => uniqueSiswaMap.set(s.id, s));
+        const uniqueSiswa = Array.from(uniqueSiswaMap.values());
+
         await prisma.pesertaUjian.createMany({
-          data: targetSiswa.map((s) => ({
+          data: uniqueSiswa.map((s) => ({
             ujianId: newUjian.id,
             siswaId: s.id,
             status: 'BELUM_MULAI',
             sisaDetik: duration * 60,
           })),
+          skipDuplicates: true,
         });
       }
 

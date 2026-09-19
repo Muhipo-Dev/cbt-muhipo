@@ -108,7 +108,7 @@ export default function ProktorPage() {
     schoolName?: string;
   }>({
     logoUrl: '/pic_logo.png',
-    backgroundUrl: '/muhipo-front.jpg',
+    backgroundUrl: '/muhipo-log.jpg',
     appTitle: 'CBT SMA MUHIPO',
     schoolName: 'SMA Muhammadiyah 1 Ponorogo',
   });
@@ -121,7 +121,7 @@ export default function ProktorPage() {
         if (json.success && json.data) {
           setSettings({
             logoUrl: json.data.logoUrl || '/pic_logo.png',
-            backgroundUrl: json.data.backgroundUrl || '/muhipo-front.jpg',
+            backgroundUrl: json.data.backgroundUrl || '/muhipo-log.jpg',
             appTitle: json.data.appTitle || 'CBT SMA MUHIPO',
             schoolName: json.data.schoolName || 'SMA Muhammadiyah 1 Ponorogo',
           });

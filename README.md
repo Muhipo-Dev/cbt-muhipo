@@ -73,8 +73,8 @@ Platform ini beroperasi secara *standalone* menggunakan file database SQLite lok
 | **Framework** | Next.js 16.3 (App Router) | Server-side rendering dan Route Handlers yang cepat & modern |
 | **Frontend** | React 19 + TypeScript | UI interaktif, type-safe, dan modular |
 | **Styling** | Tailwind CSS v4 | Desain antarmuka responsif dan clean |
-| **Database** | SQLite + Prisma ORM 5.22 | Penyimpanan database lokal bebas konfigurasi (*zero-config*) |
-| **Keamanan Server** | Custom Node.js Server (`server.js`) | Standalone High-Performance HTTP Server Port 8080 |
+| **Database** | MySQL / MariaDB + Prisma ORM 5.22 | Penyimpanan database relasional performa tinggi |
+| **Keamanan Server** | Custom Node.js Server (`server.js`) | Standalone High-Performance HTTP Server Port 80 |
 | **Matematika/Formula** | KaTeX | Render notasi matematika & sains instan di browser |
 | **Spreadsheet** | ExcelJS & XLSX | Generator dan parser data Excel untuk soal, peserta, dan rekap nilai |
 
@@ -119,11 +119,11 @@ Atau melalui PowerShell:
 ```
 
 Server akan aktif pada:
-- **HTTP (Port 8080)**: `http://localhost:8080` *(Akses Utama Server CBT)*
+- **HTTP (Port 80)**: `http://localhost` *(Akses Utama Server CBT)*
 - **Prisma Studio (Port 5560)**: `http://localhost:5560` *(GUI Database)*
 
 > 💡 **Akses Komputer Klien (Siswa & Proktor):**
-> Komputer siswa cukup membuka browser dan mengakses alamat IP Server: `http://[IP_SERVER]:8080` (contoh: `http://192.168.1.100:8080`).
+> Komputer siswa cukup membuka browser dan mengakses alamat IP Server: `http://[IP_SERVER]` (contoh: `http://192.168.1.100`).
 
 ---
 
