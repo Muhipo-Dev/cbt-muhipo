@@ -994,7 +994,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Soft Delete: Pindahkan Topik ke Tempat Sampah (Recycle Bin)
+    // Soft Delete: Pindahkan Topik ke Recycle Bin
     if (action === 'DELETE_MAPEL' || action === 'DELETE_TOPIK' || action === 'DELETE_BANK_SOAL') {
       const { id, bankSoalId, mataPelajaranId } = body;
       const targetId = id || bankSoalId || mataPelajaranId;
@@ -1009,11 +1009,11 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: 'Topik berhasil dipindahkan ke Tempat Sampah (Recycle Bin). Anda dapat memulihkannya kapan saja.',
+        message: 'Topik dipindahkan ke Recycle Bin.',
       });
     }
 
-    // Soft Delete Massal: Pindahkan banyak topik ke Tempat Sampah
+    // Soft Delete Massal: Pindahkan banyak topik ke Recycle Bin
     if (action === 'BULK_DELETE_MAPEL' || action === 'BULK_DELETE_TOPIK') {
       const { ids } = body;
       if (!Array.isArray(ids) || ids.length === 0) {
@@ -1027,11 +1027,11 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Berhasil memindahkan ${ids.length} topik terpilih ke Tempat Sampah (Recycle Bin).`,
+        message: `Berhasil memindahkan ${ids.length} topik ke Recycle Bin.`,
       });
     }
 
-    // Restore / Pulihkan Topik Tunggal dari Tempat Sampah
+    // Restore / Pulihkan Topik Tunggal dari Recycle Bin
     if (action === 'RESTORE_MAPEL' || action === 'RESTORE_TOPIK') {
       const { id, bankSoalId, mataPelajaranId } = body;
       const targetId = id || bankSoalId || mataPelajaranId;
@@ -1046,7 +1046,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: 'Topik berhasil dipulihkan dan kembali aktif.',
+        message: 'Topik berhasil dipulihkan.',
       });
     }
 
@@ -1064,7 +1064,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Berhasil memulihkan ${ids.length} topik terpilih.`,
+        message: `Berhasil memulihkan ${ids.length} topik.`,
       });
     }
 
@@ -1100,7 +1100,7 @@ export async function POST(request: NextRequest) {
       await prisma.guruMataPelajaran.deleteMany({ where: { mataPelajaranId: targetId } });
       await prisma.mataPelajaran.delete({ where: { id: targetId } });
 
-      return NextResponse.json({ success: true, message: 'Topik beserta seluruh butir soalnya telah dihapus secara permanen.' });
+      return NextResponse.json({ success: true, message: 'Topik telah dihapus permanen.' });
     }
 
     // Hapus Permanen Massal (Bulk Permanent Delete)
@@ -1136,10 +1136,10 @@ export async function POST(request: NextRequest) {
         await prisma.mataPelajaran.delete({ where: { id: targetId } });
       }
 
-      return NextResponse.json({ success: true, message: `Berhasil menghapus permanen ${ids.length} topik terpilih.` });
+      return NextResponse.json({ success: true, message: `Berhasil menghapus permanen ${ids.length} topik.` });
     }
 
-    // Kosongkan Tempat Sampah (Empty Trash)
+    // Kosongkan Recycle Bin (Empty Trash)
     if (action === 'EMPTY_TRASH_MAPEL' || action === 'EMPTY_TRASH_TOPIK') {
       const deletedTopikList = await prisma.mataPelajaran.findMany({
         where: { status: 'TERHAPUS' },
@@ -1173,7 +1173,7 @@ export async function POST(request: NextRequest) {
         await prisma.mataPelajaran.delete({ where: { id: targetId } });
       }
 
-      return NextResponse.json({ success: true, message: `Tempat sampah berhasil dikosongkan (${ids.length} topik dihapus permanen).` });
+      return NextResponse.json({ success: true, message: `Recycle Bin berhasil dikosongkan (${ids.length} topik dihapus permanen).` });
     }
 
     // --- 4. CRUD GURU ---

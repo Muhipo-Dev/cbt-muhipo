@@ -360,7 +360,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, message: 'Topik / Mata Pelajaran tidak ditemukan' }, { status: 404 });
       }
 
-      // Soft delete ke Tempat Sampah
+      // Soft delete ke Recycle Bin
       await prisma.mataPelajaran.update({
         where: { id: targetId },
         data: { status: 'TERHAPUS' },
@@ -368,7 +368,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: 'Topik / Bank Soal berhasil dipindahkan ke Tempat Sampah (Recycle Bin).',
+        message: 'Topik berhasil dipindahkan ke Recycle Bin.',
       });
     }
 

@@ -46,6 +46,7 @@ export function ModulTopikView({
 }: ModulTopikViewProps) {
   const userRole = (currentUser?.role || 'ADMIN').toUpperCase()
   const canManageTrash = ['SUPERADMIN', 'SUPER ADMIN', 'ADMIN', 'PROKTOR'].includes(userRole)
+
   // Ambil list modul unik dari modulList atau dari relasi mapelList
   const rawModulNames = Array.from(
     new Set([
@@ -55,7 +56,7 @@ export function ModulTopikView({
     ])
   )
 
-  // Mode Tampilan: 'ACTIVE' (Topik Aktif & Arsip) atau 'TRASH' (Tempat Sampah / Recycle Bin)
+  // Mode Tampilan: 'ACTIVE' (Daftar Topik) atau 'TRASH' (Recycle Bin)
   const [viewMode, setViewMode] = useState<'ACTIVE' | 'TRASH'>('ACTIVE')
   const [selectedModul, setSelectedModul] = useState<string>('SEMUA')
   const [statusFilter, setStatusFilter] = useState<'SEMUA' | 'AKTIF' | 'NONAKTIF'>('SEMUA')
@@ -167,7 +168,7 @@ export function ModulTopikView({
 
     showConfirm(
       'Hapus Modul?',
-      `Apakah Anda yakin ingin menghapus modul "${selectedModul}"? Seluruh topik di dalam modul ini akan dialihkan ke modul "Default" sehingga soal tetap aman.`,
+      `Hapus modul "${selectedModul}"? Seluruh topik di dalamnya akan dialihkan ke modul "Default".`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -266,8 +267,8 @@ export function ModulTopikView({
     const action = isArchived ? 'UNARCHIVE_MAPEL' : 'ARCHIVE_MAPEL'
     const title = isArchived ? 'Aktifkan Kembali Topik?' : 'Arsipkan Topik?'
     const message = isArchived
-      ? `Aktifkan kembali topik "${item.nama}"? Topik ini akan kembali berstatus aktif.`
-      : `Apakah Anda yakin ingin mengarsipkan topik "${item.nama}"? Topik yang diarsipkan tidak akan muncul saat membuat tes baru, namun seluruh butir soal tetap aman.`
+      ? `Aktifkan kembali topik "${item.nama}"?`
+      : `Arsipkan topik "${item.nama}"? Topik yang diarsipkan tidak muncul saat membuat tes baru, namun butir soal tetap aman.`
 
     showConfirm(title, message, async () => {
       try {
@@ -278,7 +279,7 @@ export function ModulTopikView({
         })
         const json = await res.json()
         if (json.success) {
-          showNotification('Berhasil', json.message || 'Status topik berhasil diubah', 'success')
+          showNotification('Berhasil', json.message || 'Status topik diperbarui', 'success')
           onRefresh()
         } else {
           showNotification('Gagal', json.message || 'Gagal mengubah status topik', 'error')
@@ -298,7 +299,7 @@ export function ModulTopikView({
 
     showConfirm(
       'Arsipkan Topik Terpilih?',
-      `Apakah Anda yakin ingin mengarsipkan ${selectedIds.length} topik terpilih? Seluruh butir soal tetap tersimpan aman.`,
+      `Arsipkan ${selectedIds.length} topik terpilih? Butir soal tetap aman.`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -308,7 +309,7 @@ export function ModulTopikView({
           })
           const json = await res.json()
           if (json.success) {
-            showNotification('Berhasil', json.message || 'Topik terpilih berhasil diarsipkan', 'success')
+            showNotification('Berhasil', json.message || 'Topik terpilih diarsipkan', 'success')
             setSelectedIds([])
             onRefresh()
           } else {
@@ -330,7 +331,7 @@ export function ModulTopikView({
 
     showConfirm(
       'Aktifkan Kembali Topik Terpilih?',
-      `Apakah Anda yakin ingin mengaktifkan kembali ${selectedIds.length} topik terpilih?`,
+      `Aktifkan kembali ${selectedIds.length} topik terpilih?`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -340,7 +341,7 @@ export function ModulTopikView({
           })
           const json = await res.json()
           if (json.success) {
-            showNotification('Berhasil', json.message || 'Topik terpilih berhasil diaktifkan', 'success')
+            showNotification('Berhasil', json.message || 'Topik terpilih diaktifkan', 'success')
             setSelectedIds([])
             onRefresh()
           } else {
@@ -353,12 +354,11 @@ export function ModulTopikView({
     )
   }
 
-  // 1. Soft Delete Single Topic (Pindahkan ke Tempat Sampah)
+  // 1. Soft Delete Single Topic (Pindahkan ke Recycle Bin)
   const handleDeleteSingle = (item: any) => {
-    const soalCount = item._count?.soalList ?? item.soalList?.length ?? 0
     showConfirm(
-      'Pindahkan ke Tempat Sampah?',
-      `Apakah Anda yakin ingin memindahkan topik "${item.nama}" ke Tempat Sampah (Recycle Bin)?\n\nSeluruh ${soalCount} butir soal di dalam topik ini tetap tersimpan aman dan dapat Anda pulihkan (Restore) kapan saja.`,
+      'Pindahkan ke Recycle Bin?',
+      `Pindahkan topik "${item.nama}" ke Recycle Bin? Butir soal tetap aman dan dapat dipulihkan kapan saja.`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -368,7 +368,7 @@ export function ModulTopikView({
           })
           const json = await res.json()
           if (json.success) {
-            showNotification('Berhasil', json.message || 'Topik berhasil dipindahkan ke Tempat Sampah', 'success')
+            showNotification('Berhasil', json.message || 'Topik dipindahkan ke Recycle Bin', 'success')
             onRefresh()
           } else {
             showNotification('Gagal', json.message || 'Gagal memindahkan topik', 'error')
@@ -380,16 +380,16 @@ export function ModulTopikView({
     )
   }
 
-  // 2. Bulk Soft Delete (Pindahkan banyak topik ke Tempat Sampah)
+  // 2. Bulk Soft Delete (Pindahkan banyak topik ke Recycle Bin)
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) {
-      showNotification('Peringatan', 'Pilih minimal 1 topik untuk dipindahkan ke Tempat Sampah', 'warning')
+      showNotification('Peringatan', 'Pilih minimal 1 topik untuk dipindahkan ke Recycle Bin', 'warning')
       return
     }
 
     showConfirm(
-      'Pindahkan Topik Terpilih ke Tempat Sampah?',
-      `Apakah Anda yakin ingin memindahkan ${selectedIds.length} topik terpilih ke Tempat Sampah (Recycle Bin)? Seluruh butir soal tetap tersimpan dan dapat dipulihkan kapan saja.`,
+      'Pindahkan Topik ke Recycle Bin?',
+      `Pindahkan ${selectedIds.length} topik terpilih ke Recycle Bin?`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -399,7 +399,7 @@ export function ModulTopikView({
           })
           const json = await res.json()
           if (json.success) {
-            showNotification('Berhasil', json.message || 'Topik terpilih berhasil dipindahkan ke Tempat Sampah', 'success')
+            showNotification('Berhasil', json.message || 'Topik dipindahkan ke Recycle Bin', 'success')
             setSelectedIds([])
             onRefresh()
           } else {
@@ -412,11 +412,11 @@ export function ModulTopikView({
     )
   }
 
-  // 3. Restore Single Topic (Pulihkan Topik dari Tempat Sampah)
+  // 3. Restore Single Topic (Pulihkan Topik dari Recycle Bin)
   const handleRestoreSingle = (item: any) => {
     showConfirm(
       'Pulihkan Topik?',
-      `Pulihkan topik "${item.nama}" beserta seluruh butir soalnya kembali ke daftar topik aktif?`,
+      `Pulihkan topik "${item.nama}" kembali aktif?`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -447,7 +447,7 @@ export function ModulTopikView({
 
     showConfirm(
       'Pulihkan Topik Terpilih?',
-      `Apakah Anda yakin ingin memulihkan ${selectedIds.length} topik terpilih kembali ke status aktif?`,
+      `Pulihkan ${selectedIds.length} topik terpilih kembali aktif?`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -457,7 +457,7 @@ export function ModulTopikView({
           })
           const json = await res.json()
           if (json.success) {
-            showNotification('Berhasil', json.message || 'Topik terpilih berhasil dipulihkan', 'success')
+            showNotification('Berhasil', json.message || 'Topik terpilih dipulihkan', 'success')
             setSelectedIds([])
             onRefresh()
           } else {
@@ -472,10 +472,9 @@ export function ModulTopikView({
 
   // 5. Permanent Delete Single Topic (Hapus Permanen Tunggal)
   const handlePermanentDeleteSingle = (item: any) => {
-    const soalCount = item._count?.soalList ?? item.soalList?.length ?? 0
     showConfirm(
-      '⚠️ Hapus Topik Secara Permanen?',
-      `PERINGATAN: Topik "${item.nama}" beserta seluruh ${soalCount} butir soal, kunci jawaban, dan data ujian terkait akan DIHAPUS PERMANEN dari database.\n\nTindakan ini TIDAK DAPAT DIBATALKAN!`,
+      'Hapus Permanen?',
+      `Hapus permanen topik "${item.nama}" beserta butir soalnya? Tindakan ini tidak dapat dibatalkan.`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -485,7 +484,7 @@ export function ModulTopikView({
           })
           const json = await res.json()
           if (json.success) {
-            showNotification('Berhasil', json.message || 'Topik telah dihapus secara permanen', 'success')
+            showNotification('Berhasil', json.message || 'Topik telah dihapus permanen', 'success')
             onRefresh()
           } else {
             showNotification('Gagal', json.message || 'Gagal menghapus topik', 'error')
@@ -505,8 +504,8 @@ export function ModulTopikView({
     }
 
     showConfirm(
-      '⚠️ Hapus Permanen Topik Terpilih?',
-      `PERINGATAN: ${selectedIds.length} topik terpilih beserta seluruh butir soalnya akan DIHAPUS PERMANEN dari database. Tindakan ini tidak dapat dibatalkan!`,
+      'Hapus Permanen Topik Terpilih?',
+      `Hapus permanen ${selectedIds.length} topik terpilih beserta butir soalnya? Tindakan ini tidak dapat dibatalkan.`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -516,7 +515,7 @@ export function ModulTopikView({
           })
           const json = await res.json()
           if (json.success) {
-            showNotification('Berhasil', json.message || 'Topik terpilih telah dihapus secara permanen', 'success')
+            showNotification('Berhasil', json.message || 'Topik terpilih dihapus permanen', 'success')
             setSelectedIds([])
             onRefresh()
           } else {
@@ -529,16 +528,16 @@ export function ModulTopikView({
     )
   }
 
-  // 7. Empty Trash (Kosongkan Tempat Sampah)
+  // 7. Empty Trash (Kosongkan Recycle Bin)
   const handleEmptyTrash = () => {
     if (trashCount === 0) {
-      showNotification('Info', 'Tempat sampah saat ini sudah kosong.', 'info')
+      showNotification('Info', 'Recycle Bin saat ini kosong.', 'info')
       return
     }
 
     showConfirm(
-      '⚠️ Kosongkan Seluruh Tempat Sampah?',
-      `PERINGATAN: Seluruh ${trashCount} topik yang ada di Tempat Sampah beserta semua butir soalnya akan DIHAPUS PERMANEN dari database.\n\nApakah Anda benar-benar yakin?`,
+      'Kosongkan Recycle Bin?',
+      `Hapus permanen seluruh (${trashCount}) topik di Recycle Bin?`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -548,11 +547,11 @@ export function ModulTopikView({
           })
           const json = await res.json()
           if (json.success) {
-            showNotification('Berhasil', json.message || 'Tempat sampah berhasil dikosongkan', 'success')
+            showNotification('Berhasil', json.message || 'Recycle Bin berhasil dikosongkan', 'success')
             setSelectedIds([])
             onRefresh()
           } else {
-            showNotification('Gagal', json.message || 'Gagal mengosongkan tempat sampah', 'error')
+            showNotification('Gagal', json.message || 'Gagal mengosongkan Recycle Bin', 'error')
           }
         } catch (err: any) {
           showNotification('Error', 'Gagal: ' + err.message, 'error')
@@ -611,11 +610,11 @@ export function ModulTopikView({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 dark:border-white/10 pb-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-normal text-slate-900 dark:text-white flex items-center gap-2">
-            Topik & Modul Soal CBT
+            Topik & Modul Soal
             <span className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-normal">
               {viewMode === 'ACTIVE'
-                ? 'Daftar topik aktif, pengarsipan topik, dan manajemen topik berdasarkan Modul'
-                : 'Tempat Sampah / Keranjang Sampah Topik Soal'}
+                ? 'Daftar topik aktif dan pengarsipan topik berdasarkan modul'
+                : 'Recycle Bin topik soal yang dihapus'}
             </span>
           </h1>
         </div>
@@ -656,7 +655,7 @@ export function ModulTopikView({
                 }`}
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Tempat Sampah</span>
+                <span>Recycle Bin</span>
                 {trashCount > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-600 text-white font-bold animate-pulse">
                     {trashCount}
@@ -670,39 +669,28 @@ export function ModulTopikView({
 
       {/* Info Notice Box */}
       {viewMode === 'ACTIVE' ? (
-        <div className="p-3.5 rounded-lg bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-          <div className="text-xs text-blue-900 dark:text-blue-200 leading-relaxed">
-            <strong className="font-semibold">Fitur Recycle Bin & Perlindungan Data Soal:</strong> Topik yang Anda hapus{' '}
-            <strong>tidak langsung hilang</strong>, melainkan dipindahkan secara aman ke{' '}
-            <button
-              type="button"
-              onClick={() => handleSwitchViewMode('TRASH')}
-              className="font-bold underline text-blue-700 dark:text-blue-300 hover:text-blue-900 cursor-pointer"
-            >
-              Tempat Sampah (Recycle Bin)
-            </button>
-            . Seluruh butir soal tetap 100% aman dan dapat Anda <strong>pulihkan (Restore)</strong> kapan saja.
-          </div>
+        <div className="p-3 rounded-lg bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 flex items-center gap-2.5 text-xs text-blue-900 dark:text-blue-200">
+          <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          <span>
+            Topik yang dihapus akan tersimpan di <strong>Recycle Bin</strong> dan dapat dipulihkan kapan saja.
+          </span>
         </div>
       ) : (
-        <div className="p-3.5 rounded-lg bg-amber-50/90 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-900/50 flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-            <div className="text-xs text-amber-950 dark:text-amber-200 leading-relaxed">
-              <strong className="font-semibold">Tempat Sampah Topik Soal (Recycle Bin):</strong> Daftar di bawah memuat topik-topik yang sebelumnya terhapus. Seluruh butir soal, opsi jawaban, dan kunci jawaban masih tersimpan utuh di database. Klik tombol{' '}
-              <span className="font-bold text-emerald-700 dark:text-emerald-300">Pulihkan (Restore)</span> untuk mengaktifkan kembali topik ke modul asalnya, atau{' '}
-              <span className="font-bold text-rose-600 dark:text-rose-400">Hapus Permanen</span> jika memang ingin menghapus selamanya.
-            </div>
+        <div className="p-3 rounded-lg bg-amber-50/90 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-900/50 flex items-center justify-between gap-3 text-xs text-amber-950 dark:text-amber-200">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>
+              Topik di <strong>Recycle Bin</strong> dapat dipulihkan kembali ke modul asal atau dihapus permanen.
+            </span>
           </div>
           {trashCount > 0 && (
             <button
               type="button"
               onClick={handleEmptyTrash}
-              className="shrink-0 px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+              className="shrink-0 px-3 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
               <Trash className="w-3.5 h-3.5" />
-              <span>Kosongkan Tempat Sampah</span>
+              <span>Kosongkan Recycle Bin</span>
             </button>
           )}
         </div>
@@ -740,7 +728,7 @@ export function ModulTopikView({
                     title="Hapus modul yang sedang dipilih"
                   >
                     <Trash2 className="w-3 h-3" />
-                    <span>Hapus Modul Ini</span>
+                    <span>Hapus Modul</span>
                   </button>
                 )}
               </div>
@@ -752,7 +740,7 @@ export function ModulTopikView({
                 }}
                 className="w-full px-3 py-2 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
               >
-                <option value="SEMUA">-- Tampilkan Semua Modul --</option>
+                <option value="SEMUA">-- Semua Modul --</option>
                 {rawModulNames.map((modName) => (
                   <option key={modName} value={modName}>
                     {modName}
@@ -760,9 +748,6 @@ export function ModulTopikView({
                 ))}
               </select>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Pilih modul untuk memfilter topik. Anda dapat membuat modul baru atau menghapus modul yang tidak terpakai.
-            </p>
             <div className="pt-2 flex flex-col gap-2">
               <button
                 type="button"
@@ -770,7 +755,7 @@ export function ModulTopikView({
                 className="w-full px-4 py-2 rounded bg-[#337ab7] hover:bg-[#286090] text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <Plus className="w-4 h-4" />
-                <span>Tambah Topik di Modul Ini</span>
+                <span>Tambah Topik</span>
               </button>
               <button
                 type="button"
@@ -787,7 +772,7 @@ export function ModulTopikView({
                   className="w-full px-4 py-1.5 rounded border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 text-rose-700 dark:text-rose-300 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
                 >
                   <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Buka Tempat Sampah ({trashCount})</span>
+                  <span>Buka Recycle Bin ({trashCount})</span>
                 </button>
               )}
             </div>
@@ -802,14 +787,14 @@ export function ModulTopikView({
                 <>
                   <BookOpen className="w-4 h-4 text-blue-600" />
                   <span>
-                    Daftar Topik {selectedModul !== 'SEMUA' ? `(Modul: ${selectedModul})` : ''} - {filteredItems.length} Topik
+                    Daftar Topik {selectedModul !== 'SEMUA' ? `(${selectedModul})` : ''} - {filteredItems.length} Topik
                   </span>
                 </>
               ) : (
                 <>
                   <Trash2 className="w-4 h-4 text-rose-600" />
                   <span className="text-rose-700 dark:text-rose-300">
-                    Tempat Sampah / Recycle Bin {selectedModul !== 'SEMUA' ? `(Modul: ${selectedModul})` : ''} - {filteredItems.length} Topik Terhapus
+                    Recycle Bin {selectedModul !== 'SEMUA' ? `(${selectedModul})` : ''} - {filteredItems.length} Topik
                   </span>
                 </>
               )}
@@ -869,9 +854,9 @@ export function ModulTopikView({
                       }}
                       className="px-2.5 py-1 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
                     >
-                      <option value="SEMUA">Semua Status (Aktif & Arsip)</option>
-                      <option value="AKTIF">Hanya Aktif</option>
-                      <option value="NONAKTIF">Diarsipkan (Arsip)</option>
+                      <option value="SEMUA">Semua Status</option>
+                      <option value="AKTIF">Aktif</option>
+                      <option value="NONAKTIF">Arsip</option>
                     </select>
                   </div>
                 )}
@@ -910,18 +895,15 @@ export function ModulTopikView({
                     <tr>
                       <td colSpan={6} className="py-10 text-center text-slate-400">
                         {viewMode === 'TRASH' ? (
-                          <div className="space-y-2 py-4">
-                            <Trash2 className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
-                            <p className="font-medium text-slate-600 dark:text-slate-400">
-                              Tempat Sampah kosong.
+                          <div className="space-y-1.5 py-4">
+                            <Trash2 className="w-7 h-7 text-slate-300 dark:text-slate-600 mx-auto" />
+                            <p className="font-semibold text-slate-600 dark:text-slate-400">
+                              Recycle Bin kosong
                             </p>
-                            <p className="text-xs text-slate-400">
-                              Tidak ada topik yang dihapus di modul{' '}
-                              <strong>{selectedModul === 'SEMUA' ? 'mana pun' : selectedModul}</strong>.
-                            </p>
+                            <p className="text-xs text-slate-400">Tidak ada topik yang dihapus.</p>
                           </div>
                         ) : searchQuery || statusFilter !== 'SEMUA' ? (
-                          'Tidak ada topik yang sesuai kriteria pencarian / filter status.'
+                          'Tidak ada topik yang sesuai pencarian.'
                         ) : (
                           <div className="space-y-2">
                             <p>
@@ -933,7 +915,7 @@ export function ModulTopikView({
                               onClick={handleOpenCreate}
                               className="px-3 py-1.5 rounded bg-blue-600 text-white font-medium text-xs hover:bg-blue-700 cursor-pointer"
                             >
-                              + Buat Topik di Modul Ini
+                              + Buat Topik
                             </button>
                           </div>
                         )}
@@ -970,7 +952,7 @@ export function ModulTopikView({
                               )}
                               {isTrash && (
                                 <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold font-mono">
-                                  (Terhapus)
+                                  (Recycle Bin)
                                 </span>
                               )}
                             </div>
@@ -991,7 +973,7 @@ export function ModulTopikView({
                                   ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'
                                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                               }`}
-                              title={`${soalCount} butir soal tersimpan aman`}
+                              title={`${soalCount} butir soal tersimpan`}
                             >
                               {soalCount} Soal
                             </span>
@@ -999,11 +981,11 @@ export function ModulTopikView({
                           <td className="py-2.5 px-3 text-center">
                             {isTrash ? (
                               <span className="px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 font-bold text-[10px] border border-rose-200 dark:border-rose-800/40">
-                                Di Keranjang
+                                Recycle Bin
                               </span>
                             ) : isArchived ? (
                               <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold text-[10px] border border-slate-300 dark:border-slate-700">
-                                Diarsipkan
+                                Arsip
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] border border-emerald-200 dark:border-emerald-800/40">
@@ -1013,12 +995,12 @@ export function ModulTopikView({
                           </td>
                           <td className="py-2.5 px-3 text-center">
                             {viewMode === 'TRASH' ? (
-                              /* Aksi di Tempat Sampah: Restore & Permanent Delete */
+                              /* Aksi di Recycle Bin: Restore & Permanent Delete */
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
                                   type="button"
                                   onClick={() => handleRestoreSingle(item)}
-                                  title="Pulihkan (Restore) topik ini kembali aktif"
+                                  title="Pulihkan topik ini kembali aktif"
                                   className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer shadow-xs transition"
                                 >
                                   <RotateCcw className="w-3 h-3" />
@@ -1027,7 +1009,7 @@ export function ModulTopikView({
                                 <button
                                   type="button"
                                   onClick={() => handlePermanentDeleteSingle(item)}
-                                  title="Hapus Topik Secara Permanen dari Database"
+                                  title="Hapus Topik Secara Permanen"
                                   className="p-1.5 rounded text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition border border-rose-200 dark:border-rose-900/40"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -1040,13 +1022,13 @@ export function ModulTopikView({
                                 />
                               </div>
                             ) : (
-                              /* Aksi di Daftar Topik Reguler: Soal, Edit, Arsip, Soft Delete */
+                              /* Aksi di Daftar Topik Reguler */
                               <div className="flex items-center justify-center gap-1.5">
                                 {onNavigateToDaftarSoal && (
                                   <button
                                     type="button"
                                     onClick={() => onNavigateToDaftarSoal(item.id)}
-                                    title="Kelola Butir Soal pada topik ini"
+                                    title="Kelola Butir Soal"
                                     className="px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
                                   >
                                     <BookOpen className="w-3 h-3" />
@@ -1064,7 +1046,7 @@ export function ModulTopikView({
                                 <button
                                   type="button"
                                   onClick={() => handleArchiveSingle(item)}
-                                  title={isArchived ? 'Aktifkan Kembali Topik' : 'Arsipkan Topik'}
+                                  title={isArchived ? 'Aktifkan Topik' : 'Arsipkan Topik'}
                                   className="p-1 rounded text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer transition"
                                 >
                                   {isArchived ? (
@@ -1077,7 +1059,7 @@ export function ModulTopikView({
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteSingle(item)}
-                                    title="Pindahkan ke Tempat Sampah (Recycle Bin)"
+                                    title="Pindahkan ke Recycle Bin"
                                     className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1146,7 +1128,7 @@ export function ModulTopikView({
             {/* Bottom Action Buttons */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-white/5">
               {viewMode === 'TRASH' ? (
-                /* Tombol Massal di Tempat Sampah: Pulihkan Terpilih & Hapus Permanen Terpilih */
+                /* Tombol Massal di Recycle Bin: Pulihkan Terpilih & Hapus Permanen Terpilih */
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
@@ -1169,7 +1151,7 @@ export function ModulTopikView({
                   </button>
                 </div>
               ) : (
-                /* Tombol Massal di Daftar Reguler: Hapus ke Sampah, Arsipkan, Aktifkan */
+                /* Tombol Massal di Daftar Reguler */
                 <div className="flex flex-wrap items-center gap-2">
                   {canManageTrash && (
                     <button
@@ -1179,7 +1161,7 @@ export function ModulTopikView({
                       className="px-3.5 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1 shadow-xs"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Hapus ({selectedIds.length}) ke Tempat Sampah</span>
+                      <span>Hapus ({selectedIds.length}) ke Recycle Bin</span>
                     </button>
                   )}
 
@@ -1351,8 +1333,8 @@ export function ModulTopikView({
                     onChange={(e) => setForm({ ...form, status: e.target.value })}
                     className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                   >
-                    <option value="Aktif">Aktif (Dapat Diujikan)</option>
-                    <option value="Nonaktif">Nonaktif / Diarsipkan</option>
+                    <option value="Aktif">Aktif</option>
+                    <option value="Nonaktif">Arsip</option>
                   </select>
                 </div>
               </div>
