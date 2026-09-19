@@ -12,6 +12,227 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'full';
+    const format = searchParams.get('format') || 'attachment';
+    const topikId = searchParams.get('topikId') || searchParams.get('id');
+    const idsParam = searchParams.get('ids');
+    const modulParam = searchParams.get('modul');
+    const ujianIdParam = searchParams.get('ujianId');
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    // 1. BACKUP MASTER SOAL & TOPIK MODUL (JSON)
+    if (type === 'soal_topik') {
+      const whereClause: any = {
+        status: { not: 'TERHAPUS' },
+      };
+
+      if (topikId) {
+        whereClause.id = topikId;
+      } else if (idsParam) {
+        const ids = idsParam.split(',').filter(Boolean);
+        if (ids.length > 0) {
+          whereClause.id = { in: ids };
+        }
+      } else if (modulParam && modulParam !== 'SEMUA') {
+        whereClause.namaModul = modulParam;
+      }
+
+      const mapelList = await prisma.mataPelajaran.findMany({
+        where: whereClause,
+        include: {
+          soalList: {
+            orderBy: { nomorUrut: 'asc' },
+            include: {
+              opsiJawaban: {
+                orderBy: { label: 'asc' },
+              },
+            },
+          },
+        },
+        orderBy: { nama: 'asc' },
+      });
+
+      const totalSoalCount = mapelList.reduce((acc, m) => acc + (m.soalList?.length || 0), 0);
+
+      const backupPayload = {
+        meta: {
+          type: 'SOAL_TOPIK_BACKUP',
+          appName: 'CBT MUHIPO Standalone Server',
+          exportedAt: new Date().toISOString(),
+          version: '2.0.0',
+          exportedBy: {
+            id: user.userId,
+            name: user.name,
+            username: user.username,
+            role: user.role,
+          },
+          counts: {
+            totalTopik: mapelList.length,
+            totalSoal: totalSoalCount,
+          },
+        },
+        data: {
+          mataPelajaran: mapelList,
+        },
+      };
+
+      if (format === 'json_raw') {
+        return NextResponse.json({
+          success: true,
+          ...backupPayload,
+        });
+      }
+
+      const safeName = topikId && mapelList[0]?.nama
+        ? mapelList[0].nama.replace(/[^a-zA-Z0-9_-]/g, '_')
+        : 'ALL';
+
+      const headers = new Headers();
+      headers.set('Content-Type', 'application/json');
+      headers.set('Content-Disposition', `attachment; filename="CBT_MUHIPO_SOAL_${safeName}_${dateStr}.json"`);
+
+      return new NextResponse(JSON.stringify(backupPayload, null, 2), {
+        status: 200,
+        headers,
+      });
+    }
+
+    // 2. BACKUP JADWAL TES & KONFIGURASI (JSON / RAW)
+    if (type === 'jadwal_tes') {
+      const ujianList = await prisma.ujian.findMany({
+        include: {
+          mataPelajaran: true,
+          ujianKelas: {
+            include: { kelas: true },
+          },
+          _count: {
+            select: { pesertaUjian: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const exportRows = ujianList.map((u, idx) => ({
+        No: idx + 1,
+        'Kode Ujian': u.kodeUjian,
+        'Judul Ujian': u.judul,
+        'Topik / Mapel': u.mataPelajaran?.nama || '-',
+        'Durasi (Menit)': u.durasiMenit,
+        Token: u.token || '-',
+        'Waktu Mulai': u.waktuMulai ? new Date(u.waktuMulai).toLocaleString('id-ID') : '-',
+        'Waktu Selesai': u.waktuSelesai ? new Date(u.waktuSelesai).toLocaleString('id-ID') : '-',
+        'Alokasi Kelas': u.ujianKelas.map((uk) => uk.kelas?.nama).filter(Boolean).join(', ') || 'Semua Kelas',
+        'Acak Soal': u.acakSoal ? 'Ya' : 'Tidak',
+        'Acak Opsi': u.acakOpsi ? 'Ya' : 'Tidak',
+        'Lock Browser': u.lockBrowser ? 'Aktif' : 'Nonaktif',
+        'Tampilkan Nilai': u.tampilkanHasil ? 'Ya' : 'Tidak',
+        Status: u.status,
+        'Jumlah Peserta': u._count?.pesertaUjian || 0,
+      }));
+
+      const backupPayload = {
+        meta: {
+          type: 'JADWAL_TES_BACKUP',
+          appName: 'CBT MUHIPO Standalone Server',
+          exportedAt: new Date().toISOString(),
+          version: '2.0.0',
+          exportedBy: {
+            id: user.userId,
+            name: user.name,
+            username: user.username,
+            role: user.role,
+          },
+          counts: {
+            totalUjian: ujianList.length,
+          },
+        },
+        data: {
+          ujian: ujianList,
+        },
+        exportRows,
+      };
+
+      if (format === 'json_raw') {
+        return NextResponse.json({
+          success: true,
+          ...backupPayload,
+        });
+      }
+
+      const headers = new Headers();
+      headers.set('Content-Type', 'application/json');
+      headers.set('Content-Disposition', `attachment; filename="CBT_MUHIPO_JADWAL_TES_${dateStr}.json"`);
+
+      return new NextResponse(JSON.stringify(backupPayload, null, 2), {
+        status: 200,
+        headers,
+      });
+    }
+
+    // 3. BACKUP HASIL TES & LEMBAR JAWABAN (JSON / RAW)
+    if (type === 'hasil_tes') {
+      const whereClause: any = {};
+      if (ujianIdParam) {
+        whereClause.id = ujianIdParam;
+      }
+
+      const ujianResults = await prisma.ujian.findMany({
+        where: whereClause,
+        include: {
+          mataPelajaran: true,
+          pesertaUjian: {
+            include: {
+              siswa: { include: { kelas: true } },
+              jawabanPeserta: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const totalPesertaCount = ujianResults.reduce((acc, u) => acc + u.pesertaUjian.length, 0);
+
+      const backupPayload = {
+        meta: {
+          type: 'HASIL_TES_BACKUP',
+          appName: 'CBT MUHIPO Standalone Server',
+          exportedAt: new Date().toISOString(),
+          version: '2.0.0',
+          exportedBy: {
+            id: user.userId,
+            name: user.name,
+            username: user.username,
+            role: user.role,
+          },
+          counts: {
+            totalUjian: ujianResults.length,
+            totalPeserta: totalPesertaCount,
+          },
+        },
+        data: {
+          ujian: ujianResults,
+        },
+      };
+
+      if (format === 'json_raw') {
+        return NextResponse.json({
+          success: true,
+          ...backupPayload,
+        });
+      }
+
+      const safeKode = ujianIdParam && ujianResults[0]?.kodeUjian
+        ? ujianResults[0].kodeUjian.replace(/[^a-zA-Z0-9_-]/g, '_')
+        : 'ALL';
+
+      const headers = new Headers();
+      headers.set('Content-Type', 'application/json');
+      headers.set('Content-Disposition', `attachment; filename="CBT_MUHIPO_HASIL_TES_${safeKode}_${dateStr}.json"`);
+
+      return new NextResponse(JSON.stringify(backupPayload, null, 2), {
+        status: 200,
+        headers,
+      });
+    }
 
     if (type === 'rekap_nilai_all') {
       // Rekap nilai seluruh ujian
@@ -121,7 +342,6 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    const dateStr = new Date().toISOString().slice(0, 10);
     const headers = new Headers();
     headers.set('Content-Type', 'application/json');
     headers.set('Content-Disposition', `attachment; filename="CBT_MUHIPO_BACKUP_${dateStr}.json"`);
@@ -219,13 +439,14 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // 1.4 Restore Mata Pelajaran (Topik)
+      // 1.4 Restore Mata Pelajaran (Topik) & Nested Soal jika ada
       for (const m of mataPelajaran) {
         await prisma.mataPelajaran.upsert({
           where: { id: m.id },
           update: {
             kode: m.kode,
             nama: m.nama,
+            namaModul: m.namaModul || 'Default',
             tingkat: m.tingkat,
             jurusan: m.jurusan,
             durasiMenit: m.durasiMenit,
@@ -233,11 +454,13 @@ export async function POST(request: NextRequest) {
             nilaiMinimal: m.nilaiMinimal,
             nilaiMaksimal: m.nilaiMaksimal,
             pembuatId: m.pembuatId,
+            status: m.status || 'AKTIF',
           },
           create: {
             id: m.id,
             kode: m.kode,
             nama: m.nama,
+            namaModul: m.namaModul || 'Default',
             tingkat: m.tingkat,
             jurusan: m.jurusan,
             durasiMenit: m.durasiMenit,
@@ -245,11 +468,68 @@ export async function POST(request: NextRequest) {
             nilaiMinimal: m.nilaiMinimal,
             nilaiMaksimal: m.nilaiMaksimal,
             pembuatId: m.pembuatId,
+            status: m.status || 'AKTIF',
           },
         });
+
+        // Jika soal tersarang di dalam mataPelajaran
+        const nestedSoal = Array.isArray(m.soalList) ? m.soalList : (Array.isArray(m.soal) ? m.soal : null);
+        if (nestedSoal) {
+          for (const s of nestedSoal) {
+            await prisma.soal.upsert({
+              where: { id: s.id },
+              update: {
+                mataPelajaranId: s.mataPelajaranId || m.id,
+                nomorUrut: s.nomorUrut,
+                tipeSoal: s.tipeSoal,
+                pertanyaan: s.pertanyaan,
+                bobot: s.bobot,
+                mediaAudio: s.mediaAudio,
+                mediaGambar: s.mediaGambar,
+                kunciJawabanTeks: s.kunciJawabanTeks,
+                matchingData: s.matchingData,
+              },
+              create: {
+                id: s.id,
+                mataPelajaranId: s.mataPelajaranId || m.id,
+                nomorUrut: s.nomorUrut,
+                tipeSoal: s.tipeSoal,
+                pertanyaan: s.pertanyaan,
+                bobot: s.bobot,
+                mediaAudio: s.mediaAudio,
+                mediaGambar: s.mediaGambar,
+                kunciJawabanTeks: s.kunciJawabanTeks,
+                matchingData: s.matchingData,
+              },
+            });
+
+            if (Array.isArray(s.opsiJawaban)) {
+              for (const o of s.opsiJawaban) {
+                await prisma.opsiJawaban.upsert({
+                  where: { id: o.id },
+                  update: {
+                    soalId: o.soalId || s.id,
+                    label: o.label,
+                    konten: o.konten,
+                    gambar: o.gambar,
+                    isBenar: o.isBenar,
+                  },
+                  create: {
+                    id: o.id,
+                    soalId: o.soalId || s.id,
+                    label: o.label,
+                    konten: o.konten,
+                    gambar: o.gambar,
+                    isBenar: o.isBenar,
+                  },
+                });
+              }
+            }
+          }
+        }
       }
 
-      // 1.5 Restore Soal
+      // 1.5 Restore Soal (Flat list)
       for (const s of soal) {
         await prisma.soal.upsert({
           where: { id: s.id },
@@ -279,7 +559,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // 1.6 Restore Opsi Jawaban
+      // 1.6 Restore Opsi Jawaban (Flat list)
       for (const o of opsiJawaban) {
         await prisma.opsiJawaban.upsert({
           where: { id: o.id },

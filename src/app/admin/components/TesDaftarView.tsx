@@ -11,7 +11,10 @@ import {
   Archive,
   ArchiveRestore,
   Users,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 interface TesDaftarViewProps {
   jadwalList: any[]
@@ -277,6 +280,62 @@ export function TesDaftarView({
     )
   }
 
+  // 1. Backup Jadwal Tes (JSON)
+  const handleBackupJadwalJson = async () => {
+    try {
+      showNotification('Memproses', 'Menyiapkan cadangan jadwal tes (.json)...', 'info')
+      const res = await fetch('/api/admin/backup?type=jadwal_tes')
+      if (!res.ok) throw new Error('Gagal mengunduh backup jadwal')
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      a.download = `CBT_MUHIPO_JADWAL_TES_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      showNotification('Berhasil', 'File cadangan jadwal tes (.json) berhasil diunduh.', 'success')
+    } catch (err: any) {
+      showNotification('Gagal', 'Gagal backup jadwal: ' + err.message, 'error')
+    }
+  }
+
+  // 2. Ekspor Jadwal Tes ke Excel (.XLSX)
+  const handleExportJadwalExcel = () => {
+    if (!filtered || filtered.length === 0) {
+      showNotification('Peringatan', 'Tidak ada jadwal tes untuk diekspor', 'warning')
+      return
+    }
+
+    const rows = filtered.map((u: any, idx: number) => ({
+      No: idx + 1,
+      'Kode Ujian': u.kodeUjian,
+      'Judul Ujian': u.judul,
+      'Topik / Mapel': u.mataPelajaran?.nama || u.bankSoal?.nama || '-',
+      'Durasi (Menit)': u.durasiMenit,
+      Token: u.token || '-',
+      'Waktu Mulai': u.waktuMulai ? new Date(u.waktuMulai).toLocaleString('id-ID') : '-',
+      'Waktu Selesai': u.waktuSelesai ? new Date(u.waktuSelesai).toLocaleString('id-ID') : '-',
+      'Alokasi Kelas': u.ujianKelas ? u.ujianKelas.map((uk: any) => uk.kelas?.nama).filter(Boolean).join(', ') : 'Semua',
+      'Acak Soal': u.acakSoal ? 'Ya' : 'Tidak',
+      'Acak Opsi': u.acakOpsi ? 'Ya' : 'Tidak',
+      'Lock Browser': u.lockBrowser ? 'Aktif' : 'Nonaktif',
+      'Tampilkan Nilai': u.tampilkanHasil ? 'Ya' : 'Tidak',
+      Status: u.status,
+    }))
+
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Jadwal_Tes')
+    const dateStr = new Date().toISOString().slice(0, 10)
+    XLSX.writeFile(workbook, `Jadwal_Tes_CBT_${dateStr}.xlsx`)
+    showNotification('Berhasil', `Berhasil mengekspor ${rows.length} jadwal tes ke Excel.`, 'success')
+  }
+
   const filtered = (jadwalList || []).filter((u) => {
     const mapelName = u.mataPelajaran?.nama || u.bankSoal?.nama || ''
     const matchSearch =
@@ -310,14 +369,36 @@ export function TesDaftarView({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onNavigateToTambah}
-          className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-blue-600/30 transition cursor-pointer self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Tambah Jadwal Tes</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <button
+            type="button"
+            onClick={handleBackupJadwalJson}
+            title="Cadangkan seluruh jadwal tes ke file JSON"
+            className="px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-bold text-xs border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Backup Jadwal (.JSON)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportJadwalExcel}
+            title="Ekspor seluruh jadwal tes ke Excel"
+            className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Ekspor Excel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onNavigateToTambah}
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/30 transition cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Tambah Jadwal Tes</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter & Search */}

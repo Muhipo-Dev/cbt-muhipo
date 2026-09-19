@@ -98,6 +98,33 @@ export function TesRekapView({
     showNotification('Berhasil', 'Rekap nilai berhasil diekspor ke Excel.', 'success')
   }
 
+  // Backup Hasil Tes (JSON)
+  const handleBackupHasilJson = async () => {
+    try {
+      showNotification('Memproses', 'Menyiapkan cadangan hasil ujian & jawaban siswa...', 'info')
+      const param = selectedUjianId ? `?type=hasil_tes&ujianId=${selectedUjianId}` : '?type=hasil_tes'
+      const res = await fetch(`/api/admin/backup${param}`)
+      if (!res.ok) throw new Error('Gagal mengunduh backup hasil')
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      const currentUjian = ujianList.find((u: any) => u.id === selectedUjianId)
+      const safeKode = (currentUjian?.kodeUjian || 'TES').replace(/[^a-zA-Z0-9_-]/g, '_')
+      a.download = `CBT_MUHIPO_HASIL_${safeKode}_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      showNotification('Berhasil', 'File cadangan hasil tes (.json) berhasil diunduh.', 'success')
+    } catch (err: any) {
+      showNotification('Gagal', 'Gagal backup: ' + err.message, 'error')
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Header & Selector */}
@@ -112,7 +139,7 @@ export function TesRekapView({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <select
             value={selectedUjianId}
             onChange={(e) => setSelectedUjianId(e.target.value)}
@@ -124,6 +151,16 @@ export function TesRekapView({
               </option>
             ))}
           </select>
+
+          <button
+            type="button"
+            onClick={handleBackupHasilJson}
+            title="Cadangkan detail hasil tes ini ke format JSON"
+            className="px-3.5 py-2.5 rounded-xl bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/50 text-teal-700 dark:text-teal-300 font-bold text-xs border border-teal-200 dark:border-teal-800 flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>Backup JSON</span>
+          </button>
 
           <button
             type="button"

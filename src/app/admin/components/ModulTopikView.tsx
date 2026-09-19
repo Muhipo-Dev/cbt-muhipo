@@ -21,6 +21,7 @@ import {
   RotateCcw,
   AlertTriangle,
   Trash,
+  Download,
 } from 'lucide-react'
 
 interface ModulTopikViewProps {
@@ -560,6 +561,84 @@ export function ModulTopikView({
     )
   }
 
+  // 8. Backup Single Topic (JSON)
+  const handleBackupSingle = async (item: any) => {
+    try {
+      showNotification('Memproses', `Menyiapkan cadangan topik "${item.nama}"...`, 'info')
+      const res = await fetch(`/api/admin/backup?type=soal_topik&topikId=${item.id}`)
+      if (!res.ok) throw new Error('Gagal mengunduh cadangan topik')
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      const safeName = item.nama.replace(/[^a-zA-Z0-9_-]/g, '_')
+      a.download = `CBT_MUHIPO_SOAL_${safeName}_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      showNotification('Berhasil', `File cadangan topik "${item.nama}" berhasil diunduh.`, 'success')
+    } catch (err: any) {
+      showNotification('Gagal', 'Gagal backup topik: ' + err.message, 'error')
+    }
+  }
+
+  // 9. Backup Bulk Selected Topics (JSON)
+  const handleBackupBulk = async () => {
+    if (selectedIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 topik untuk dicadangkan', 'warning')
+      return
+    }
+
+    try {
+      showNotification('Memproses', `Menyiapkan cadangan ${selectedIds.length} topik terpilih...`, 'info')
+      const res = await fetch(`/api/admin/backup?type=soal_topik&ids=${selectedIds.join(',')}`)
+      if (!res.ok) throw new Error('Gagal mengunduh cadangan')
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      a.download = `CBT_MUHIPO_SOAL_SELECTED_${selectedIds.length}_TOPIK_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      showNotification('Berhasil', `Berhasil mencadangkan ${selectedIds.length} topik terpilih.`, 'success')
+    } catch (err: any) {
+      showNotification('Gagal', 'Gagal backup: ' + err.message, 'error')
+    }
+  }
+
+  // 10. Backup All Active Topics (JSON)
+  const handleBackupAll = async () => {
+    try {
+      showNotification('Memproses', 'Menyiapkan cadangan seluruh topik & butir soal...', 'info')
+      const res = await fetch('/api/admin/backup?type=soal_topik')
+      if (!res.ok) throw new Error('Gagal mengunduh cadangan')
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      a.download = `CBT_MUHIPO_SOAL_ALL_TOPIK_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      showNotification('Berhasil', 'Seluruh master butir soal & topik berhasil dicadangkan.', 'success')
+    } catch (err: any) {
+      showNotification('Gagal', 'Gagal backup topik: ' + err.message, 'error')
+    }
+  }
+
   // Toggle selection for a row
   const toggleSelectRow = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -801,14 +880,26 @@ export function ModulTopikView({
             </h2>
 
             {viewMode === 'ACTIVE' ? (
-              <button
-                type="button"
-                onClick={handleOpenCreate}
-                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-bold"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tambah Topik</span>
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleBackupAll}
+                  title="Cadangkan seluruh butir soal dan topik aktif ke format JSON"
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Backup Semua Soal</span>
+                </button>
+                <span className="text-slate-300 dark:text-slate-700">|</span>
+                <button
+                  type="button"
+                  onClick={handleOpenCreate}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah Topik</span>
+                </button>
+              </div>
             ) : (
               <button
                 type="button"
@@ -1055,6 +1146,14 @@ export function ModulTopikView({
                                     <Archive className="w-3.5 h-3.5" />
                                   )}
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleBackupSingle(item)}
+                                  title="Backup Topik & Soal Ini (.JSON)"
+                                  className="p-1 rounded text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 cursor-pointer transition"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </button>
                                 {canManageTrash && (
                                   <button
                                     type="button"
@@ -1164,6 +1263,16 @@ export function ModulTopikView({
                       <span>Hapus ({selectedIds.length}) ke Recycle Bin</span>
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={handleBackupBulk}
+                    disabled={selectedIds.length === 0}
+                    className="px-3.5 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1 shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Backup ({selectedIds.length}) Soal Topik</span>
+                  </button>
 
                   <button
                     type="button"

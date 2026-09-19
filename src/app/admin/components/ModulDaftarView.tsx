@@ -17,6 +17,7 @@ import {
   Info,
   HelpCircle,
   ExternalLink,
+  Download,
 } from 'lucide-react'
 import { MathRenderer } from '@/components/MathRenderer'
 
@@ -293,6 +294,34 @@ export function ModulDaftarView({
     window.print()
   }
 
+  // Backup Soal Topik Ini (JSON)
+  const handleBackupTopicSoal = async () => {
+    if (!selectedMapelId) {
+      showNotification('Peringatan', 'Pilih topik terlebih dahulu', 'warning')
+      return
+    }
+    try {
+      showNotification('Memproses', 'Menyiapkan cadangan soal topik ini...', 'info')
+      const res = await fetch(`/api/admin/backup?type=soal_topik&topikId=${selectedMapelId}`)
+      if (!res.ok) throw new Error('Gagal mengunduh backup soal')
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      const currentTopic = items.find((m: any) => m.id === selectedMapelId)
+      const safeName = (currentTopic?.nama || 'TOPIK').replace(/[^a-zA-Z0-9_-]/g, '_')
+      a.download = `CBT_MUHIPO_SOAL_${safeName}_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      showNotification('Berhasil', 'File cadangan topik & butir soal berhasil diunduh.', 'success')
+    } catch (err: any) {
+      showNotification('Gagal', 'Gagal backup: ' + err.message, 'error')
+    }
+  }
+
   // Format Tipe Soal Text
   const formatTipeLabel = (tipe: string) => {
     switch (tipe) {
@@ -445,6 +474,15 @@ export function ModulDaftarView({
             <span>Daftar Soal {topicDisplayName}</span>
           </h2>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleBackupTopicSoal}
+              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer font-bold"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Backup Soal Topik (.JSON)</span>
+            </button>
+            <span className="text-slate-300 dark:text-slate-700">|</span>
             <button
               type="button"
               onClick={handlePrint}

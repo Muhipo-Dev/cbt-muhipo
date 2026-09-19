@@ -33,6 +33,9 @@ export function BackupDataView({
   showConfirm,
 }: BackupDataViewProps) {
   const [downloadingJson, setDownloadingJson] = useState(false)
+  const [downloadingSoal, setDownloadingSoal] = useState(false)
+  const [downloadingJadwal, setDownloadingJadwal] = useState(false)
+  const [downloadingHasil, setDownloadingHasil] = useState(false)
   const [exportingNilai, setExportingNilai] = useState(false)
   const [exportingSiswa, setExportingSiswa] = useState(false)
 
@@ -46,7 +49,7 @@ export function BackupDataView({
   const [factoryConfirmText, setFactoryConfirmText] = useState('')
   const [wiping, setWiping] = useState(false)
 
-  // 1. Download Database Backup JSON
+  // 1. Download Database Backup JSON (Full Snapshot)
   const handleDownloadBackupJson = async () => {
     try {
       setDownloadingJson(true)
@@ -58,7 +61,7 @@ export function BackupDataView({
       const a = document.createElement('a')
       a.href = url
       const dateStr = new Date().toISOString().slice(0, 10)
-      a.download = `CBT_MUHIPO_BACKUP_${dateStr}.json`
+      a.download = `CBT_MUHIPO_FULL_BACKUP_${dateStr}.json`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -72,7 +75,85 @@ export function BackupDataView({
     }
   }
 
-  // 2. Ekspor Semua Rekap Nilai ke Excel
+  // 2. Download Backup Soal & Topik Modul (JSON)
+  const handleDownloadSoalTopikJson = async () => {
+    try {
+      setDownloadingSoal(true)
+      const res = await fetch('/api/admin/backup?type=soal_topik')
+      if (!res.ok) throw new Error('Gagal mengunduh backup soal')
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      a.download = `CBT_MUHIPO_SOAL_TOPIK_ALL_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      showNotification('Berhasil', 'File cadangan master butir soal & topik (.json) berhasil diunduh.', 'success')
+    } catch (err: any) {
+      showNotification('Gagal', err.message || 'Gagal mengunduh backup soal', 'error')
+    } finally {
+      setDownloadingSoal(false)
+    }
+  }
+
+  // 3. Download Backup Jadwal Tes & Konfigurasi (JSON)
+  const handleDownloadJadwalTesJson = async () => {
+    try {
+      setDownloadingJadwal(true)
+      const res = await fetch('/api/admin/backup?type=jadwal_tes')
+      if (!res.ok) throw new Error('Gagal mengunduh backup jadwal tes')
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      a.download = `CBT_MUHIPO_JADWAL_TES_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      showNotification('Berhasil', 'File cadangan jadwal tes & sesi ujian (.json) berhasil diunduh.', 'success')
+    } catch (err: any) {
+      showNotification('Gagal', err.message || 'Gagal mengunduh backup jadwal', 'error')
+    } finally {
+      setDownloadingJadwal(false)
+    }
+  }
+
+  // 4. Download Backup Hasil Tes Lengkap (JSON)
+  const handleDownloadHasilTesJson = async () => {
+    try {
+      setDownloadingHasil(true)
+      const res = await fetch('/api/admin/backup?type=hasil_tes')
+      if (!res.ok) throw new Error('Gagal mengunduh backup hasil tes')
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      a.download = `CBT_MUHIPO_HASIL_TES_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      showNotification('Berhasil', 'File cadangan lembar jawaban & hasil tes (.json) berhasil diunduh.', 'success')
+    } catch (err: any) {
+      showNotification('Gagal', err.message || 'Gagal mengunduh backup hasil', 'error')
+    } finally {
+      setDownloadingHasil(false)
+    }
+  }
+
+  // 5. Ekspor Semua Rekap Nilai ke Excel
   const handleExportAllNilai = async () => {
     try {
       setExportingNilai(true)
@@ -97,7 +178,7 @@ export function BackupDataView({
     }
   }
 
-  // 3. Ekspor Data Peserta ke Excel
+  // 6. Ekspor Data Peserta ke Excel
   const handleExportSiswa = async () => {
     try {
       setExportingSiswa(true)
@@ -135,7 +216,7 @@ export function BackupDataView({
     }
   }
 
-  // 4. Handle File JSON Restore Selection
+  // 7. Handle File JSON Restore Selection
   const handleSelectRestoreFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -161,7 +242,7 @@ export function BackupDataView({
     reader.readAsText(file)
   }
 
-  // 5. Execute Restore
+  // 8. Execute Restore
   const handleExecuteRestore = () => {
     if (!restorePreview) return
 
@@ -198,7 +279,7 @@ export function BackupDataView({
     )
   }
 
-  // 6. Maintenance / Wipe Actions
+  // 9. Maintenance / Wipe Actions
   const handleExecuteWipe = async (action: string) => {
     try {
       setWiping(true)
@@ -244,7 +325,7 @@ export function BackupDataView({
               </span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Kelola cadangan basis data lengkap, ekspor nilai & peserta ke format Excel, serta fasilitas reset/pembersihan data berkala.
+              Kelola cadangan soal topik modul, jadwal ujian, hasil tes, ekspor nilai & peserta, serta fasilitas reset pemeliharaan.
             </p>
           </div>
         </div>
@@ -270,7 +351,7 @@ export function BackupDataView({
           </div>
         </div>
 
-        <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Card 1: Full JSON Backup */}
           <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/10 border border-blue-200/80 dark:border-blue-900/40 flex flex-col justify-between space-y-4">
             <div className="space-y-2">
@@ -291,11 +372,83 @@ export function BackupDataView({
               className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
-              <span>{downloadingJson ? 'Menyiapkan File...' : 'Unduh Backup (.JSON)'}</span>
+              <span>{downloadingJson ? 'Menyiapkan File...' : 'Unduh Full Backup (.JSON)'}</span>
             </button>
           </div>
 
-          {/* Card 2: Export All Nilai Excel */}
+          {/* Card 2: Backup Master Soal & Topik Modul */}
+          <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/80 to-violet-50/50 dark:from-indigo-950/20 dark:to-violet-950/10 border border-indigo-200/80 dark:border-indigo-900/40 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
+                <Database className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                Backup Soal Topik Modul (JSON)
+              </h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Cadangan seluruh master modul, topik mata pelajaran, butir soal terinput, bobot, dan opsi kunci jawaban lengkap.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleDownloadSoalTopikJson}
+              disabled={downloadingSoal}
+              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              <span>{downloadingSoal ? 'Menyiapkan Soal...' : 'Backup Soal Topik (.JSON)'}</span>
+            </button>
+          </div>
+
+          {/* Card 3: Backup Jadwal Tes & Konfigurasi */}
+          <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-50/80 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/10 border border-amber-200/80 dark:border-amber-900/40 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-md">
+                <FileJson className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                Backup Jadwal Tes (JSON)
+              </h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Cadangan seluruh jadwal ujian, alokasi kelas, konfigurasi token, durasi waktu, serta pengaturan keamanan browser.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleDownloadJadwalTesJson}
+              disabled={downloadingJadwal}
+              className="w-full py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              <span>{downloadingJadwal ? 'Menyiapkan Jadwal...' : 'Backup Jadwal Tes (.JSON)'}</span>
+            </button>
+          </div>
+
+          {/* Card 4: Backup Hasil Tes Lengkap (JSON) */}
+          <div className="p-5 rounded-2xl bg-gradient-to-br from-teal-50/80 to-cyan-50/50 dark:from-teal-950/20 dark:to-cyan-950/10 border border-teal-200/80 dark:border-teal-900/40 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-md">
+                <FileJson className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                Backup Hasil & Lembar Jawaban (JSON)
+              </h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Cadangan detail seluruh lembar pengerjaan peserta, pilihan butir soal per siswa, skor PG/Esai, dan riwayat ujian.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleDownloadHasilTesJson}
+              disabled={downloadingHasil}
+              className="w-full py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              <span>{downloadingHasil ? 'Menyiapkan Hasil...' : 'Backup Hasil Tes (.JSON)'}</span>
+            </button>
+          </div>
+
+          {/* Card 5: Export All Nilai Excel */}
           <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/80 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/10 border border-emerald-200/80 dark:border-emerald-900/40 flex flex-col justify-between space-y-4">
             <div className="space-y-2">
               <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md">
@@ -319,7 +472,7 @@ export function BackupDataView({
             </button>
           </div>
 
-          {/* Card 3: Export Peserta Excel */}
+          {/* Card 6: Export Peserta Excel */}
           <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-50/80 to-pink-50/50 dark:from-purple-950/20 dark:to-pink-950/10 border border-purple-200/80 dark:border-purple-900/40 flex flex-col justify-between space-y-4">
             <div className="space-y-2">
               <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md">
