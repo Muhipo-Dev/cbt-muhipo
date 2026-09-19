@@ -84,24 +84,11 @@ export function SecurityLockModal({
             </div>
           </div>
 
-          {/* Entire Screen Sharing Info (Diutamakan di Laptop/Desktop/MacBook) */}
-          {deviceInfo?.hasDisplayMedia && !isMobileOrTablet && (
-            <div className="flex items-start gap-2 sm:gap-2.5">
-              <Tv className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
-              <div>
-                <b className="text-slate-900 text-xs">1. Izinkan Permintaan Google Chrome / Browser (Seluruh Layar):</b>
-                <span className="text-slate-500 block text-[11px] mt-0.5">
-                  Saat muncul pop-up izin browser, pilih <b>"Entire Screen / Seluruh Layar"</b> lalu klik <b>"Share / Bagikan"</b>.
-                </span>
-              </div>
-            </div>
-          )}
-
           <div className="flex items-start gap-2 sm:gap-2.5">
             <Maximize2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
             <div>
               <b className="text-slate-900 text-xs">
-                {isMobileOrTablet ? '2. Mode Ujian Mobile (Android & iOS):' : '2. Kunci Layar Penuh (Fullscreen Lockdown):'}
+                {isMobileOrTablet ? '1. Mode Ujian Mobile (Android & iOS):' : '1. Kunci Layar Penuh (Fullscreen Lockdown):'}
               </b>
               <span className="text-slate-500 block text-[11px] mt-0.5">
                 {isApple && isMobileOrTablet

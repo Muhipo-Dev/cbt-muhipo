@@ -14,13 +14,13 @@ import {
   RefreshCw,
   BookOpen,
   Info,
-  HelpCircle,
-  FileText,
-  ExternalLink,
   Layers,
   FolderPlus,
   Archive,
   ArchiveRestore,
+  RotateCcw,
+  AlertTriangle,
+  Trash,
 } from 'lucide-react'
 
 interface ModulTopikViewProps {
@@ -51,7 +51,9 @@ export function ModulTopikView({
     ])
   )
 
-  const [selectedModul, setSelectedModul] = useState<string>('Default')
+  // Mode Tampilan: 'ACTIVE' (Topik Aktif & Arsip) atau 'TRASH' (Tempat Sampah / Recycle Bin)
+  const [viewMode, setViewMode] = useState<'ACTIVE' | 'TRASH'>('ACTIVE')
+  const [selectedModul, setSelectedModul] = useState<string>('SEMUA')
   const [statusFilter, setStatusFilter] = useState<'SEMUA' | 'AKTIF' | 'NONAKTIF'>('SEMUA')
   const [searchQuery, setSearchQuery] = useState('')
   const [entriesPerPage, setEntriesPerPage] = useState(10)
@@ -80,6 +82,21 @@ export function ModulTopikView({
     durasiMenit: 90,
   })
   const [saving, setSaving] = useState(false)
+
+  // Perhitungan Data Keseluruhan
+  const allItems = mapelList || []
+  const activeAllItems = allItems.filter((m: any) => m.status !== 'TERHAPUS')
+  const trashAllItems = allItems.filter((m: any) => m.status === 'TERHAPUS')
+  const activeCount = activeAllItems.length
+  const trashCount = trashAllItems.length
+
+  // Ganti View Mode (Active / Trash)
+  const handleSwitchViewMode = (mode: 'ACTIVE' | 'TRASH') => {
+    setViewMode(mode)
+    setSelectedIds([])
+    setCurrentPage(1)
+    setSearchQuery('')
+  }
 
   // Open Modal Tambah Modul
   const handleOpenCreateModul = () => {
@@ -173,7 +190,7 @@ export function ModulTopikView({
   const handleOpenCreate = () => {
     setEditingItem(null)
     setForm({
-      modul: selectedModul || 'Default',
+      modul: selectedModul !== 'SEMUA' ? selectedModul : 'Default',
       kode: `TPK-${Date.now().toString().slice(-4)}`,
       nama: '',
       status: 'Aktif',
@@ -332,11 +349,12 @@ export function ModulTopikView({
     )
   }
 
-  // Delete Single Topic
+  // 1. Soft Delete Single Topic (Pindahkan ke Tempat Sampah)
   const handleDeleteSingle = (item: any) => {
+    const soalCount = item._count?.soalList ?? item.soalList?.length ?? 0
     showConfirm(
-      'Hapus Topik?',
-      `Apakah Anda yakin ingin menghapus topik "${item.nama}" beserta seluruh butir soal yang ada di dalamnya?`,
+      'Pindahkan ke Tempat Sampah?',
+      `Apakah Anda yakin ingin memindahkan topik "${item.nama}" ke Tempat Sampah (Recycle Bin)?\n\nSeluruh ${soalCount} butir soal di dalam topik ini tetap tersimpan aman dan dapat Anda pulihkan (Restore) kapan saja.`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -346,13 +364,194 @@ export function ModulTopikView({
           })
           const json = await res.json()
           if (json.success) {
-            showNotification('Berhasil', json.message || 'Topik berhasil dihapus', 'success')
+            showNotification('Berhasil', json.message || 'Topik berhasil dipindahkan ke Tempat Sampah', 'success')
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal memindahkan topik', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        }
+      }
+    )
+  }
+
+  // 2. Bulk Soft Delete (Pindahkan banyak topik ke Tempat Sampah)
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 topik untuk dipindahkan ke Tempat Sampah', 'warning')
+      return
+    }
+
+    showConfirm(
+      'Pindahkan Topik Terpilih ke Tempat Sampah?',
+      `Apakah Anda yakin ingin memindahkan ${selectedIds.length} topik terpilih ke Tempat Sampah (Recycle Bin)? Seluruh butir soal tetap tersimpan dan dapat dipulihkan kapan saja.`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'BULK_DELETE_MAPEL', ids: selectedIds }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', json.message || 'Topik terpilih berhasil dipindahkan ke Tempat Sampah', 'success')
+            setSelectedIds([])
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal memindahkan topik', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        }
+      }
+    )
+  }
+
+  // 3. Restore Single Topic (Pulihkan Topik dari Tempat Sampah)
+  const handleRestoreSingle = (item: any) => {
+    showConfirm(
+      'Pulihkan Topik?',
+      `Pulihkan topik "${item.nama}" beserta seluruh butir soalnya kembali ke daftar topik aktif?`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'RESTORE_MAPEL', id: item.id }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', json.message || 'Topik berhasil dipulihkan', 'success')
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal memulihkan topik', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        }
+      }
+    )
+  }
+
+  // 4. Bulk Restore Topics (Pulihkan Banyak Topik)
+  const handleBulkRestore = () => {
+    if (selectedIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 topik untuk dipulihkan', 'warning')
+      return
+    }
+
+    showConfirm(
+      'Pulihkan Topik Terpilih?',
+      `Apakah Anda yakin ingin memulihkan ${selectedIds.length} topik terpilih kembali ke status aktif?`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'BULK_RESTORE_MAPEL', ids: selectedIds }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', json.message || 'Topik terpilih berhasil dipulihkan', 'success')
+            setSelectedIds([])
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal memulihkan topik', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        }
+      }
+    )
+  }
+
+  // 5. Permanent Delete Single Topic (Hapus Permanen Tunggal)
+  const handlePermanentDeleteSingle = (item: any) => {
+    const soalCount = item._count?.soalList ?? item.soalList?.length ?? 0
+    showConfirm(
+      '⚠️ Hapus Topik Secara Permanen?',
+      `PERINGATAN: Topik "${item.nama}" beserta seluruh ${soalCount} butir soal, kunci jawaban, dan data ujian terkait akan DIHAPUS PERMANEN dari database.\n\nTindakan ini TIDAK DAPAT DIBATALKAN!`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'PERMANENT_DELETE_MAPEL', id: item.id }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', json.message || 'Topik telah dihapus secara permanen', 'success')
             onRefresh()
           } else {
             showNotification('Gagal', json.message || 'Gagal menghapus topik', 'error')
           }
         } catch (err: any) {
-          showNotification('Error', 'Gagal menghapus topik: ' + err.message, 'error')
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        }
+      }
+    )
+  }
+
+  // 6. Bulk Permanent Delete (Hapus Permanen Massal)
+  const handleBulkPermanentDelete = () => {
+    if (selectedIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 topik untuk dihapus permanen', 'warning')
+      return
+    }
+
+    showConfirm(
+      '⚠️ Hapus Permanen Topik Terpilih?',
+      `PERINGATAN: ${selectedIds.length} topik terpilih beserta seluruh butir soalnya akan DIHAPUS PERMANEN dari database. Tindakan ini tidak dapat dibatalkan!`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'BULK_PERMANENT_DELETE_MAPEL', ids: selectedIds }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', json.message || 'Topik terpilih telah dihapus secara permanen', 'success')
+            setSelectedIds([])
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal menghapus topik', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        }
+      }
+    )
+  }
+
+  // 7. Empty Trash (Kosongkan Tempat Sampah)
+  const handleEmptyTrash = () => {
+    if (trashCount === 0) {
+      showNotification('Info', 'Tempat sampah saat ini sudah kosong.', 'info')
+      return
+    }
+
+    showConfirm(
+      '⚠️ Kosongkan Seluruh Tempat Sampah?',
+      `PERINGATAN: Seluruh ${trashCount} topik yang ada di Tempat Sampah beserta semua butir soalnya akan DIHAPUS PERMANEN dari database.\n\nApakah Anda benar-benar yakin?`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'EMPTY_TRASH_MAPEL' }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', json.message || 'Tempat sampah berhasil dikosongkan', 'success')
+            setSelectedIds([])
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal mengosongkan tempat sampah', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
         }
       }
     )
@@ -369,51 +568,23 @@ export function ModulTopikView({
 
   // Select all or deselect all
   const handleToggleSelectAll = () => {
-    if (selectedIds.length === filteredItems.length) {
+    if (selectedIds.length === filteredItems.length && filteredItems.length > 0) {
       setSelectedIds([])
     } else {
       setSelectedIds(filteredItems.map((item) => item.id))
     }
   }
 
-  // Bulk Delete
-  const handleBulkDelete = () => {
-    if (selectedIds.length === 0) {
-      showNotification('Peringatan', 'Pilih minimal 1 topik untuk dihapus', 'warning')
-      return
-    }
-
-    showConfirm(
-      'Hapus Topik Terpilih?',
-      `Apakah Anda yakin ingin menghapus ${selectedIds.length} topik terpilih beserta seluruh butir soalnya?`,
-      async () => {
-        try {
-          const res = await fetch('/api/admin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'BULK_DELETE_MAPEL', ids: selectedIds }),
-          })
-          const json = await res.json()
-          if (json.success) {
-            showNotification('Berhasil', json.message || 'Topik terpilih berhasil dihapus', 'success')
-            setSelectedIds([])
-            onRefresh()
-          } else {
-            showNotification('Gagal', json.message || 'Gagal menghapus topik', 'error')
-          }
-        } catch (err: any) {
-          showNotification('Error', 'Gagal menghapus topik: ' + err.message, 'error')
-        }
-      }
-    )
-  }
-
-  // Filter & Pagination berdasarkan Modul yang dipilih, Status Arsip, & Search
-  const allItems = mapelList || []
-  const modulItems = allItems.filter((m: any) => {
+  // Filter Items berdasarkan Mode Tampilan (Active vs Trash)
+  const baseItems = viewMode === 'TRASH' ? trashAllItems : activeAllItems
+  const modulItems = baseItems.filter((m: any) => {
     const mapelModul = m.namaModul || m.modul?.nama || 'Default'
     const matchModul = selectedModul === 'SEMUA' || mapelModul.toLowerCase() === selectedModul.toLowerCase()
-    
+
+    if (viewMode === 'TRASH') {
+      return matchModul
+    }
+
     let matchStatus = true
     if (statusFilter === 'AKTIF') {
       matchStatus = m.status !== 'NONAKTIF'
@@ -432,33 +603,106 @@ export function ModulTopikView({
 
   return (
     <div className="w-full space-y-4 font-sans text-slate-800 dark:text-slate-100">
-      {/* 1. Header Page Title & Breadcrumb */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-white/10 pb-3">
+      {/* 1. Header Page Title, Tabs & Breadcrumb */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 dark:border-white/10 pb-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-normal text-slate-900 dark:text-white flex items-center gap-2">
-            Topik & Arsip Topik
+            Topik & Modul Soal CBT
             <span className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-normal">
-              Daftar topik aktif, pengarsipan topik, pemulihan topik, dan manajemen topik berdasarkan Modul
+              {viewMode === 'ACTIVE'
+                ? 'Daftar topik aktif, pengarsipan topik, dan manajemen topik berdasarkan Modul'
+                : 'Tempat Sampah / Keranjang Sampah Topik Soal'}
             </span>
           </h1>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-          <Home className="w-3.5 h-3.5 text-slate-400" />
-          <span>Home</span>
-          <ChevronRight className="w-3 h-3 text-slate-400" />
-          <span className="font-semibold text-slate-700 dark:text-slate-200">Topik</span>
+
+        {/* View Mode Switch Tabs (Daftar Topik vs Recycle Bin) */}
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-lg p-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-xs font-semibold shadow-xs">
+            <button
+              type="button"
+              onClick={() => handleSwitchViewMode('ACTIVE')}
+              className={`px-3.5 py-1.5 rounded-md flex items-center gap-1.5 transition cursor-pointer ${
+                viewMode === 'ACTIVE'
+                  ? 'bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Daftar Topik</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                  viewMode === 'ACTIVE'
+                    ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 font-bold'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                {activeCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSwitchViewMode('TRASH')}
+              className={`px-3.5 py-1.5 rounded-md flex items-center gap-1.5 transition cursor-pointer ${
+                viewMode === 'TRASH'
+                  ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/40 shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400'
+              }`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Tempat Sampah</span>
+              {trashCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-600 text-white font-bold animate-pulse">
+                  {trashCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Info Notice Box */}
-      <div className="p-3.5 rounded-lg bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 flex items-start gap-3">
-        <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-        <div className="text-xs text-blue-900 dark:text-blue-200 leading-relaxed">
-          <strong className="font-semibold">Fitur Arsip & Manajemen Topik:</strong> Topik yang sudah tidak diujikan dapat Anda <strong>arsipkan</strong> agar tidak muncul pada pilihan tes baru. Seluruh butir soal di dalam topik yang diarsipkan tetap tersimpan 100% aman dan dapat dipulihkan kapan saja melalui tombol <span className="font-semibold text-amber-600 dark:text-amber-400">Pulihkan Topik</span>.
+      {viewMode === 'ACTIVE' ? (
+        <div className="p-3.5 rounded-lg bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 flex items-start gap-3">
+          <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <div className="text-xs text-blue-900 dark:text-blue-200 leading-relaxed">
+            <strong className="font-semibold">Fitur Recycle Bin & Perlindungan Data Soal:</strong> Topik yang Anda hapus{' '}
+            <strong>tidak langsung hilang</strong>, melainkan dipindahkan secara aman ke{' '}
+            <button
+              type="button"
+              onClick={() => handleSwitchViewMode('TRASH')}
+              className="font-bold underline text-blue-700 dark:text-blue-300 hover:text-blue-900 cursor-pointer"
+            >
+              Tempat Sampah (Recycle Bin)
+            </button>
+            . Seluruh butir soal tetap 100% aman dan dapat Anda <strong>pulihkan (Restore)</strong> kapan saja.
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-3.5 rounded-lg bg-amber-50/90 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-900/50 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-950 dark:text-amber-200 leading-relaxed">
+              <strong className="font-semibold">Tempat Sampah Topik Soal (Recycle Bin):</strong> Daftar di bawah memuat topik-topik yang sebelumnya terhapus. Seluruh butir soal, opsi jawaban, dan kunci jawaban masih tersimpan utuh di database. Klik tombol{' '}
+              <span className="font-bold text-emerald-700 dark:text-emerald-300">Pulihkan (Restore)</span> untuk mengaktifkan kembali topik ke modul asalnya, atau{' '}
+              <span className="font-bold text-rose-600 dark:text-rose-400">Hapus Permanen</span> jika memang ingin menghapus selamanya.
+            </div>
+          </div>
+          {trashCount > 0 && (
+            <button
+              type="button"
+              onClick={handleEmptyTrash}
+              className="shrink-0 px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Trash className="w-3.5 h-3.5" />
+              <span>Kosongkan Tempat Sampah</span>
+            </button>
+          )}
+        </div>
+      )}
 
-      {/* 2. Grid: Left Panel (Pilih Modul) & Right Panel (Daftar Topik) */}
+      {/* 2. Grid: Left Panel (Pilih Modul) & Right Panel (Daftar Topik / Recycle Bin) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* Left Card: Pilih Modul */}
         <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-white/10 rounded-md shadow-xs overflow-hidden">
@@ -511,7 +755,7 @@ export function ModulTopikView({
               </select>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Pilih modul terlebih dahulu untuk memfilter topik di sebelah kanan. Anda dapat membuat modul baru atau menghapus modul yang tidak terpakai.
+              Pilih modul untuk memfilter topik. Anda dapat membuat modul baru atau menghapus modul yang tidak terpakai.
             </p>
             <div className="pt-2 flex flex-col gap-2">
               <button
@@ -530,24 +774,59 @@ export function ModulTopikView({
                 <FolderPlus className="w-4 h-4 text-emerald-600" />
                 <span>Buat Modul Baru</span>
               </button>
+              {trashCount > 0 && viewMode === 'ACTIVE' && (
+                <button
+                  type="button"
+                  onClick={() => handleSwitchViewMode('TRASH')}
+                  className="w-full px-4 py-1.5 rounded border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 text-rose-700 dark:text-rose-300 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Buka Tempat Sampah ({trashCount})</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Right Card: Daftar Topik */}
+        {/* Right Card: Daftar Topik / Recycle Bin */}
         <div className="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-white/10 rounded-md shadow-xs overflow-hidden">
           <div className="px-4 py-2.5 bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-white/10 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-800 dark:text-white">
-              Daftar Topik {selectedModul !== 'SEMUA' ? `(Modul: ${selectedModul})` : ''} - {filteredItems.length} Topik
+            <h2 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+              {viewMode === 'ACTIVE' ? (
+                <>
+                  <BookOpen className="w-4 h-4 text-blue-600" />
+                  <span>
+                    Daftar Topik {selectedModul !== 'SEMUA' ? `(Modul: ${selectedModul})` : ''} - {filteredItems.length} Topik
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 text-rose-600" />
+                  <span className="text-rose-700 dark:text-rose-300">
+                    Tempat Sampah / Recycle Bin {selectedModul !== 'SEMUA' ? `(Modul: ${selectedModul})` : ''} - {filteredItems.length} Topik Terhapus
+                  </span>
+                </>
+              )}
             </h2>
-            <button
-              type="button"
-              onClick={handleOpenCreate}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-bold"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Tambah Topik</span>
-            </button>
+
+            {viewMode === 'ACTIVE' ? (
+              <button
+                type="button"
+                onClick={handleOpenCreate}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-bold"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Tambah Topik</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleSwitchViewMode('ACTIVE')}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-bold"
+              >
+                <span>← Kembali ke Daftar Topik</span>
+              </button>
+            )}
           </div>
 
           <div className="p-4 sm:p-5 space-y-3">
@@ -572,22 +851,24 @@ export function ModulTopikView({
                   <span>entries</span>
                 </div>
 
-                {/* Status Filter Selector */}
-                <div className="flex items-center gap-1 ml-2">
-                  <span className="font-semibold">Status:</span>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => {
-                      setStatusFilter(e.target.value as any)
-                      setCurrentPage(1)
-                    }}
-                    className="px-2.5 py-1 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
-                  >
-                    <option value="SEMUA">Semua Status</option>
-                    <option value="AKTIF">Hanya Aktif</option>
-                    <option value="NONAKTIF">Diarsipkan (Arsip)</option>
-                  </select>
-                </div>
+                {/* Status Filter Selector (Khusus Active Mode) */}
+                {viewMode === 'ACTIVE' && (
+                  <div className="flex items-center gap-1 ml-2">
+                    <span className="font-semibold">Status:</span>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => {
+                        setStatusFilter(e.target.value as any)
+                        setCurrentPage(1)
+                      }}
+                      className="px-2.5 py-1 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value="SEMUA">Semua Status (Aktif & Arsip)</option>
+                      <option value="AKTIF">Hanya Aktif</option>
+                      <option value="NONAKTIF">Diarsipkan (Arsip)</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-1.5 self-end sm:self-auto">
@@ -613,20 +894,34 @@ export function ModulTopikView({
                     <th className="py-2.5 px-3 w-10 text-center">No. ⇅</th>
                     <th className="py-2.5 px-3">Nama Topik</th>
                     <th className="py-2.5 px-3">Modul</th>
-                    <th className="py-2.5 px-3 text-center w-20">Jml. Soal</th>
-                    <th className="py-2.5 px-3 text-center w-24">Status</th>
-                    <th className="py-2.5 px-3 text-center w-40">Aksi</th>
+                    <th className="py-2.5 px-3 text-center w-24">Jml. Soal</th>
+                    <th className="py-2.5 px-3 text-center w-28">Status</th>
+                    <th className="py-2.5 px-3 text-center w-48">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-white/5">
                   {paginatedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-slate-400">
-                        {searchQuery || statusFilter !== 'SEMUA' ? (
+                      <td colSpan={6} className="py-10 text-center text-slate-400">
+                        {viewMode === 'TRASH' ? (
+                          <div className="space-y-2 py-4">
+                            <Trash2 className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
+                            <p className="font-medium text-slate-600 dark:text-slate-400">
+                              Tempat Sampah kosong.
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              Tidak ada topik yang dihapus di modul{' '}
+                              <strong>{selectedModul === 'SEMUA' ? 'mana pun' : selectedModul}</strong>.
+                            </p>
+                          </div>
+                        ) : searchQuery || statusFilter !== 'SEMUA' ? (
                           'Tidak ada topik yang sesuai kriteria pencarian / filter status.'
                         ) : (
                           <div className="space-y-2">
-                            <p>Belum ada topik di modul <strong>{selectedModul}</strong>.</p>
+                            <p>
+                              Belum ada topik di modul{' '}
+                              <strong>{selectedModul === 'SEMUA' ? 'ini' : selectedModul}</strong>.
+                            </p>
                             <button
                               type="button"
                               onClick={handleOpenCreate}
@@ -643,6 +938,7 @@ export function ModulTopikView({
                       const rowNumber = (currentPage - 1) * entriesPerPage + idx + 1
                       const isSelected = selectedIds.includes(item.id)
                       const isArchived = item.status === 'NONAKTIF'
+                      const isTrash = item.status === 'TERHAPUS'
                       const soalCount = item._count?.soalList ?? item.soalList?.length ?? 0
                       const itemModul = item.namaModul || item.modul?.nama || 'Default'
 
@@ -651,7 +947,9 @@ export function ModulTopikView({
                           key={item.id}
                           className={`hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition ${
                             isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''
-                          } ${isArchived ? 'opacity-80 bg-slate-50/30 dark:bg-slate-900/30' : ''}`}
+                          } ${isArchived ? 'opacity-80 bg-slate-50/30 dark:bg-slate-900/30' : ''} ${
+                            isTrash ? 'bg-rose-50/20 dark:bg-rose-950/10' : ''
+                          }`}
                         >
                           <td className="py-2.5 px-3 text-center font-medium text-slate-500 dark:text-slate-400">
                             {rowNumber}
@@ -664,12 +962,16 @@ export function ModulTopikView({
                                   (Arsip)
                                 </span>
                               )}
+                              {isTrash && (
+                                <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold font-mono">
+                                  (Terhapus)
+                                </span>
+                              )}
                             </div>
-                            {item.tingkat ? (
-                              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                                Kelas {item.tingkat}
-                              </div>
-                            ) : null}
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-2">
+                              {item.tingkat ? <span>Kelas {item.tingkat}</span> : null}
+                              {item.kode ? <span className="font-mono text-[10px] text-slate-400">[{item.kode}]</span> : null}
+                            </div>
                           </td>
                           <td className="py-2.5 px-3">
                             <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold text-[11px] border border-blue-200 dark:border-blue-900/40">
@@ -677,12 +979,23 @@ export function ModulTopikView({
                             </span>
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <span className="inline-block px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs">
-                              {soalCount}
+                            <span
+                              className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-xs ${
+                                isTrash
+                                  ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                              }`}
+                              title={`${soalCount} butir soal tersimpan aman`}
+                            >
+                              {soalCount} Soal
                             </span>
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            {isArchived ? (
+                            {isTrash ? (
+                              <span className="px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 font-bold text-[10px] border border-rose-200 dark:border-rose-800/40">
+                                Di Keranjang
+                              </span>
+                            ) : isArchived ? (
                               <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold text-[10px] border border-slate-300 dark:border-slate-700">
                                 Diarsipkan
                               </span>
@@ -693,49 +1006,83 @@ export function ModulTopikView({
                             )}
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              {onNavigateToDaftarSoal && (
+                            {viewMode === 'TRASH' ? (
+                              /* Aksi di Tempat Sampah: Restore & Permanent Delete */
+                              <div className="flex items-center justify-center gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => onNavigateToDaftarSoal(item.id)}
-                                  title="Kelola Butir Soal pada topik ini"
-                                  className="px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                                  onClick={() => handleRestoreSingle(item)}
+                                  title="Pulihkan (Restore) topik ini kembali aktif"
+                                  className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer shadow-xs transition"
                                 >
-                                  <BookOpen className="w-3 h-3" />
-                                  <span>Soal</span>
+                                  <RotateCcw className="w-3 h-3" />
+                                  <span>Pulihkan</span>
                                 </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEdit(item)}
-                                title="Edit Topik"
-                                className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleArchiveSingle(item)}
-                                title={isArchived ? 'Aktifkan Kembali Topik' : 'Arsipkan Topik'}
-                                className="p-1 rounded text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer transition"
-                              >
-                                {isArchived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteSingle(item)}
-                                title="Hapus Topik Permanen"
-                                className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleSelectRow(item.id)}
-                                className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer ml-1"
-                              />
-                            </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePermanentDeleteSingle(item)}
+                                  title="Hapus Topik Secara Permanen dari Database"
+                                  className="p-1.5 rounded text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition border border-rose-200 dark:border-rose-900/40"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleSelectRow(item.id)}
+                                  className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer ml-1"
+                                />
+                              </div>
+                            ) : (
+                              /* Aksi di Daftar Topik Reguler: Soal, Edit, Arsip, Soft Delete */
+                              <div className="flex items-center justify-center gap-1.5">
+                                {onNavigateToDaftarSoal && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onNavigateToDaftarSoal(item.id)}
+                                    title="Kelola Butir Soal pada topik ini"
+                                    className="px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <BookOpen className="w-3 h-3" />
+                                    <span>Soal</span>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEdit(item)}
+                                  title="Edit Topik"
+                                  className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleArchiveSingle(item)}
+                                  title={isArchived ? 'Aktifkan Kembali Topik' : 'Arsipkan Topik'}
+                                  className="p-1 rounded text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer transition"
+                                >
+                                  {isArchived ? (
+                                    <ArchiveRestore className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Archive className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSingle(item)}
+                                  title="Pindahkan ke Tempat Sampah (Recycle Bin)"
+                                  className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleSelectRow(item.id)}
+                                  className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer ml-1"
+                                />
+                              </div>
+                            )}
                           </td>
                         </tr>
                       )
@@ -757,7 +1104,7 @@ export function ModulTopikView({
                   type="button"
                   disabled={currentPage <= 1}
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  className="px-2.5 py-1 rounded border border-slate-300 dark:border-white/10 bg-white dark:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
+                  className="px-2.5 py-1 rounded border border-slate-300 dark:border-white/10 bg-white dark:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 cursor-pointer"
                 >
                   Previous
                 </button>
@@ -767,7 +1114,7 @@ export function ModulTopikView({
                     key={i}
                     type="button"
                     onClick={() => setCurrentPage(i + 1)}
-                    className={`w-7 h-7 rounded text-xs font-bold border transition ${
+                    className={`w-7 h-7 rounded text-xs font-bold border transition cursor-pointer ${
                       currentPage === i + 1
                         ? 'bg-[#337ab7] text-white border-[#2e6da4]'
                         : 'border-slate-300 dark:border-white/10 bg-white dark:bg-slate-800 hover:bg-slate-50'
@@ -781,55 +1128,84 @@ export function ModulTopikView({
                   type="button"
                   disabled={currentPage >= totalPages}
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  className="px-2.5 py-1 rounded border border-slate-300 dark:border-white/10 bg-white dark:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
+                  className="px-2.5 py-1 rounded border border-slate-300 dark:border-white/10 bg-white dark:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 cursor-pointer"
                 >
                   Next
                 </button>
               </div>
             </div>
 
-            {/* Bottom Action Buttons: Hapus, Arsip, Aktifkan & Pilih Semua */}
+            {/* Bottom Action Buttons */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-white/5">
+              {viewMode === 'TRASH' ? (
+                /* Tombol Massal di Tempat Sampah: Pulihkan Terpilih & Hapus Permanen Terpilih */
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleBulkRestore}
+                    disabled={selectedIds.length === 0}
+                    className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1.5 shadow-xs"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Pulihkan ({selectedIds.length}) Terpilih</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBulkPermanentDelete}
+                    disabled={selectedIds.length === 0}
+                    className="px-3.5 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus Permanen ({selectedIds.length}) Terpilih</span>
+                  </button>
+                </div>
+              ) : (
+                /* Tombol Massal di Daftar Reguler: Hapus ke Sampah, Arsipkan, Aktifkan */
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleBulkDelete}
+                    disabled={selectedIds.length === 0}
+                    className="px-3.5 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1 shadow-xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus ({selectedIds.length}) ke Tempat Sampah</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBulkArchive}
+                    disabled={selectedIds.length === 0}
+                    className="px-3.5 py-1.5 rounded bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1 shadow-xs"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    <span>Arsipkan ({selectedIds.length}) Terpilih</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBulkUnarchive}
+                    disabled={selectedIds.length === 0}
+                    className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1 shadow-xs"
+                  >
+                    <ArchiveRestore className="w-3.5 h-3.5" />
+                    <span>Aktifkan ({selectedIds.length}) Terpilih</span>
+                  </button>
+                </div>
+              )}
+
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleBulkDelete}
-                  disabled={selectedIds.length === 0}
-                  className="px-3.5 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40"
+                  onClick={handleToggleSelectAll}
+                  className="px-3.5 py-1.5 rounded border border-slate-300 dark:border-white/15 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-medium cursor-pointer"
                 >
-                  Hapus ({selectedIds.length}) Terpilih
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleBulkArchive}
-                  disabled={selectedIds.length === 0}
-                  className="px-3.5 py-1.5 rounded bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1"
-                >
-                  <Archive className="w-3.5 h-3.5" />
-                  <span>Arsipkan ({selectedIds.length}) Terpilih</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleBulkUnarchive}
-                  disabled={selectedIds.length === 0}
-                  className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition cursor-pointer disabled:opacity-40 flex items-center gap-1"
-                >
-                  <ArchiveRestore className="w-3.5 h-3.5" />
-                  <span>Aktifkan ({selectedIds.length}) Terpilih</span>
+                  {selectedIds.length === filteredItems.length && filteredItems.length > 0
+                    ? 'Batal Pilih Semua'
+                    : 'Pilih Semua'}
                 </button>
               </div>
-
-              <button
-                type="button"
-                onClick={handleToggleSelectAll}
-                className="px-3.5 py-1.5 rounded border border-slate-300 dark:border-white/15 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-medium cursor-pointer"
-              >
-                {selectedIds.length === filteredItems.length && filteredItems.length > 0
-                  ? 'Batal Pilih Semua'
-                  : 'Pilih Semua'}
-              </button>
             </div>
           </div>
         </div>
@@ -995,4 +1371,3 @@ export function ModulTopikView({
     </div>
   )
 }
-

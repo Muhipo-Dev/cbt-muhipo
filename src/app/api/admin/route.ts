@@ -48,8 +48,8 @@ export async function GET(request: NextRequest) {
           },
         }),
         prisma.kelas.count(),
-        prisma.mataPelajaran.count(),
-        prisma.soal.count(),
+        prisma.mataPelajaran.count({ where: { status: { not: 'TERHAPUS' } } }),
+        prisma.soal.count({ where: { mataPelajaran: { status: { not: 'TERHAPUS' } } } }),
         prisma.ujian.count(),
         prisma.ujian.count({
           where: {
@@ -994,7 +994,82 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Soft Delete: Pindahkan Topik ke Tempat Sampah (Recycle Bin)
     if (action === 'DELETE_MAPEL' || action === 'DELETE_TOPIK' || action === 'DELETE_BANK_SOAL') {
+      const { id, bankSoalId, mataPelajaranId } = body;
+      const targetId = id || bankSoalId || mataPelajaranId;
+      if (!targetId) {
+        return NextResponse.json({ success: false, message: 'ID Topik / Mapel wajib disertakan' }, { status: 400 });
+      }
+
+      await prisma.mataPelajaran.update({
+        where: { id: targetId },
+        data: { status: 'TERHAPUS' },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Topik berhasil dipindahkan ke Tempat Sampah (Recycle Bin). Anda dapat memulihkannya kapan saja.',
+      });
+    }
+
+    // Soft Delete Massal: Pindahkan banyak topik ke Tempat Sampah
+    if (action === 'BULK_DELETE_MAPEL' || action === 'BULK_DELETE_TOPIK') {
+      const { ids } = body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return NextResponse.json({ success: false, message: 'Daftar ID Topik tidak boleh kosong' }, { status: 400 });
+      }
+
+      await prisma.mataPelajaran.updateMany({
+        where: { id: { in: ids } },
+        data: { status: 'TERHAPUS' },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Berhasil memindahkan ${ids.length} topik terpilih ke Tempat Sampah (Recycle Bin).`,
+      });
+    }
+
+    // Restore / Pulihkan Topik Tunggal dari Tempat Sampah
+    if (action === 'RESTORE_MAPEL' || action === 'RESTORE_TOPIK') {
+      const { id, bankSoalId, mataPelajaranId } = body;
+      const targetId = id || bankSoalId || mataPelajaranId;
+      if (!targetId) {
+        return NextResponse.json({ success: false, message: 'ID Topik / Mapel wajib disertakan' }, { status: 400 });
+      }
+
+      await prisma.mataPelajaran.update({
+        where: { id: targetId },
+        data: { status: 'AKTIF' },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Topik berhasil dipulihkan dan kembali aktif.',
+      });
+    }
+
+    // Restore Massal: Pulihkan banyak topik sekaligus
+    if (action === 'BULK_RESTORE_MAPEL' || action === 'BULK_RESTORE_TOPIK') {
+      const { ids } = body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return NextResponse.json({ success: false, message: 'Daftar ID Topik tidak boleh kosong' }, { status: 400 });
+      }
+
+      await prisma.mataPelajaran.updateMany({
+        where: { id: { in: ids } },
+        data: { status: 'AKTIF' },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Berhasil memulihkan ${ids.length} topik terpilih.`,
+      });
+    }
+
+    // Hapus Permanen Tunggal (Permanent Hard Delete)
+    if (action === 'PERMANENT_DELETE_MAPEL' || action === 'PERMANENT_DELETE_TOPIK') {
       const { id, bankSoalId, mataPelajaranId } = body;
       const targetId = id || bankSoalId || mataPelajaranId;
       if (!targetId) {
@@ -1025,10 +1100,11 @@ export async function POST(request: NextRequest) {
       await prisma.guruMataPelajaran.deleteMany({ where: { mataPelajaranId: targetId } });
       await prisma.mataPelajaran.delete({ where: { id: targetId } });
 
-      return NextResponse.json({ success: true, message: 'Topik / Mata Pelajaran beserta seluruh butir soalnya berhasil dihapus' });
+      return NextResponse.json({ success: true, message: 'Topik beserta seluruh butir soalnya telah dihapus secara permanen.' });
     }
 
-    if (action === 'BULK_DELETE_MAPEL' || action === 'BULK_DELETE_TOPIK') {
+    // Hapus Permanen Massal (Bulk Permanent Delete)
+    if (action === 'BULK_PERMANENT_DELETE_MAPEL' || action === 'BULK_PERMANENT_DELETE_TOPIK') {
       const { ids } = body;
       if (!Array.isArray(ids) || ids.length === 0) {
         return NextResponse.json({ success: false, message: 'Daftar ID Topik tidak boleh kosong' }, { status: 400 });
@@ -1060,7 +1136,44 @@ export async function POST(request: NextRequest) {
         await prisma.mataPelajaran.delete({ where: { id: targetId } });
       }
 
-      return NextResponse.json({ success: true, message: `Berhasil menghapus ${ids.length} topik terpilih` });
+      return NextResponse.json({ success: true, message: `Berhasil menghapus permanen ${ids.length} topik terpilih.` });
+    }
+
+    // Kosongkan Tempat Sampah (Empty Trash)
+    if (action === 'EMPTY_TRASH_MAPEL' || action === 'EMPTY_TRASH_TOPIK') {
+      const deletedTopikList = await prisma.mataPelajaran.findMany({
+        where: { status: 'TERHAPUS' },
+        select: { id: true },
+      });
+      const ids = deletedTopikList.map((t) => t.id);
+
+      for (const targetId of ids) {
+        const soalList = await prisma.soal.findMany({ where: { mataPelajaranId: targetId }, select: { id: true } });
+        const soalIds = soalList.map((s) => s.id);
+        if (soalIds.length > 0) {
+          await prisma.jawabanPeserta.deleteMany({ where: { soalId: { in: soalIds } } });
+          await prisma.opsiJawaban.deleteMany({ where: { soalId: { in: soalIds } } });
+          await prisma.soal.deleteMany({ where: { mataPelajaranId: targetId } });
+        }
+
+        const ujianList = await prisma.ujian.findMany({ where: { mataPelajaranId: targetId }, select: { id: true } });
+        for (const u of ujianList) {
+          const peserta = await prisma.pesertaUjian.findMany({ where: { ujianId: u.id }, select: { id: true } });
+          const pesertaIds = peserta.map((p) => p.id);
+          if (pesertaIds.length > 0) {
+            await prisma.jawabanPeserta.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
+            await prisma.logAktivitasUjian.deleteMany({ where: { pesertaUjianId: { in: pesertaIds } } });
+            await prisma.pesertaUjian.deleteMany({ where: { ujianId: u.id } });
+          }
+          await prisma.ujianKelas.deleteMany({ where: { ujianId: u.id } });
+          await prisma.ujian.delete({ where: { id: u.id } });
+        }
+
+        await prisma.guruMataPelajaran.deleteMany({ where: { mataPelajaranId: targetId } });
+        await prisma.mataPelajaran.delete({ where: { id: targetId } });
+      }
+
+      return NextResponse.json({ success: true, message: `Tempat sampah berhasil dikosongkan (${ids.length} topik dihapus permanen).` });
     }
 
     // --- 4. CRUD GURU ---

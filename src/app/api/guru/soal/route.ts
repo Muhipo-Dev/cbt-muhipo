@@ -136,7 +136,10 @@ export async function GET(request: NextRequest) {
         : {};
 
     const list = await prisma.mataPelajaran.findMany({
-      where: mapelWhereClause,
+      where: {
+        ...mapelWhereClause,
+        status: { not: 'TERHAPUS' },
+      },
       include: {
         gurus: {
           include: {

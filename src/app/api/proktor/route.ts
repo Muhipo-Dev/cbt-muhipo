@@ -90,8 +90,6 @@ export async function GET(request: NextRequest) {
           ].includes(l.aktivitas)
         );
 
-        const latestScreenshotLog = p.logs.find((l: any) => l.fotoBukti);
-
         return {
           pesertaUjianId: p.id,
           siswaId: p.siswa.id,
@@ -107,11 +105,8 @@ export async function GET(request: NextRequest) {
           violationLogs,
           jumlahPelanggaran: violationLogs.length,
           hasViolations: violationLogs.length > 0,
-          latestScreenshot: (latestScreenshotLog as any)?.fotoBukti || null,
-          latestScreenshotTime: latestScreenshotLog?.createdAt || null,
           latestViolationActivity: violationLogs[0]?.aktivitas || null,
           latestViolationDetail: violationLogs[0]?.detail || null,
-          hasLiveScreen: Boolean(global.__cbtLiveScreenStore?.get(p.id) && (Date.now() - (global.__cbtLiveScreenStore?.get(p.id)?.timestamp || 0) < 12000)),
         };
       });
     }

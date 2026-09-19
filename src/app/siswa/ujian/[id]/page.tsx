@@ -73,9 +73,8 @@ export default function LembarUjianPage({
   const [jawabanMap, setJawabanMap] = useState<Record<string, JawabanState>>({});
   const [sisaDetik, setSisaDetik] = useState(0);
 
-  // Security Lock & Screen Sharing State
+  // Security Lock & State
   const [isSecurityUnlocked, setIsSecurityUnlocked] = useState(false);
-  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [violationCount, setViolationCount] = useState(0);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
 
@@ -93,89 +92,6 @@ export default function LembarUjianPage({
   const isSubmittedRef = useRef<boolean>(false);
   const securityUnlockedAtRef = useRef<number | null>(null);
   const lastViolationTimeRef = useRef<number>(0);
-  const hiddenVideoRef = useRef<HTMLVideoElement | null>(null);
-  const latestScreenFrameRef = useRef<string | null>(null);
-
-  // Setup persistent off-screen video element untuk Google Chrome Screen Share Stream
-  useEffect(() => {
-    if (!screenStream) {
-      if (hiddenVideoRef.current) {
-        if (hiddenVideoRef.current.parentNode) {
-          hiddenVideoRef.current.parentNode.removeChild(hiddenVideoRef.current);
-        }
-        hiddenVideoRef.current = null;
-      }
-      return;
-    }
-
-    try {
-      const video = document.createElement('video');
-      video.srcObject = screenStream;
-      video.muted = true;
-      video.autoplay = true;
-      video.playsInline = true;
-      video.setAttribute('playsinline', 'true');
-      video.setAttribute('webkit-playsinline', 'true');
-      video.style.position = 'fixed';
-      video.style.opacity = '0';
-      video.style.pointerEvents = 'none';
-      video.style.zIndex = '-9999';
-      video.style.width = '1px';
-      video.style.height = '1px';
-      video.style.left = '-9999px';
-      video.style.top = '-9999px';
-      document.body.appendChild(video);
-      hiddenVideoRef.current = video;
-
-      const handleLoadedMetadata = () => {
-        video.play().catch(() => {});
-      };
-      video.addEventListener('loadedmetadata', handleLoadedMetadata);
-
-      video.play().catch(() => {});
-
-      return () => {
-        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-        if (video.parentNode) {
-          video.parentNode.removeChild(video);
-        }
-        hiddenVideoRef.current = null;
-      };
-    } catch (e) {
-      console.warn('Gagal setup video stream:', e);
-    }
-  }, [screenStream]);
-
-  // Helper untuk mengekstrak frame gambar aktual dari sharing layar Chrome
-  const getScreenSharingFrame = (): string | null => {
-    try {
-      const video = hiddenVideoRef.current;
-      if (video && video.videoWidth > 0 && video.videoHeight > 0) {
-        const canvas = document.createElement('canvas');
-        const maxW = 960;
-        const maxH = 540;
-        let w = video.videoWidth;
-        let h = video.videoHeight;
-        if (w > maxW || h > maxH) {
-          const ratio = Math.min(maxW / w, maxH / h);
-          w = Math.round(w * ratio);
-          h = Math.round(h * ratio);
-        }
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, w, h);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
-          latestScreenFrameRef.current = dataUrl;
-          return dataUrl;
-        }
-      }
-    } catch (err) {
-      console.warn('Gagal grab screen share frame:', err);
-    }
-    return latestScreenFrameRef.current;
-  };
 
   // 1. Fetch Soal & Status Ujian
   useEffect(() => {
@@ -183,9 +99,6 @@ export default function LembarUjianPage({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
-      if (screenStream) {
-        screenStream.getTracks().forEach((t) => t.stop());
-      }
     };
   }, [ujianId]);
 
@@ -230,74 +143,23 @@ export default function LembarUjianPage({
     }
   };
 
-  // Aktivasi Protokol Keamanan & Entire Screen Sharing Universal (Safari/Chrome/Firefox/Brave/iOS/Android)
-  // Urutan: 1. Masuk Fullscreen & Unlock Audio -> 2. Screen Share Wajib Google Chrome -> 3. Buka Ujian & Cooldown 30 Detik
+  // Aktivasi Protokol Keamanan Ringan (Fullscreen + Audio Alarms Tanpa Screen Capture)
   const handleActivateSecurity = async (): Promise<boolean> => {
     try {
-      // 0. Unlock Web Audio & Speech synthesis (Krusial untuk iOS Safari / Mobile browser)
+      // 0. Unlock Web Audio & Speech synthesis
       cbtSecurityAudio.unlockAudio();
 
-      // 1. Masuk ke mode fullscreen universal secara langsung atas gesture klik user
-      await requestUniversalFullscreen();
-      setIsFullscreen(isCurrentlyFullscreen());
-
-      const devInfo = detectDeviceSecurityInfo();
-
-      // 2. Minta Perekaman / Screen Share Seluruh Layar (Wajib diizinkan pada browser yang mendukung getDisplayMedia)
-      const nav = typeof navigator !== 'undefined' ? navigator : null;
-      const mediaDev = nav?.mediaDevices || (nav as any)?.webkitMediaDevices;
-
-      if (mediaDev && typeof mediaDev.getDisplayMedia === 'function') {
-        try {
-          const stream = await mediaDev.getDisplayMedia({
-            video: {
-              displaySurface: 'monitor', // Paksa monitor / entire screen
-            } as any,
-            audio: false,
-          });
-
-          // Listener jika siswa mematikan screen sharing di tengah ujian
-          const videoTrack = stream.getVideoTracks()[0];
-          if (videoTrack) {
-            videoTrack.onended = () => {
-              // Ambil frame terakhir sebelum stream berakhir
-              getScreenSharingFrame();
-              if (securityUnlockedAtRef.current && Date.now() - securityUnlockedAtRef.current < 5000) {
-                // Diabaikan selama masa 5 detik pertama
-                return;
-              }
-              triggerCheatLog(
-                'SCREEN_SHARE_STOPPED',
-                'Siswa mematikan perekaman / sharing layar'
-              );
-              cbtSecurityAudio.triggerFullWarning(
-                'Peringatan! Berbagi layar telah dihentikan. Segera aktifkan kembali!'
-              );
-              setCheatWarning(
-                'Peringatan: Berbagi layar dihentikan! Pengawas mencatat aktivitas ini.'
-              );
-            };
-          }
-
-          setScreenStream(stream);
-        } catch (mediaErr: any) {
-          // Pengguna membatalkan atau menolak izin di dialog Google Chrome
-          console.warn('Izin screen share ditolak atau dibatalkan:', mediaErr);
-          throw new Error('Anda wajib mengizinkan "Berbagi Seluruh Layar (Entire Screen)" pada Google Chrome untuk dapat memulai ujian.');
-        }
-      }
-
-      // 3. Pastikan fullscreen aktif kembali setelah dialog perizinan browser ditutup
+      // 1. Masuk ke mode fullscreen universal
       await requestUniversalFullscreen();
       const fullscreenActive = isCurrentlyFullscreen();
       setIsFullscreen(fullscreenActive);
 
-      // Pada PC/Laptop, jika fullscreen tidak aktif
+      const devInfo = detectDeviceSecurityInfo();
       if (devInfo.hasFullscreen && !fullscreenActive && !devInfo.isMobile && !devInfo.isTablet) {
         throw new Error('Anda wajib mengizinkan Mode Layar Penuh (Fullscreen) untuk dapat memulai ujian.');
       }
 
-      // 4. Buka lembar ujian dan aktifkan grace period 5 detik bebas pelanggaran
+      // 2. Buka lembar ujian dan aktifkan grace period 5 detik bebas pelanggaran
       securityUnlockedAtRef.current = Date.now();
       setIsSecurityUnlocked(true);
       setCooldownRemaining(5);
@@ -345,154 +207,6 @@ export default function LembarUjianPage({
     };
   }, [sisaDetik, loading]);
 
-  // 2b. Realtime Live Screen Streaming ke Proktor (Dual Engine: Chrome Desktop Stream & Mobile Active Canvas)
-  useEffect(() => {
-    if (!isSecurityUnlocked || !pesertaUjianId || isSubmittedRef.current) return;
-
-    let isSending = false;
-    const sendLiveFrame = async () => {
-      if (isSending || isSubmittedRef.current) return;
-      isSending = true;
-
-      try {
-        const devInfo = detectDeviceSecurityInfo();
-        let frameBase64: string | null = getScreenSharingFrame();
-        let isStreamNative = Boolean(frameBase64);
-
-        // 2. Fallback Canvas Active State Realtime untuk Mobile Android & iOS (jika tanpa share screen)
-        if (!frameBase64) {
-          const canvas = document.createElement('canvas');
-          canvas.width = 640;
-          canvas.height = 360;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            // Background Dashboard Gelap Elegan
-            const grad = ctx.createLinearGradient(0, 0, 640, 360);
-            grad.addColorStop(0, '#0f172a');
-            grad.addColorStop(1, '#020617');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, 640, 360);
-
-            // Header Bar
-            ctx.fillStyle = '#059669';
-            ctx.fillRect(0, 0, 640, 40);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 14px sans-serif';
-            ctx.fillText(`CBT LIVE PROKTOR: ${ujianInfo?.judul || 'Ujian Aktif'}`, 15, 25);
-
-            // Indikator Live
-            ctx.fillStyle = '#ef4444';
-            ctx.beginPath();
-            ctx.arc(615, 20, 6, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 10px sans-serif';
-            ctx.fillText('LIVE', 575, 24);
-
-            // Kotak Status Pengerjaan Realtime
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-            ctx.fillRect(15, 52, 610, 160);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(15, 52, 610, 160);
-
-            // Info Siswa & Status
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '12px sans-serif';
-            ctx.fillText('Nama Siswa:', 28, 80);
-            ctx.fillStyle = '#38bdf8';
-            ctx.font = 'bold 13px sans-serif';
-            ctx.fillText(`${ujianInfo?.namaSiswa || 'Siswa'} (${ujianInfo?.nomorPeserta || '-'})`, 125, 80);
-
-            ctx.fillStyle = '#94a3b8';
-            ctx.fillText('Sedang Buka:', 28, 110);
-            ctx.fillStyle = '#fbbf24';
-            ctx.font = 'bold 14px sans-serif';
-            ctx.fillText(`Soal No. ${currentIndex + 1} dari ${soalList.length}`, 125, 110);
-
-            const currJawaban = jawabanMap[soalList[currentIndex]?.id];
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '12px sans-serif';
-            ctx.fillText('Status Jawaban:', 28, 140);
-            ctx.fillStyle = currJawaban?.jawabanDipilih ? '#34d399' : '#f87171';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.fillText(
-              currJawaban?.jawabanDipilih
-                ? `Sudah Dijawab ${currJawaban.raguRagu ? '(Ragu-Ragu)' : ''}`
-                : 'Belum Dijawab (Sedang Membaca)',
-              125,
-              140
-            );
-
-            ctx.fillStyle = '#94a3b8';
-            ctx.fillText('Sisa Waktu:', 28, 170);
-            ctx.fillStyle = sisaDetik < 300 ? '#f87171' : '#f8fafc';
-            ctx.font = 'bold 13px monospace';
-            ctx.fillText(formatTime(sisaDetik), 125, 170);
-
-            ctx.fillStyle = '#94a3b8';
-            ctx.fillText('Perangkat:', 28, 195);
-            ctx.fillStyle = '#a7f3d0';
-            ctx.font = '11px monospace';
-            ctx.fillText(devInfo.deviceName, 125, 195);
-
-            // Mini Progress Tracker Bar
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-            ctx.fillRect(15, 225, 610, 30);
-            const answeredCount = Object.values(jawabanMap).filter((j) => Boolean(j.jawabanDipilih)).length;
-            const progressRatio = soalList.length > 0 ? answeredCount / soalList.length : 0;
-            ctx.fillStyle = '#10b981';
-            ctx.fillRect(15, 225, Math.floor(610 * progressRatio), 30);
-
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.fillText(`Progres: ${answeredCount} / ${soalList.length} Soal Dijawab (${Math.round(progressRatio * 100)}%)`, 25, 245);
-
-            // Watermark Security Status
-            ctx.fillStyle = '#64748b';
-            ctx.font = '10px monospace';
-            ctx.fillText(`Sync Aktif: ${new Date().toLocaleTimeString('id-ID')} | Security Guard Anti-Cheat Muhipo`, 15, 345);
-
-            frameBase64 = canvas.toDataURL('image/jpeg', 0.5);
-            isStreamNative = false;
-          }
-        }
-
-        if (frameBase64) {
-          const isLandscape = typeof window !== 'undefined' && window.innerWidth > window.innerHeight;
-          await fetch('/api/proktor/screen', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              pesertaUjianId,
-              screenImage: frameBase64,
-              browser: navigator.userAgent.includes('Chrome') ? 'Google Chrome' : 'Safari / WebKit',
-              device: devInfo.deviceName,
-              soalAktifNomor: currentIndex + 1,
-              totalSoal: soalList.length,
-              sisaDetik,
-              isStreamNative,
-              orientation: isLandscape ? 'landscape' : 'portrait',
-            }),
-          });
-        }
-      } catch (err) {
-        // Silent
-      } finally {
-        isSending = false;
-      }
-    };
-
-    // Broadcast frame pertama setelah 1.5 detik, lalu ulangi tiap 2.5 detik
-    const initialTimer = setTimeout(sendLiveFrame, 1500);
-    const streamInterval = setInterval(sendLiveFrame, 2500);
-
-    return () => {
-      clearTimeout(initialTimer);
-      clearInterval(streamInterval);
-    };
-  }, [isSecurityUnlocked, pesertaUjianId, screenStream, currentIndex, jawabanMap, sisaDetik, soalList.length, ujianInfo]);
-
   // 3. Anti-Cheat Engine Lintas Platform (Tab switch, Window blur, Keyboard Lockdown, Audio alarms)
   useEffect(() => {
     if (!isSecurityUnlocked) return;
@@ -529,8 +243,6 @@ export default function LembarUjianPage({
       if (securityUnlockedAtRef.current && Date.now() - securityUnlockedAtRef.current < 5000) {
         return;
       }
-      // Jika dokumen tersembunyi (ganti tab), visibilitychange akan menangani TAB_SWITCH_ALERT
-      // Jika dokumen masih terlihat tapi kehilangan fokus, ini adalah perpindahan aplikasi (Alt+Tab, membuka program lain)
       const activityType = document.hidden ? 'TAB_SWITCH_ALERT' : 'APP_SWITCH_ALERT';
       const detailMsg = document.hidden
         ? 'Siswa berpindah tab browser'
@@ -561,7 +273,6 @@ export default function LembarUjianPage({
         return;
       }
       const devInfo = detectDeviceSecurityInfo();
-      // Pada iPhone Safari fullscreen API tidak didukung native sehingga tidak memicu false-positive
       if (!inFullscreen && devInfo.hasFullscreen) {
         triggerCheatLog('FULLSCREEN_EXIT', 'Siswa keluar dari mode layar penuh (Lock Browser)');
         cbtSecurityAudio.triggerFullWarning(
@@ -604,110 +315,7 @@ export default function LembarUjianPage({
       window.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('copy', handleCopy);
     };
-  }, [isSecurityUnlocked, pesertaUjianId, screenStream, ujianInfo]);
-
-  // Helper untuk mengambil screenshot frame saat terjadi pelanggaran (Dual-Mode: Stream & Canvas Fallback)
-  const captureScreenSnapshot = async (aktivitasText?: string, detailText?: string): Promise<string | null> => {
-    try {
-      // 1. Ambil frame aktual dari Google Chrome screen share (live atau frame snapshot terakhir)
-      let frame = getScreenSharingFrame();
-      if (!frame && latestScreenFrameRef.current) {
-        frame = latestScreenFrameRef.current;
-      }
-      if (frame) {
-        return frame;
-      }
-
-      // 2. Fallback Universal untuk Android & iOS: Render Bukti Visual Snapshot Pelanggaran
-      const canvas = document.createElement('canvas');
-      canvas.width = 640;
-      canvas.height = 360;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        // Background Gelap Exam Card
-        const grad = ctx.createLinearGradient(0, 0, 640, 360);
-        grad.addColorStop(0, '#0f172a');
-        grad.addColorStop(1, '#020617');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 640, 360);
-
-        // Header Merah Peringatan
-        ctx.fillStyle = '#dc2626';
-        ctx.fillRect(0, 0, 640, 45);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText('BUKTI TANGKAPAN SISTEM CBT: DETEKSI PELANGGARAN', 20, 28);
-
-        // Border Frame
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(4, 4, 632, 352);
-
-        // Informasi Peserta
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '13px sans-serif';
-        ctx.fillText('Nama Peserta:', 25, 80);
-        ctx.fillStyle = '#f8fafc';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(`${ujianInfo?.namaSiswa || 'Peserta Ujian'} (${ujianInfo?.nomorPeserta || '-'})`, 150, 80);
-
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '13px sans-serif';
-        ctx.fillText('Mata Pelajaran:', 25, 110);
-        ctx.fillStyle = '#38bdf8';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(`${ujianInfo?.judul || 'Ujian CBT'} - ${ujianInfo?.mataPelajaran || ''}`, 150, 110);
-
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '13px sans-serif';
-        ctx.fillText('Jenis Aktivitas:', 25, 140);
-        ctx.fillStyle = '#f87171';
-        ctx.font = 'bold 14px monospace';
-        ctx.fillText(`${aktivitasText || 'PELANGGARAN_KEAMANAN'}`, 150, 140);
-
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '13px sans-serif';
-        ctx.fillText('Keterangan Log:', 25, 170);
-        ctx.fillStyle = '#fca5a5';
-        ctx.font = '13px sans-serif';
-        ctx.fillText(`${detailText || 'Siswa meninggalkan layar ujian atau berpindah aplikasi'}`, 150, 170);
-
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '13px sans-serif';
-        ctx.fillText('Waktu Kejadian:', 25, 200);
-        ctx.fillStyle = '#fbbf24';
-        ctx.font = 'bold 13px monospace';
-        ctx.fillText(`${new Date().toLocaleString('id-ID')} WIB`, 150, 200);
-
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '13px sans-serif';
-        ctx.fillText('Perangkat Klien:', 25, 230);
-        ctx.fillStyle = '#a7f3d0';
-        ctx.font = '13px monospace';
-        ctx.fillText(`${navigator.userAgent.substring(0, 50)}...`, 150, 230);
-
-        // Watermark Box
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
-        ctx.fillRect(25, 260, 590, 70);
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(25, 260, 590, 70);
-
-        ctx.fillStyle = '#f87171';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('STATUS: TERDETEKSI KELUAR DARI HALAMAN UJIAN (SCREEN / TAB SWITCH / BLUR)', 40, 290);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.font = '11px sans-serif';
-        ctx.fillText('Terekam otomatis oleh Anti-Cheat Engine CBT SMA Muhammadiyah 1 Ponorogo.', 40, 312);
-
-        return canvas.toDataURL('image/jpeg', 0.6);
-      }
-    } catch (err) {
-      console.warn('Gagal capture screen frame:', err);
-    }
-    return null;
-  };
+  }, [isSecurityUnlocked, pesertaUjianId, ujianInfo]);
 
   const triggerCheatLog = async (aktivitas: string, detail: string) => {
     // 1. Masa penyesuaian 5 detik pertama: bypass semua pelanggaran
@@ -724,11 +332,10 @@ export default function LembarUjianPage({
     lastViolationTimeRef.current = now;
 
     try {
-      const fotoBukti = await captureScreenSnapshot(aktivitas, detail);
       const res = await fetch('/api/siswa/ujian/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pesertaUjianId, aktivitas, detail, fotoBukti }),
+        body: JSON.stringify({ pesertaUjianId, aktivitas, detail }),
       });
       const resJson = await res.json();
       const currentViolation = resJson.data?.totalPelanggaran ?? 0;
@@ -847,11 +454,6 @@ export default function LembarUjianPage({
         method: 'POST',
       });
       const data = await res.json();
-
-      // Hentikan screen stream jika aktif
-      if (screenStream) {
-        screenStream.getTracks().forEach((track) => track.stop());
-      }
 
       // Keluar dari layar penuh secara otomatis
       await exitUniversalFullscreen();

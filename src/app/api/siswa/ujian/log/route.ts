@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { pesertaUjianId, aktivitas, detail, fotoBukti } = body;
+    const { pesertaUjianId, aktivitas, detail } = body;
 
     const logEntry = await prisma.logAktivitasUjian.create({
       data: {
@@ -18,7 +18,6 @@ export async function POST(request: NextRequest) {
         pesertaUjianId: pesertaUjianId || null,
         aktivitas: aktivitas || 'SECURITY_ALERT',
         detail: detail || 'Aktivitas mencurigakan / pergantian tab / keluar fullscreen',
-        fotoBukti: fotoBukti || null,
       } as any,
     });
 

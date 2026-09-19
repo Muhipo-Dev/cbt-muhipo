@@ -20,7 +20,9 @@ export function ModulImportView({
   onRefresh,
   showNotification,
 }: ModulImportViewProps) {
-  const items = mapelList && mapelList.length > 0 ? mapelList : bankSoalList || []
+  const items = (mapelList && mapelList.length > 0 ? mapelList : bankSoalList || []).filter(
+    (m: any) => m.status !== 'TERHAPUS'
+  )
   const [selectedMapelId, setSelectedMapelId] = useState(items[0]?.id || '')
   const [parsedItems, setParsedItems] = useState<any[]>([])
   const [fileName, setFileName] = useState('')

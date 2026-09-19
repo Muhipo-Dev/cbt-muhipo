@@ -23,7 +23,9 @@ export function TesTambahView({
   onSuccess,
   showNotification,
 }: TesTambahViewProps) {
-  const rawItems = mapelList && mapelList.length > 0 ? mapelList : (bankSoalList || [])
+  const rawItems = (mapelList && mapelList.length > 0 ? mapelList : (bankSoalList || [])).filter(
+    (m: any) => m.status !== 'TERHAPUS'
+  )
   // Urutkan topik aktif di atas dan tandai yang terarsip
   const items = [...rawItems].sort((a, b) => {
     if (a.status === 'NONAKTIF' && b.status !== 'NONAKTIF') return 1

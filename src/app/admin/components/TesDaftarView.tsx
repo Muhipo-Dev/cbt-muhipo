@@ -39,7 +39,9 @@ export function TesDaftarView({
   showNotification,
   showConfirm,
 }: TesDaftarViewProps) {
-  const itemsMapel = mapelList && mapelList.length > 0 ? mapelList : (bankSoalList || [])
+  const itemsMapel = (mapelList && mapelList.length > 0 ? mapelList : (bankSoalList || [])).filter(
+    (m: any) => m.status !== 'TERHAPUS'
+  )
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('ALL')
   const [selectedIds, setSelectedIds] = useState<string[]>([])

@@ -47,7 +47,9 @@ export function ModulDaftarView({
   showNotification,
   showConfirm,
 }: ModulDaftarViewProps) {
-  const items = mapelList && mapelList.length > 0 ? mapelList : bankSoalList || []
+  const items = (mapelList && mapelList.length > 0 ? mapelList : bankSoalList || []).filter(
+    (m: any) => m.status !== 'TERHAPUS'
+  )
 
   // Ambil list modul unik
   const rawModulNames = Array.from(

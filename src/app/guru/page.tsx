@@ -141,7 +141,7 @@ export default function GuruDashboardPage() {
     acakOpsi: true,
   });
 
-  // Monitoring Pengerjaan Peserta / Pengawas Live State (Auto-Refresh 2 Detik)
+  // Monitoring Pengerjaan Peserta / Pengawas Live State (Auto-Refresh 3 Detik)
   const [proktorData, setProktorData] = useState<any>(null);
   const [selectedProktorUjianId, setSelectedProktorUjianId] = useState('');
   const [selectedProktorKelas, setSelectedProktorKelas] = useState('ALL');
@@ -149,7 +149,6 @@ export default function GuruDashboardPage() {
   const [extraTimeModal, setExtraTimeModal] = useState<any>(null);
   const [extraMinutes, setExtraMinutes] = useState(15);
   const [violationScreenModal, setViolationScreenModal] = useState<any>(null);
-  const [liveScreenFeed, setLiveScreenFeed] = useState<any>(null);
   const [isLiveActive, setIsLiveActive] = useState(true);
   const [lastLiveUpdated, setLastLiveUpdated] = useState<Date>(new Date());
 
@@ -1008,30 +1007,6 @@ export default function GuruDashboardPage() {
     return () => clearInterval(interval);
   }, [activeTab, selectedProktorUjianId, proktorFilterHari, isLiveActive]);
 
-  // Realtime Polling Layar Siswa (Active Screen Stream) jika modal inspeksi layar dibuka
-  useEffect(() => {
-    if (!violationScreenModal?.pesertaUjianId) {
-      setLiveScreenFeed(null);
-      return;
-    }
-
-    const fetchLiveFeed = async () => {
-      try {
-        const res = await fetch(`/api/proktor/screen?pesertaUjianId=${violationScreenModal.pesertaUjianId}`);
-        const json = await res.json();
-        if (json.success && json.data) {
-          setLiveScreenFeed(json.data);
-        }
-      } catch (err) {
-        // silent
-      }
-    };
-
-    fetchLiveFeed();
-    const liveInterval = setInterval(fetchLiveFeed, 1500);
-    return () => clearInterval(liveInterval);
-  }, [violationScreenModal?.pesertaUjianId]);
-
   // Muat data proktor saat tab proktor_live dibuka atau filter berubah
   useEffect(() => {
     if (activeTab === 'proktor_live') {
@@ -1060,6 +1035,32 @@ export default function GuruDashboardPage() {
           }
         } catch (e) {
           showNotification('Error', 'Gagal reset status ujian', 'error');
+        }
+      }
+    );
+  };
+
+  // Aksi Pengawas: Reset Peringatan / Pelanggaran Peserta
+  const handleResetPelanggaran = async (pesertaUjianId: string, namaSiswa: string) => {
+    showConfirm(
+      'Reset Peringatan Siswa',
+      `Bersihkan catatan dan kembalikan counter pelanggaran siswa "${namaSiswa}" menjadi 0?`,
+      async () => {
+        try {
+          const res = await fetch('/api/proktor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'RESET_PELANGGARAN', pesertaUjianId }),
+          });
+          const json = await res.json();
+          if (json.success) {
+            showNotification('Reset Peringatan', json.message, 'success');
+            fetchProktorData(selectedProktorUjianId);
+          } else {
+            showNotification('Gagal', json.message || 'Gagal reset peringatan siswa', 'error');
+          }
+        } catch (e) {
+          showNotification('Error', 'Gagal reset peringatan siswa', 'error');
         }
       }
     );
@@ -1745,25 +1746,23 @@ export default function GuruDashboardPage() {
                             <td className="py-3 px-4 text-center">{p.jumlahJawaban} Soal</td>
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                                {/* Tombol Lihat Layar Siswa (Live Realtime Monitor & Snapshot) */}
+                                {/* Tombol Lihat Log & Peringatan Siswa */}
                                 <button
                                   type="button"
                                   onClick={() => setViolationScreenModal(p)}
                                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition shadow-xs ${
-                                    p.hasLiveScreen
-                                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30'
-                                      : p.latestScreenshot || p.jumlahPelanggaran > 0
-                                      ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+                                    p.jumlahPelanggaran > 0 || p.status === 'TERKUNCI'
+                                      ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20'
                                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                   }`}
-                                  title="Pantau Layar Realtime & Log Siswa"
+                                  title="Lihat Riwayat Log & Peringatan Siswa"
                                 >
-                                  {p.hasLiveScreen ? (
-                                    <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                                  {p.jumlahPelanggaran > 0 ? (
+                                    <ShieldAlert className="w-3.5 h-3.5 text-white" />
                                   ) : (
-                                    <Monitor className="w-3.5 h-3.5" />
+                                    <Eye className="w-3.5 h-3.5" />
                                   )}
-                                  <span>{p.hasLiveScreen ? 'Live Layar' : 'Lihat Layar'}</span>
+                                  <span>{p.jumlahPelanggaran > 0 ? `${p.jumlahPelanggaran}x Peringatan` : 'Lihat Log'}</span>
                                 </button>
 
                                 <button
@@ -4120,21 +4119,25 @@ export default function GuruDashboardPage() {
         </div>
       )}
 
-      {/* Modal Inspeksi Layar Pelanggaran Siswa */}
+      {/* Modal Log & Peringatan Siswa */}
       {violationScreenModal && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 text-xs max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-200 dark:border-white/10">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                  <Monitor className="w-5 h-5" />
+                  <ShieldAlert className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span>Inspeksi Layar Siswa: {violationScreenModal.name}</span>
-                    {violationScreenModal.jumlahPelanggaran > 0 && (
+                    <span>Log Aktivitas & Peringatan: {violationScreenModal.name}</span>
+                    {violationScreenModal.jumlahPelanggaran > 0 ? (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white">
                         {violationScreenModal.jumlahPelanggaran} Pelanggaran
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        Tertib (0 Pelanggaran)
                       </span>
                     )}
                   </h3>
@@ -4145,106 +4148,28 @@ export default function GuruDashboardPage() {
               </div>
               <button
                 onClick={() => setViolationScreenModal(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold p-1"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold p-1 text-sm"
               >
                 ✕
               </button>
             </div>
 
-            {/* Tab/Switcher Tampilan: Layar Realtime Aktif vs Bukti Pelanggaran Terakhir */}
-            <div className="space-y-3">
-              {/* Header Live Feed */}
-              <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-2xl border border-slate-200 dark:border-white/10">
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-3 w-3">
-                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${liveScreenFeed?.isOnline ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                    <span className={`relative inline-flex rounded-full h-3 w-3 ${liveScreenFeed?.isOnline ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                  </span>
-                  <span className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
-                    <span>{liveScreenFeed?.isOnline ? '🔴 LIVE MONITORING AKTIF' : 'STATUS TERAKHIR PESERTA'}</span>
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                  {liveScreenFeed ? (
-                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10">
-                      {liveScreenFeed.browser} • {liveScreenFeed.device}
-                    </span>
-                  ) : (
-                    <span>Menghubungkan ke layar siswa...</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Tampilan Feed Layar Realtime */}
-              {liveScreenFeed?.screenImage ? (
-                <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-500/50 shadow-xl bg-black group">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={liveScreenFeed.screenImage}
-                    alt={`Layar Aktif ${violationScreenModal.name}`}
-                    className="w-full h-auto max-h-[380px] object-contain bg-slate-950 mx-auto"
-                  />
-                  <div className="absolute bottom-2 left-2 right-2 p-2 rounded-xl bg-slate-950/85 backdrop-blur-md text-white text-[11px] flex justify-between items-center border border-white/10">
-                    <div className="flex items-center gap-2 font-mono">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>
-                        {liveScreenFeed.isStreamNative ? 'Native Chrome Screen Stream' : 'Mobile Active Exam Guard'} • Update: {Math.round(liveScreenFeed.ageMs / 1000)}s lalu
-                      </span>
-                    </div>
-                    <a
-                      href={liveScreenFeed.screenImage}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold shrink-0 ml-2 shadow-xs transition cursor-pointer"
-                    >
-                      Buka Penuh
-                    </a>
-                  </div>
-                </div>
-              ) : violationScreenModal.latestScreenshot ? (
-                <div className="relative rounded-2xl overflow-hidden border-2 border-amber-500/50 shadow-lg bg-black group">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={violationScreenModal.latestScreenshot}
-                    alt={`Layar Pelanggaran ${violationScreenModal.name}`}
-                    className="w-full h-auto max-h-[360px] object-contain bg-slate-950 mx-auto"
-                  />
-                  <div className="absolute bottom-2 left-2 right-2 p-2 rounded-xl bg-slate-950/80 backdrop-blur-sm text-white text-[11px] flex justify-between items-center">
-                    <span className="font-mono truncate">
-                      ⚠ Snapshot Tersimpan: {violationScreenModal.latestViolationDetail || 'Terdeteksi berpindah layar'}
-                    </span>
-                    <a
-                      href={violationScreenModal.latestScreenshot}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-[10px] font-bold shrink-0 ml-2"
-                    >
-                      Buka Penuh
-                    </a>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 space-y-2">
-                  <Monitor className="w-10 h-10 text-slate-400 opacity-50 mx-auto animate-pulse" />
-                  <p className="font-semibold text-xs text-slate-700 dark:text-slate-300">
-                    Menunggu koneksi feed layar siswa aktif...
-                  </p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                    Jika siswa menggunakan <b>Google Chrome</b> di Laptop/PC dengan screen share aktif, feed monitor akan langsung mengalir secara realtime. Di perangkat Mobile Android/iOS, sistem memancarkan visual status ujian siswa secara otomatis.
-                  </p>
-                </div>
-              )}
-            </div>
-
             {/* Riwayat Log Pelanggaran Siswa */}
-            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-white/10">
-              <span className="font-bold text-slate-800 dark:text-slate-200 block">
-                Riwayat Log Aktivitas & Peringatan:
-              </span>
-              <div className="max-h-44 overflow-y-auto space-y-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-800 dark:text-slate-200">
+                  Daftar Rekam Jejak Aktivitas:
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Total Log: {violationScreenModal.logsTerakhir?.length || 0}
+                </span>
+              </div>
+              <div className="max-h-72 overflow-y-auto space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10">
                 {(!violationScreenModal.logsTerakhir || violationScreenModal.logsTerakhir.length === 0) ? (
-                  <p className="text-center text-[11px] text-slate-400 py-3">Tidak ada catatan aktivitas mencurigakan.</p>
+                  <div className="text-center py-8 text-slate-400 space-y-1">
+                    <p className="font-semibold">Tidak ada catatan aktivitas mencurigakan.</p>
+                    <p className="text-[10.5px]">Siswa tertib mengerjakan ujian di dalam aplikasi.</p>
+                  </div>
                 ) : (
                   violationScreenModal.logsTerakhir.map((log: any, idx: number) => {
                     const isViolation = [
@@ -4252,7 +4177,6 @@ export default function GuruDashboardPage() {
                       'APP_SWITCH_ALERT',
                       'WINDOW_BLUR',
                       'FULLSCREEN_EXIT',
-                      'SCREEN_SHARE_STOPPED',
                       'KEYBOARD_SHORTCUT_VIOLATION',
                       'SECURITY_ALERT',
                     ].includes(log.aktivitas);
@@ -4260,17 +4184,30 @@ export default function GuruDashboardPage() {
                     return (
                       <div
                         key={log.id || idx}
-                        className={`p-2 rounded-lg text-[11px] flex justify-between items-start gap-2 ${
+                        className={`p-2.5 rounded-xl text-[11px] flex justify-between items-start gap-2 ${
                           isViolation
                             ? 'bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/50 text-rose-800 dark:text-rose-200'
-                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
+                            : 'bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-white/5 text-slate-700 dark:text-slate-300'
                         }`}
                       >
                         <div className="min-w-0 flex-1">
-                          <span className="font-bold font-mono uppercase text-[10px] block">
-                            {log.aktivitas}
-                          </span>
-                          <p className="text-[10.5px] mt-0.5 truncate">{log.detail || '-'}</p>
+                          <div className="flex items-center gap-1.5">
+                            {isViolation ? (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-500 text-white uppercase tracking-wider">
+                                Pelanggaran
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                Info
+                              </span>
+                            )}
+                            <span className="font-bold font-mono text-[10.5px]">
+                              {log.aktivitas}
+                            </span>
+                          </div>
+                          <p className="text-[10.5px] mt-1 text-slate-600 dark:text-slate-300">
+                            {log.detail || '-'}
+                          </p>
                         </div>
                         <span className="text-[10px] text-slate-400 font-mono shrink-0">
                           {new Date(log.createdAt).toLocaleTimeString('id-ID')}
@@ -4291,6 +4228,18 @@ export default function GuruDashboardPage() {
               >
                 Tutup
               </button>
+              {violationScreenModal.jumlahPelanggaran > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleResetPelanggaran(violationScreenModal.pesertaUjianId, violationScreenModal.name);
+                    setViolationScreenModal(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold cursor-pointer shadow-md shadow-amber-600/20"
+                >
+                  Reset Peringatan Siswa
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -4299,7 +4248,7 @@ export default function GuruDashboardPage() {
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold cursor-pointer shadow-md shadow-rose-600/20"
               >
-                Reset Login Siswa
+                Reset Sesi / Login
               </button>
             </div>
           </div>
