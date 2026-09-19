@@ -47,6 +47,9 @@ export function TesDaftarView({
   )
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('ALL')
+  const [filterModul, setFilterModul] = useState('SEMUA')
+  const [entriesPerPage, setEntriesPerPage] = useState(10)
+  const [currentPage, setCurrentPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingUjian, setEditingUjian] = useState<any>(null)
@@ -336,12 +339,21 @@ export function TesDaftarView({
     showNotification('Berhasil', `Berhasil mengekspor ${rows.length} jadwal tes ke Excel.`, 'success')
   }
 
+  const rawModulNames = Array.from(
+    new Set([
+      'SEMUA',
+      ...(itemsMapel || []).map((m: any) => m.namaModul || m.modul?.nama).filter(Boolean),
+    ])
+  )
+
   const filtered = (jadwalList || []).filter((u) => {
     const mapelName = u.mataPelajaran?.nama || u.bankSoal?.nama || ''
+    const modulName = u.mataPelajaran?.namaModul || u.mataPelajaran?.modul?.nama || ''
     const matchSearch =
       u.judul?.toLowerCase().includes(search.toLowerCase()) ||
       u.kodeUjian?.toLowerCase().includes(search.toLowerCase()) ||
-      mapelName.toLowerCase().includes(search.toLowerCase())
+      mapelName.toLowerCase().includes(search.toLowerCase()) ||
+      modulName.toLowerCase().includes(search.toLowerCase())
 
     let matchStatus = true
     if (filterStatus === 'AKTIF') {
@@ -352,8 +364,19 @@ export function TesDaftarView({
       matchStatus = u.status === filterStatus
     }
 
-    return matchSearch && matchStatus
+    let matchModul = true
+    if (filterModul !== 'SEMUA') {
+      matchModul = modulName.toLowerCase() === filterModul.toLowerCase()
+    }
+
+    return matchSearch && matchStatus && matchModul
   })
+
+  // Pagination calculation
+  const totalPages = Math.ceil(filtered.length / (entriesPerPage === 999 ? (filtered.length || 1) : entriesPerPage)) || 1
+  const paginatedList = entriesPerPage === 999
+    ? filtered
+    : filtered.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage)
 
   return (
     <div className="space-y-4">
@@ -402,13 +425,16 @@ export function TesDaftarView({
       </div>
 
       {/* Filter & Search */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div className="relative sm:col-span-2">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setCurrentPage(1)
+            }}
             placeholder="Cari kode ujian, judul tes, atau nama topik mapel..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
           />
@@ -416,11 +442,32 @@ export function TesDaftarView({
 
         <div>
           <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            value={filterModul}
+            onChange={(e) => {
+              setFilterModul(e.target.value)
+              setCurrentPage(1)
+            }}
             className="w-full px-3.5 py-2.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
           >
-            <option value="ALL">Semua Jadwal (Aktif & Arsip)</option>
+            <option value="SEMUA">Semua Modul Kategori</option>
+            {rawModulNames.filter(m => m !== 'SEMUA').map((m) => (
+              <option key={m} value={m}>
+                Modul: {m}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <select
+            value={filterStatus}
+            onChange={(e) => {
+              setFilterStatus(e.target.value)
+              setCurrentPage(1)
+            }}
+            className="w-full px-3.5 py-2.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+          >
+            <option value="ALL">Semua Status (Aktif & Arsip)</option>
             <option value="AKTIF">Hanya Jadwal Aktif</option>
             <option value="DIJADWALKAN">Status: Dijadwalkan</option>
             <option value="SEDANG_BERJALAN">Status: Sedang Berjalan</option>
@@ -453,14 +500,14 @@ export function TesDaftarView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
-              {filtered.length === 0 ? (
+              {paginatedList.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-12 text-slate-400 font-medium">
                     Tidak ada jadwal tes yang sesuai filter.
                   </td>
                 </tr>
               ) : (
-                filtered.map((u) => {
+                paginatedList.map((u) => {
                   const mapelObj = u.mataPelajaran || u.bankSoal
                   const isArchived = u.status === 'NONAKTIF'
                   const isSelected = selectedIds.includes(u.id)
@@ -559,9 +606,9 @@ export function TesDaftarView({
           </table>
         </div>
 
-        {/* Table Bottom Bulk Actions */}
-        <div className="p-3 bg-slate-50/80 dark:bg-slate-950/60 border-t border-slate-200/80 dark:border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2">
+        {/* Table Bottom Pagination & Bulk Actions */}
+        <div className="p-3 bg-slate-50/80 dark:bg-slate-950/60 border-t border-slate-200/80 dark:border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={handleBulkDelete}
@@ -590,17 +637,58 @@ export function TesDaftarView({
               <ArchiveRestore className="w-3.5 h-3.5" />
               <span>Aktifkan ({selectedIds.length}) Terpilih</span>
             </button>
+
+            <button
+              type="button"
+              onClick={handleToggleSelectAll}
+              className="px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-white/15 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
+            >
+              {selectedIds.length === filtered.length && filtered.length > 0
+                ? 'Batal Pilih Semua'
+                : 'Pilih Semua'}
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={handleToggleSelectAll}
-            className="px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-white/15 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
-          >
-            {selectedIds.length === filtered.length && filtered.length > 0
-              ? 'Batal Pilih Semua'
-              : 'Pilih Semua'}
-          </button>
+          {/* Pagination Controls */}
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 dark:text-slate-400 text-xs">
+              Menampilkan {paginatedList.length} dari {filtered.length} tes (Halaman {currentPage} / {totalPages})
+            </span>
+
+            <select
+              value={entriesPerPage}
+              onChange={(e) => {
+                setEntriesPerPage(Number(e.target.value))
+                setCurrentPage(1)
+              }}
+              className="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer"
+            >
+              <option value={10}>10 / hal</option>
+              <option value={25}>25 / hal</option>
+              <option value={50}>50 / hal</option>
+              <option value={100}>100 / hal</option>
+              <option value={999}>Semua</option>
+            </select>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

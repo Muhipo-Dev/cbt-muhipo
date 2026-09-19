@@ -53,7 +53,7 @@ export function PenggunaAksesView({
 
   // Password reset modal
   const [resetModal, setResetModal] = useState<any>(null)
-  const [newPasswordInput, setNewPasswordInput] = useState('123456')
+  const [newPasswordInput, setNewPasswordInput] = useState('')
 
   const fetchUsers = async () => {
     try {
@@ -164,6 +164,12 @@ export function PenggunaAksesView({
 
   const handleResetPassword = async () => {
     if (!resetModal) return
+    const pass = newPasswordInput.trim()
+    if (!pass) {
+      showNotification('Peringatan', 'Silakan masukkan kata sandi baru.', 'warning')
+      return
+    }
+
     try {
       const res = await fetch('/api/admin', {
         method: 'POST',
@@ -171,13 +177,14 @@ export function PenggunaAksesView({
         body: JSON.stringify({
           action: 'RESET_PASSWORD',
           userId: resetModal.id,
-          newPassword: newPasswordInput,
+          newPassword: pass,
         }),
       })
       const json = await res.json()
       if (json.success) {
         showNotification('Reset Password', json.message, 'success')
         setResetModal(null)
+        setNewPasswordInput('')
       } else {
         showNotification('Gagal', json.message || 'Gagal reset kata sandi', 'error')
       }
@@ -191,6 +198,7 @@ export function PenggunaAksesView({
       SUPERADMIN: 0,
       ADMIN: 0,
       PROKTOR: 0,
+      GURU: 0,
       TOTAL: usersList.length,
     }
     usersList.forEach((u) => {
@@ -231,11 +239,17 @@ export function PenggunaAksesView({
           </span>
         )
       case 'PROKTOR':
-      case 'GURU':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/40">
             <Radio className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
             PROKTOR
+          </span>
+        )
+      case 'GURU':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40">
+            <GraduationCap className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            GURU PENGAJAR
           </span>
         )
       default:
@@ -263,11 +277,11 @@ export function PenggunaAksesView({
                   Manajemen Pengguna & Hak Akses
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/40">
-                  Superadmin • Administrator • Proktor
+                  Superadmin • Administrator • Proktor • Guru
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Kelola hak akses pengguna: <strong className="text-slate-700 dark:text-slate-200">Super Admin</strong>, <strong className="text-blue-600 dark:text-blue-400">Administrator (Full Akses)</strong>, dan <strong className="text-rose-600 dark:text-rose-400">Proktor (Input Soal, Data Tes & Pengawasan)</strong>.
+                Kelola hak akses pengguna: <strong className="text-slate-700 dark:text-slate-200">Super Admin</strong>, <strong className="text-blue-600 dark:text-blue-400">Administrator</strong>, <strong className="text-rose-600 dark:text-rose-400">Proktor</strong>, dan <strong className="text-emerald-600 dark:text-emerald-400">Guru (Bank Soal & Koreksi Nilai)</strong>.
               </p>
             </div>
           </div>
@@ -282,7 +296,7 @@ export function PenggunaAksesView({
         </div>
 
         {/* Role Overview Stat Pills */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-200/60 dark:border-white/5 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-200/60 dark:border-white/5 text-xs">
           <div
             onClick={() => setFilterRole('SUPERADMIN')}
             className={`p-3 rounded-2xl border transition cursor-pointer ${
@@ -303,7 +317,7 @@ export function PenggunaAksesView({
                 : 'bg-slate-50 dark:bg-white/5 border-slate-200/60 dark:border-white/5 hover:bg-blue-500/10'
             }`}
           >
-            <span className="text-blue-600 dark:text-blue-400 font-bold block">Administrator (Full Akses)</span>
+            <span className="text-blue-600 dark:text-blue-400 font-bold block">Administrator (Full)</span>
             <span className="text-xl font-black text-slate-900 dark:text-white">{roleCounts.ADMIN} Akun</span>
           </div>
 
@@ -315,8 +329,20 @@ export function PenggunaAksesView({
                 : 'bg-slate-50 dark:bg-white/5 border-slate-200/60 dark:border-white/5 hover:bg-rose-500/10'
             }`}
           >
-            <span className="text-rose-600 dark:text-rose-400 font-bold block">Proktor (Soal, Tes & Pengawasan)</span>
+            <span className="text-rose-600 dark:text-rose-400 font-bold block">Proktor (Pengawasan)</span>
             <span className="text-xl font-black text-slate-900 dark:text-white">{roleCounts.PROKTOR} Akun</span>
+          </div>
+
+          <div
+            onClick={() => setFilterRole('GURU')}
+            className={`p-3 rounded-2xl border transition cursor-pointer ${
+              filterRole === 'GURU'
+                ? 'bg-emerald-500/15 border-emerald-500/50 shadow-sm'
+                : 'bg-slate-50 dark:bg-white/5 border-slate-200/60 dark:border-white/5 hover:bg-emerald-500/10'
+            }`}
+          >
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold block">Guru (Soal & Koreksi)</span>
+            <span className="text-xl font-black text-slate-900 dark:text-white">{roleCounts.GURU} Akun</span>
           </div>
         </div>
 
@@ -342,7 +368,8 @@ export function PenggunaAksesView({
               <option value="ALL">Semua Pengguna ({roleCounts.TOTAL})</option>
               <option value="SUPERADMIN">Super Admin ({roleCounts.SUPERADMIN})</option>
               <option value="ADMIN">Administrator Full Akses ({roleCounts.ADMIN})</option>
-              <option value="PROKTOR">Proktor (Soal, Tes & Pengawasan) ({roleCounts.PROKTOR})</option>
+              <option value="PROKTOR">Proktor (Pengawasan) ({roleCounts.PROKTOR})</option>
+              <option value="GURU">Guru (Soal & Koreksi Nilai) ({roleCounts.GURU})</option>
             </select>
           </div>
         </div>
@@ -414,8 +441,8 @@ export function PenggunaAksesView({
                             Modul Soal, Data Tes (Tambah/Kelola Tes) & Pengawasan Live
                           </span>
                         ) : u.role === 'GURU' ? (
-                          <span className="text-rose-600 dark:text-rose-400 font-semibold">
-                            Khusus: Input Butir Soal (Modul) & Status Ujian Guru
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                            Bank Soal, Pengawasan Live, Koreksi Esai/Isian & Rekap Nilai Siswa
                           </span>
                         ) : (
                           <span>Akses Terbatas</span>
@@ -426,7 +453,7 @@ export function PenggunaAksesView({
                           <button
                             onClick={() => {
                               setResetModal(u)
-                              setNewPasswordInput('123456')
+                              setNewPasswordInput('')
                             }}
                             className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 transition cursor-pointer"
                             title="Reset Kata Sandi"
@@ -487,16 +514,17 @@ export function PenggunaAksesView({
                   Pilih Hak Akses (Role)
                 </label>
                 <select
-                  value={form.role === 'GURU' ? 'PROKTOR' : form.role}
+                  value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-purple-400/50 dark:border-purple-500/50 text-xs font-bold text-purple-700 dark:text-purple-300 focus:ring-2 focus:ring-purple-500 cursor-pointer"
                 >
                   <option value="SUPERADMIN">👑 SUPER ADMIN (Wewenang Penuh Server & Manajemen User)</option>
                   <option value="ADMIN">🛡️ ADMINISTRATOR (Full Akses Semua Menu CBT)</option>
                   <option value="PROKTOR">📡 PROKTOR (Modul Soal, Data Tes & Pengawasan Live)</option>
+                  <option value="GURU">👨‍🏫 GURU (Bank Soal, Pengawasan & Koreksi Nilai Siswa)</option>
                 </select>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                  * Administrator memiliki full akses seluruh menu ujian, sedangkan Proktor mengelola Modul Soal, Data Tes (Tambah & Kelola Ujian), dan Pengawasan Live peserta.
+                  * <strong>Superadmin & Administrator</strong> memiliki full akses sistem. <strong>Proktor</strong> mengelola Modul Soal, Tes, dan Pengawasan. <strong>Guru</strong> mengelola Bank Soal, Pengawasan, serta Evaluasi / Koreksi Esai & Rekap Nilai Siswa.
                 </p>
               </div>
 
@@ -594,21 +622,34 @@ export function PenggunaAksesView({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Kata Sandi Baru
+                Kata Sandi Baru (Diisi Manual) *
               </label>
               <input
                 type="text"
+                autoFocus
                 value={newPasswordInput}
                 onChange={(e) => setNewPasswordInput(e.target.value)}
-                placeholder="misal: 123456"
-                className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white"
+                placeholder="Masukkan kata sandi baru..."
+                className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:border-amber-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleResetPassword()
+                  }
+                }}
               />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Ketikkan kata sandi baru manual untuk pengguna ini.
+              </p>
             </div>
 
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setResetModal(null)}
+                onClick={() => {
+                  setResetModal(null)
+                  setNewPasswordInput('')
+                }}
                 className="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition cursor-pointer"
               >
                 Batal

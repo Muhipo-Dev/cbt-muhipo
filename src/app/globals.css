@@ -33,7 +33,7 @@
 }
 
 .dark {
-  --background: #020617;
+  --background: #090d16;
   --foreground: #f8fafc;
 }
 
@@ -231,73 +231,89 @@ bdi,
 }
 
 /* =========================================================================
-   LEGACY OS & LOW-SPEC COMFORT OPTIMIZATIONS (WINDOWS XP / 7 / 8 / 10-)
-   Fixes glassmorphism glitches, washed-out text, and lack of backdrop-filter
+   LOW-END HARDWARE & LAB PC ACCELERATION (ZERO-LAG ULTRA LITE ENGINE)
+   Font smoothing & ClearType sharpness for legacy Windows monitors
    ========================================================================= */
 
-/* Font smoothing & ClearType sharpness for legacy Windows monitors */
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* Fallback ketika browser/OS TIDAK mendukung backdrop-filter (Chrome < 76, Win XP, Win 7 tanpa GPU) */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  [class*="backdrop-blur"],
-  .backdrop-blur-sm,
-  .backdrop-blur-md,
-  .backdrop-blur-lg,
-  .backdrop-blur-xl,
-  .backdrop-blur-2xl {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    background-color: #ffffff !important;
-    border-color: #cbd5e1 !important; /* border-slate-300 */
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1) !important;
-  }
+/* Optimasi bayangan agar ringan & nyaman di mata */
+.shadow-2xl {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+.dark .shadow-2xl {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+}
 
-  .dark [class*="backdrop-blur"],
-  .dark .backdrop-blur-sm,
-  .dark .backdrop-blur-md,
-  .dark .backdrop-blur-lg,
-  .dark .backdrop-blur-xl,
-  .dark .backdrop-blur-2xl {
-    background-color: #0f172a !important; /* dark:bg-slate-900 */
-    border-color: #334155 !important; /* dark:border-slate-700 */
-  }
-
-  /* Overlay modal & background dimmer pada browser lawas */
-  div.fixed.inset-0[class*="bg-slate-950"],
-  div.fixed.inset-0[class*="bg-slate-900"] {
-    background-color: rgba(15, 23, 42, 0.85) !important;
-  }
-
-  /* Hilangkan wallpaper blur overlay ganda yang membuat silau */
-  .fixed.inset-0.-z-20 {
-    background-color: #f1f5f9 !important;
-  }
-  .dark .fixed.inset-0.-z-20 {
-    background-color: #020617 !important;
+/* Preferensi Kenyamanan Visual & Pengurangan Gerakan / Animasi Berat */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
-/* Preferensi Kenyamanan Visual & Pengurangan Transparansi */
-@media (prefers-reduced-transparency: reduce) {
-  [class*="backdrop-blur"] {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    background-color: #ffffff !important;
-  }
-  .dark [class*="backdrop-blur"] {
-    background-color: #0f172a !important;
+/* =========================================================================
+   COMPACT & ULTRA-RESPONSIVE SYSTEM (CHROME DESKTOP & ANDROID WEBVIEW)
+   ========================================================================= */
+
+/* Android WebView & Mobile Safe Area Inset Support */
+.safe-area-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
+}
+
+.safe-area-top {
+  padding-top: max(0.5rem, env(safe-area-inset-top, 0.5rem));
+}
+
+/* Compact Container & Card Styles */
+.cbt-card {
+  background-color: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+}
+
+.dark .cbt-card {
+  background-color: rgba(15, 23, 42, 0.92);
+  border-color: rgba(51, 65, 85, 0.7);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.25), 0 2px 4px -2px rgba(0, 0, 0, 0.25);
+}
+
+.cbt-card-compact {
+  padding: 0.875rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .cbt-card-compact {
+    padding: 1rem 1.25rem;
   }
 }
 
-/* Peningkatan kontras teks pada kartu glassmorphism agar tetap tegas di layar LCD lab */
-[class*="backdrop-blur"] {
-  /* Pastikan kartu punya soliditas dasar dan teks tidak pudar */
-  contain: paint;
+/* High Readability Text Enhancements */
+.text-high-contrast {
+  color: #0f172a;
+}
+.dark .text-high-contrast {
+  color: #f8fafc;
 }
 
+.text-muted-contrast {
+  color: #475569;
+}
+.dark .text-muted-contrast {
+  color: #94a3b8;
+}
 
+/* Better touch targets for Android WebView without excessive padding */
+.cbt-touch-btn {
+  min-height: 38px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}

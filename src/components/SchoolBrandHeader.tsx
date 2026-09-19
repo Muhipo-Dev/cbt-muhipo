@@ -13,10 +13,9 @@ export const SchoolBrandHeader: React.FC<SchoolBrandHeaderProps> = ({
   className = '',
   showBadge = false,
   logoUrl = '/pic_logo.png',
-  appTitle = 'CBT SMA MUHIPO',
+  appTitle = 'CBT',
 }) => {
   const activeLogo = logoUrl || '/pic_logo.png';
-  const displayTitle = appTitle && appTitle !== 'CBT' && appTitle !== 'CBT MUHIPO' ? appTitle : 'CBT SMA MUHIPO';
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
@@ -24,7 +23,7 @@ export const SchoolBrandHeader: React.FC<SchoolBrandHeaderProps> = ({
       <div className="relative flex items-center justify-center w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-blue-50/90 dark:bg-slate-900/90 p-2 shadow-2xs border border-blue-200/90 dark:border-blue-900/50 shrink-0 overflow-hidden">
         <img
           src={activeLogo}
-          alt="Logo CBT MUHIPO"
+          alt="Logo CBT"
           className="w-full h-full object-contain"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).src = '/pic_logo.png';
@@ -35,7 +34,7 @@ export const SchoolBrandHeader: React.FC<SchoolBrandHeaderProps> = ({
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white leading-none">
-            <span>{displayTitle}</span>{' '}
+            <span>CBT</span>{' '}
             <span className="text-blue-600 dark:text-blue-400 font-bold text-xs sm:text-sm font-sans tracking-normal">
               (Computer based test)
             </span>

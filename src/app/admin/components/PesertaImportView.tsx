@@ -183,7 +183,7 @@ export function PesertaImportView({
 
       const json = await res.json()
       if (json.success) {
-        showNotification('Import Sukses', json.message || 'Data peserta berhasil diimport ke CBT SMA Muhipo!', 'success')
+        showNotification('Import Sukses', json.message || 'Data peserta berhasil diimport ke CBT!', 'success')
         setParsedRows([])
         setFileName('')
         onRefresh()

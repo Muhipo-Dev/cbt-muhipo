@@ -43,7 +43,7 @@ import { TesRekapView } from './components/TesRekapView'
 
 import { DashboardOverview } from './components/DashboardOverview'
 import { ProktorLiveView } from './components/ProktorLiveView'
-import { CetakDokumenView } from './components/CetakDokumenView'
+import { CetakNilaiView } from './components/CetakNilaiView'
 import { PengaturanView } from './components/PengaturanView'
 import { PenggunaAksesView } from './components/PenggunaAksesView'
 import { BackupDataView } from './components/BackupDataView'
@@ -73,7 +73,7 @@ export default function ComprehensiveAdminDashboard() {
   // Settings State
   const [settingsForm, setSettingsForm] = useState({
     schoolName: 'SMA Muhammadiyah 1 Ponorogo',
-    appTitle: 'CBT SMA MUHIPO',
+    appTitle: 'CBT',
     academicYear: '2026/2027',
     semester: 'Ganjil',
     timezone: 'Asia/Jakarta',
@@ -451,17 +451,13 @@ export default function ComprehensiveAdminDashboard() {
           { id: 'tes_evaluasi', name: 'Evaluasi Tes' },
           { id: 'tes_hasil', name: 'Hasil Tes' },
           { id: 'tes_rekap', name: 'Rekap Hasil Tes' },
+          { id: 'tes_cetak', name: 'Cetak Nilai Siswa' },
         ],
       },
       {
         id: 'proktor_live',
         name: 'Pengawasan Live',
         icon: Radio,
-      },
-      {
-        id: 'cetak',
-        name: 'Cetak Dokumen',
-        icon: Printer,
       },
       {
         id: 'pengguna_akses',
@@ -503,7 +499,7 @@ export default function ComprehensiveAdminDashboard() {
           <img
             src={activeBg}
             alt="Latar Belakang SMA MUHIPO"
-            className="object-cover object-center w-full h-full scale-105"
+            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
           />
         ) : (
           <NextImage
@@ -513,13 +509,13 @@ export default function ComprehensiveAdminDashboard() {
             priority
             unoptimized
             sizes="100vw"
-            className="object-cover object-center w-full h-full scale-105"
+            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
           />
         )}
       </div>
 
       {/* Glassmorphism Backdrop Overlay */}
-      <div className="print:hidden fixed inset-0 bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-[2px] -z-20 pointer-events-none transition-colors duration-300" />
+      <div className="print:hidden fixed inset-0 bg-slate-100/80 dark:bg-slate-950/65 dark:bg-gradient-to-b dark:from-slate-950/75 dark:via-slate-950/60 dark:to-slate-950/80 backdrop-blur-[2px] -z-20 pointer-events-none transition-colors duration-300" />
 
       {/* Sidebar Navigation */}
       <AppSidebar
@@ -537,7 +533,7 @@ export default function ComprehensiveAdminDashboard() {
       <div className="flex-1 lg:ml-72 print:ml-0 print:m-0 print:p-0 flex flex-col justify-between min-w-0 transition-all duration-300 relative z-10">
         {/* Navbar */}
         <AppNavbar
-          appTitle={settingsForm.appTitle && settingsForm.appTitle !== 'CBT' && settingsForm.appTitle !== 'CBT MUHIPO' ? settingsForm.appTitle : 'CBT SMA MUHIPO'}
+          appTitle={settingsForm.appTitle ? settingsForm.appTitle : 'CBT'}
           subtitle="Manajemen Ujian SMA Muhammadiyah 1 Ponorogo"
           logoUrl={settingsForm.logoUrl}
           onToggleSidebar={() => setSidebarOpen(true)}
@@ -561,7 +557,7 @@ export default function ComprehensiveAdminDashboard() {
           <div className="print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 dark:bg-slate-900/75 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl shadow-sm dark:shadow-xl">
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block mb-1">
-                CBT SMA Muhipo
+                CBT
               </span>
               <h1 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white capitalize">
                 {getTabTitle(activeTab)}
@@ -600,6 +596,7 @@ export default function ComprehensiveAdminDashboard() {
                 if (id) setSelectedMapelId(id)
                 setActiveTab('modul_soal')
               }}
+              onNavigateToBackup={() => setActiveTab('backup_data')}
               showNotification={showNotification}
               showConfirm={showConfirm}
             />
@@ -733,6 +730,16 @@ export default function ComprehensiveAdminDashboard() {
             />
           )}
 
+          {activeTab === 'tes_cetak' && (
+            <CetakNilaiView
+              ujianList={ujianList}
+              mapelList={mapelList}
+              kelasList={kelasList}
+              settings={settingsForm}
+              showNotification={showNotification}
+            />
+          )}
+
           {/* TAB 5: PENGATURAN & EXTRAS */}
           {activeTab === 'proktor_live' && (
             <ProktorLiveView
@@ -742,17 +749,6 @@ export default function ComprehensiveAdminDashboard() {
               onResetPelanggaran={handleResetPelanggaran}
               onResetAllPelanggaran={handleResetAllPelanggaran}
               onRefresh={fetchAllData}
-              showNotification={showNotification}
-            />
-          )}
-
-          {activeTab === 'cetak' && (
-            <CetakDokumenView
-              kelasList={kelasList}
-              jadwalList={ujianList}
-              siswaList={siswaList}
-              modulList={modulList}
-              settings={settingsForm}
               showNotification={showNotification}
             />
           )}
@@ -781,9 +777,13 @@ export default function ComprehensiveAdminDashboard() {
           {activeTab === 'backup_data' && (
             <BackupDataView
               stats={dashboardData?.stats}
+              mapelList={mapelList}
+              modulList={modulList}
+              currentUser={currentUser}
               onRefresh={fetchAllData}
               showNotification={showNotification}
               showConfirm={showConfirm}
+              onNavigateToTopik={() => setActiveTab('modul_topik')}
             />
           )}
         </main>

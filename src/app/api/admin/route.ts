@@ -1451,12 +1451,13 @@ export async function POST(request: NextRequest) {
 
     // --- 6. RESET PASSWORD & STATUS PESERTA ---
     if (action === 'RESET_PASSWORD') {
-      const { userId, newPassword } = body;
-      const pass = newPassword || '123456';
+      const { userId, id, newPassword } = body;
+      const targetId = userId || id;
+      const pass = (newPassword || '123456').trim();
       const defaultPassword = await bcrypt.hash(pass, 10);
       await prisma.user.update({
-        where: { id: userId },
-        data: { password: defaultPassword },
+        where: { id: targetId },
+        data: { password: defaultPassword, plainPassword: pass },
       });
       return NextResponse.json({
         success: true,

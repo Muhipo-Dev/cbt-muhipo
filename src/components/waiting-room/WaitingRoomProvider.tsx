@@ -213,27 +213,23 @@ export default function WaitingRoomProvider({ children }: { children: React.Reac
     );
 
     return (
-      <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/90 backdrop-blur-2xl p-3 sm:p-4 md:p-6 text-white overflow-y-auto font-sans">
-        {/* Animated Ambient Background */}
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] sm:w-[520px] h-[340px] sm:h-[520px] bg-blue-500/15 rounded-full blur-[110px] animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-[280px] sm:w-[420px] h-[280px] sm:h-[420px] bg-indigo-500/12 rounded-full blur-[100px] animate-pulse delay-700" />
-          <div className="absolute top-1/3 left-1/4 w-[220px] sm:w-[360px] h-[220px] sm:h-[360px] bg-amber-500/10 rounded-full blur-[90px] animate-pulse delay-1000" />
-        </div>
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/95 p-3 sm:p-4 md:p-6 text-white overflow-y-auto font-sans">
+        {/* Lightweight Clean Ambient Background */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden opacity-30 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/40 via-transparent to-transparent" />
 
         {/* Modal Card */}
-        <div className="relative w-full max-w-lg overflow-hidden rounded-2xl sm:rounded-3xl border border-blue-500/30 bg-gradient-to-b from-slate-900/95 via-slate-900/90 to-slate-950/95 p-4 sm:p-6 md:p-8 shadow-2xl shadow-blue-950/60 backdrop-blur-xl transition-all duration-300">
+        <div className="relative w-full max-w-lg overflow-hidden rounded-2xl sm:rounded-3xl border border-blue-500/30 bg-slate-900 p-4 sm:p-6 md:p-8 shadow-xl shadow-blue-950/40 transition-all duration-300">
           
           {/* Header Badge */}
           <div className="flex items-center justify-between gap-2 mb-4">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30 shadow-sm shadow-blue-950">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
               </span>
               Proteksi Antrean CBT Aktif
             </span>
-            <span className="flex items-center gap-1 text-[11px] text-blue-400/90 font-mono bg-slate-800/60 px-2.5 py-0.5 rounded-full border border-slate-700/50">
+            <span className="flex items-center gap-1 text-[11px] text-blue-400/90 font-mono bg-slate-800/80 px-2.5 py-0.5 rounded-full border border-slate-700/50">
               <Zap className="w-3 h-3 text-amber-400" />
               Sistem Prioritas
             </span>
@@ -241,11 +237,11 @@ export default function WaitingRoomProvider({ children }: { children: React.Reac
 
           {/* Icon & Title */}
           <div className="text-center mb-4 sm:mb-5">
-            <div className="relative mx-auto mb-3 flex h-14 w-14 sm:h-18 sm:w-18 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/20 via-indigo-500/10 to-blue-500/5 border border-blue-400/40 text-blue-400 shadow-xl shadow-blue-900/30">
-              <ShieldAlert className="h-7 w-7 sm:h-9 sm:w-9 animate-bounce text-blue-400 drop-shadow-[0_0_14px_rgba(59,130,246,0.7)]" />
+            <div className="relative mx-auto mb-3 flex h-14 w-14 sm:h-18 sm:w-18 items-center justify-center rounded-2xl bg-blue-500/15 border border-blue-400/40 text-blue-400 shadow-md">
+              <ShieldAlert className="h-7 w-7 sm:h-9 sm:w-9 text-blue-400" />
             </div>
 
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-white mb-1 bg-gradient-to-r from-white via-blue-100 to-indigo-200 bg-clip-text text-transparent">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-white mb-1">
               Ruang Tunggu Antrean
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 max-w-sm mx-auto leading-relaxed">
@@ -255,11 +251,11 @@ export default function WaitingRoomProvider({ children }: { children: React.Reac
 
           {/* Cards: Position & Wait Time */}
           <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 mb-4 sm:mb-5">
-            <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800/80 to-slate-800/40 border border-slate-700/60 p-3 sm:p-4 text-center transition hover:border-blue-500/50 shadow-inner">
+            <div className="group relative overflow-hidden rounded-2xl bg-slate-800/80 border border-slate-700/60 p-3 sm:p-4 text-center transition hover:border-blue-500/50">
               <div className="flex items-center justify-center gap-1.5 text-[11px] sm:text-xs font-medium text-slate-400 mb-1">
                 <Users className="w-3.5 h-3.5 text-blue-400" /> Nomor Antrean
               </div>
-              <div className="text-2xl sm:text-3xl md:text-4xl font-black text-blue-400 tracking-tight drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]">
+              <div className="text-2xl sm:text-3xl md:text-4xl font-black text-blue-400 tracking-tight">
                 #{queueState.position}
               </div>
               <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">
@@ -267,11 +263,11 @@ export default function WaitingRoomProvider({ children }: { children: React.Reac
               </div>
             </div>
 
-            <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800/80 to-slate-800/40 border border-slate-700/60 p-3 sm:p-4 text-center transition hover:border-amber-500/50 shadow-inner">
+            <div className="group relative overflow-hidden rounded-2xl bg-slate-800/80 border border-slate-700/60 p-3 sm:p-4 text-center transition hover:border-amber-500/50">
               <div className="flex items-center justify-center gap-1.5 text-[11px] sm:text-xs font-medium text-slate-400 mb-1">
                 <Clock className="w-3.5 h-3.5 text-amber-400" /> Estimasi Waktu
               </div>
-              <div className="text-2xl sm:text-3xl md:text-4xl font-black text-amber-300 tracking-tight drop-shadow-[0_0_10px_rgba(252,211,77,0.5)]">
+              <div className="text-2xl sm:text-3xl md:text-4xl font-black text-amber-300 tracking-tight">
                 ~{queueState.estimatedWaitSeconds}s
               </div>
               <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">

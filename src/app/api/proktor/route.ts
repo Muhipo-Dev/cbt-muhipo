@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionUser } from '@/lib/auth';
+import { getSessionUser, hashPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
@@ -98,6 +98,7 @@ export async function GET(request: NextRequest) {
           nomorPeserta: p.siswa.nomorPeserta || '-',
           username: p.siswa.username,
           name: p.siswa.name,
+          plainPassword: p.siswa.plainPassword || '123456',
           kelas: p.siswa.kelas?.nama || '-',
           status: p.status,
           jumlahJawaban: p._count.jawabanPeserta,
@@ -136,6 +137,48 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { action } = body;
+
+    if (action === 'RESET_PASSWORD' || action === 'CHANGE_PASSWORD') {
+      const { siswaId, userId, id, pesertaUjianId, newPassword } = body;
+      let targetUserId = userId || siswaId || id;
+      if (!targetUserId && pesertaUjianId) {
+        const pu = await prisma.pesertaUjian.findUnique({
+          where: { id: pesertaUjianId },
+          select: { siswaId: true },
+        });
+        targetUserId = pu?.siswaId;
+      }
+      if (!targetUserId) {
+        return NextResponse.json({ success: false, message: 'Data peserta tidak ditemukan' }, { status: 400 });
+      }
+
+      const pass = (newPassword || '123456').trim();
+      if (!pass) {
+        return NextResponse.json({ success: false, message: 'Password baru tidak boleh kosong' }, { status: 400 });
+      }
+
+      const hashedPassword = await hashPassword(pass);
+      const updatedUser = await prisma.user.update({
+        where: { id: targetUserId },
+        data: { password: hashedPassword, plainPassword: pass },
+      });
+
+      if (pesertaUjianId) {
+        await prisma.logAktivitasUjian.create({
+          data: {
+            userId: user.userId,
+            pesertaUjianId,
+            aktivitas: 'RESET_PASSWORD',
+            detail: `Pengawas (${user.name}) mengubah kata sandi siswa (${updatedUser.name}) menjadi "${pass}".`,
+          },
+        }).catch(() => {});
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Password siswa "${updatedUser.name}" (${updatedUser.username}) berhasil diubah menjadi "${pass}".`,
+      });
+    }
 
     if (action === 'RESET_LOGIN') {
       const { pesertaUjianId } = body;

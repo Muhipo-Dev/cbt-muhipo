@@ -16,21 +16,35 @@ import {
   RotateCcw,
   Sparkles,
   Lock,
+  Layers,
+  Search,
+  BookOpen,
+  ArrowUpRight,
+  Archive,
+  Info,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 interface BackupDataViewProps {
-  stats: any
+  stats?: any
+  mapelList?: any[]
+  modulList?: any[]
+  currentUser?: any
   onRefresh: () => void
   showNotification: (title: string, message: string, type?: any) => void
   showConfirm: (title: string, message: string, onConfirm: () => void, type?: any) => void
+  onNavigateToTopik?: () => void
 }
 
 export function BackupDataView({
   stats,
+  mapelList = [],
+  modulList = [],
+  currentUser,
   onRefresh,
   showNotification,
   showConfirm,
+  onNavigateToTopik,
 }: BackupDataViewProps) {
   const [downloadingJson, setDownloadingJson] = useState(false)
   const [downloadingSoal, setDownloadingSoal] = useState(false)
@@ -49,7 +63,289 @@ export function BackupDataView({
   const [factoryConfirmText, setFactoryConfirmText] = useState('')
   const [wiping, setWiping] = useState(false)
 
-  // 1. Download Database Backup JSON (Full Snapshot)
+  // --- RECYCLE BIN STATE ---
+  const [trashSearchQuery, setTrashSearchQuery] = useState('')
+  const [trashSelectedModul, setTrashSelectedModul] = useState('SEMUA')
+  const [trashEntriesPerPage, setTrashEntriesPerPage] = useState(10)
+  const [trashCurrentPage, setTrashCurrentPage] = useState(1)
+  const [selectedTrashIds, setSelectedTrashIds] = useState<string[]>([])
+  const [trashActionLoading, setTrashActionLoading] = useState(false)
+
+  // Ambil list modul unik
+  const rawModulNames = Array.from(
+    new Set([
+      'Default',
+      ...(modulList || []).map((m: any) => m.nama),
+      ...(mapelList || []).map((m: any) => m.namaModul || m.modul?.nama).filter(Boolean),
+    ])
+  )
+
+  // Filter Items Recycle Bin (status === 'TERHAPUS')
+  const allItems = mapelList || []
+  const trashAllItems = allItems.filter((m: any) => m.status === 'TERHAPUS')
+  const activeAllItems = allItems.filter((m: any) => m.status !== 'TERHAPUS')
+  const trashCount = trashAllItems.length
+
+  const filteredTrashByModul =
+    trashSelectedModul === 'SEMUA'
+      ? trashAllItems
+      : trashAllItems.filter(
+          (m: any) =>
+            (m.namaModul || m.modul?.nama || 'Default').toLowerCase() === trashSelectedModul.toLowerCase()
+        )
+
+  const filteredTrashItems = filteredTrashByModul.filter((m: any) => {
+    const q = trashSearchQuery.toLowerCase()
+    const matchName = m.nama ? m.nama.toLowerCase().includes(q) : false
+    const matchKode = m.kode ? m.kode.toLowerCase().includes(q) : false
+    return matchName || matchKode
+  })
+
+  const totalTrashPages = Math.max(1, Math.ceil(filteredTrashItems.length / trashEntriesPerPage))
+  const paginatedTrashItems = filteredTrashItems.slice(
+    (trashCurrentPage - 1) * trashEntriesPerPage,
+    trashCurrentPage * trashEntriesPerPage
+  )
+
+  // Toggle selection row in Recycle Bin
+  const toggleSelectTrashRow = (id: string) => {
+    setSelectedTrashIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    )
+  }
+
+  const handleToggleSelectAllTrash = () => {
+    if (selectedTrashIds.length === filteredTrashItems.length && filteredTrashItems.length > 0) {
+      setSelectedTrashIds([])
+    } else {
+      setSelectedTrashIds(filteredTrashItems.map((item: any) => item.id))
+    }
+  }
+
+  // 1. Restore Single Topic (Pulihkan Topik dari Recycle Bin)
+  const handleRestoreSingle = (item: any) => {
+    showConfirm(
+      'Pulihkan Topik?',
+      `Pulihkan topik "${item.nama}" beserta seluruh butir soalnya kembali ke daftar topik aktif?`,
+      async () => {
+        try {
+          setTrashActionLoading(true)
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'RESTORE_MAPEL', id: item.id }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil Dipulihkan', json.message || 'Topik berhasil dipulihkan', 'success')
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal memulihkan topik', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        } finally {
+          setTrashActionLoading(false)
+        }
+      },
+      'info'
+    )
+  }
+
+  // 2. Bulk Restore Topics (Pulihkan Banyak Topik)
+  const handleBulkRestore = () => {
+    if (selectedTrashIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 topik di Recycle Bin untuk dipulihkan', 'warning')
+      return
+    }
+
+    showConfirm(
+      'Pulihkan Topik Terpilih?',
+      `Pulihkan ${selectedTrashIds.length} topik terpilih kembali ke daftar aktif?`,
+      async () => {
+        try {
+          setTrashActionLoading(true)
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'BULK_RESTORE_MAPEL', ids: selectedTrashIds }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil Dipulihkan', json.message || 'Topik terpilih berhasil dipulihkan', 'success')
+            setSelectedTrashIds([])
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal memulihkan topik terpilih', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        } finally {
+          setTrashActionLoading(false)
+        }
+      },
+      'info'
+    )
+  }
+
+  // 3. Permanent Delete Single Topic (Hapus Permanen Tunggal)
+  const handlePermanentDeleteSingle = (item: any) => {
+    showConfirm(
+      'Hapus Permanen Topik Ini?',
+      `Hapus permanen topik "${item.nama}" beserta seluruh butir soal, opsi jawaban, dan riwayat ujian terkait? Tindakan ini bersifat PERMANEN dan TIDAK BISA DIBATALKAN.`,
+      async () => {
+        try {
+          setTrashActionLoading(true)
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'PERMANENT_DELETE_MAPEL', id: item.id }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil Dihapus', json.message || 'Topik telah dihapus permanen dari sistem', 'success')
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal menghapus topik', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        } finally {
+          setTrashActionLoading(false)
+        }
+      },
+      'danger'
+    )
+  }
+
+  // 4. Bulk Permanent Delete (Hapus Permanen Terpilih)
+  const handleBulkPermanentDelete = () => {
+    if (selectedTrashIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 topik untuk dihapus permanen', 'warning')
+      return
+    }
+
+    showConfirm(
+      'Hapus Permanen Topik Terpilih?',
+      `Hapus permanen ${selectedTrashIds.length} topik terpilih beserta seluruh butir soalnya? Data tidak dapat dipulihkan kembali setelah dihapus permanen.`,
+      async () => {
+        try {
+          setTrashActionLoading(true)
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'BULK_PERMANENT_DELETE_MAPEL', ids: selectedTrashIds }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil Dihapus', json.message || 'Topik terpilih telah dihapus permanen', 'success')
+            setSelectedTrashIds([])
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal menghapus topik terpilih', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        } finally {
+          setTrashActionLoading(false)
+        }
+      },
+      'danger'
+    )
+  }
+
+  // 5. Empty Trash (Kosongkan Seluruh Recycle Bin)
+  const handleEmptyTrash = () => {
+    if (trashCount === 0) {
+      showNotification('Info', 'Recycle Bin saat ini sudah kosong.', 'info')
+      return
+    }
+
+    showConfirm(
+      'Kosongkan Seluruh Recycle Bin?',
+      `Apakah Anda yakin ingin menghapus permanen seluruh (${trashCount}) topik di Recycle Bin beserta semua butir soalnya? Tindakan ini tidak dapat dibatalkan.`,
+      async () => {
+        try {
+          setTrashActionLoading(true)
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'EMPTY_TRASH_MAPEL' }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Recycle Bin Dikosongkan', json.message || 'Seluruh item di Recycle Bin berhasil dibersihkan', 'success')
+            setSelectedTrashIds([])
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal mengosongkan Recycle Bin', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal: ' + err.message, 'error')
+        } finally {
+          setTrashActionLoading(false)
+        }
+      },
+      'danger'
+    )
+  }
+
+  // 6. Backup Single Deleted Topic (JSON)
+  const handleBackupSingle = async (item: any) => {
+    try {
+      showNotification('Memproses', `Menyiapkan cadangan topik "${item.nama}"...`, 'info')
+      const res = await fetch(`/api/admin/backup?type=soal_topik&topikId=${item.id}`)
+      if (!res.ok) throw new Error('Gagal mengunduh cadangan topik')
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      const safeName = item.nama.replace(/[^a-zA-Z0-9_-]/g, '_')
+      a.download = `CBT_MUHIPO_SOAL_${safeName}_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      showNotification('Berhasil', `File cadangan topik "${item.nama}" berhasil diunduh.`, 'success')
+    } catch (err: any) {
+      showNotification('Gagal', 'Gagal backup topik: ' + err.message, 'error')
+    }
+  }
+
+  // 7. Backup Bulk Selected Deleted Topics (JSON)
+  const handleBackupBulk = async () => {
+    if (selectedTrashIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 topik untuk dicadangkan', 'warning')
+      return
+    }
+
+    try {
+      showNotification('Memproses', `Menyiapkan cadangan ${selectedTrashIds.length} topik terpilih...`, 'info')
+      const res = await fetch(`/api/admin/backup?type=soal_topik&ids=${selectedTrashIds.join(',')}`)
+      if (!res.ok) throw new Error('Gagal mengunduh cadangan')
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      a.download = `CBT_MUHIPO_SOAL_TRASH_${selectedTrashIds.length}_TOPIK_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      showNotification('Berhasil', `Berhasil mencadangkan ${selectedTrashIds.length} topik terpilih.`, 'success')
+    } catch (err: any) {
+      showNotification('Gagal', 'Gagal backup: ' + err.message, 'error')
+    }
+  }
+
+  // --- BACKUP DOWNLOAD ACTIONS ---
+  // Download Full Database JSON
   const handleDownloadBackupJson = async () => {
     try {
       setDownloadingJson(true)
@@ -75,7 +371,7 @@ export function BackupDataView({
     }
   }
 
-  // 2. Download Backup Soal & Topik Modul (JSON)
+  // Download Backup Soal & Topik Modul (JSON)
   const handleDownloadSoalTopikJson = async () => {
     try {
       setDownloadingSoal(true)
@@ -101,7 +397,7 @@ export function BackupDataView({
     }
   }
 
-  // 3. Download Backup Jadwal Tes & Konfigurasi (JSON)
+  // Download Backup Jadwal Tes (JSON)
   const handleDownloadJadwalTesJson = async () => {
     try {
       setDownloadingJadwal(true)
@@ -127,7 +423,7 @@ export function BackupDataView({
     }
   }
 
-  // 4. Download Backup Hasil Tes Lengkap (JSON)
+  // Download Backup Hasil Tes (JSON)
   const handleDownloadHasilTesJson = async () => {
     try {
       setDownloadingHasil(true)
@@ -153,7 +449,7 @@ export function BackupDataView({
     }
   }
 
-  // 5. Ekspor Semua Rekap Nilai ke Excel
+  // Ekspor Semua Rekap Nilai ke Excel
   const handleExportAllNilai = async () => {
     try {
       setExportingNilai(true)
@@ -178,7 +474,7 @@ export function BackupDataView({
     }
   }
 
-  // 6. Ekspor Data Peserta ke Excel
+  // Ekspor Data Peserta ke Excel
   const handleExportSiswa = async () => {
     try {
       setExportingSiswa(true)
@@ -216,7 +512,7 @@ export function BackupDataView({
     }
   }
 
-  // 7. Handle File JSON Restore Selection
+  // Handle File JSON Restore Selection
   const handleSelectRestoreFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -242,7 +538,7 @@ export function BackupDataView({
     reader.readAsText(file)
   }
 
-  // 8. Execute Restore
+  // Execute Restore
   const handleExecuteRestore = () => {
     if (!restorePreview) return
 
@@ -279,7 +575,7 @@ export function BackupDataView({
     )
   }
 
-  // 9. Maintenance / Wipe Actions
+  // Maintenance / Wipe Actions
   const handleExecuteWipe = async (action: string) => {
     try {
       setWiping(true)
@@ -319,28 +615,437 @@ export function BackupDataView({
           </div>
           <div>
             <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-              <span>Backup, Ekspor & Pemeliharaan Data</span>
+              <span>Backup, Pemulihan & Pemeliharaan Data</span>
               <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-bold border border-blue-500/20">
                 Sistem CBT
               </span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Kelola cadangan soal topik modul, jadwal ujian, hasil tes, ekspor nilai & peserta, serta fasilitas reset pemeliharaan.
+              Kelola cadangan database, Recycle Bin pemulihan topik soal terhapus, ekspor spreadsheet, serta fasilitas reset pemeliharaan server.
             </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Sinkronkan Statistik</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          {onNavigateToTopik && (
+            <button
+              type="button"
+              onClick={onNavigateToTopik}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 text-blue-700 dark:text-blue-300 text-xs font-bold border border-blue-200 dark:border-blue-900 transition cursor-pointer"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Buka Daftar Topik</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Sinkronkan Statistik</span>
+          </button>
+        </div>
       </div>
 
-      {/* 2. Area Ekspor & Cadangan Basis Data */}
+      {/* Quick Status Metric Highlights */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="p-4 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
+          <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
+            <span>Topik Modul Aktif</span>
+            <BookOpen className="w-3.5 h-3.5 text-blue-500" />
+          </div>
+          <div className="mt-1 text-xl font-black text-slate-900 dark:text-white">
+            {activeAllItems.length}{' '}
+            <span className="text-xs font-normal text-slate-400">Topik</span>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
+          <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
+            <span>Total Butir Soal</span>
+            <Database className="w-3.5 h-3.5 text-indigo-500" />
+          </div>
+          <div className="mt-1 text-xl font-black text-slate-900 dark:text-white">
+            {stats?.totalSoal ?? 0}{' '}
+            <span className="text-xs font-normal text-slate-400">Soal</span>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
+          <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
+            <span>Siswa Terdaftar</span>
+            <Server className="w-3.5 h-3.5 text-emerald-500" />
+          </div>
+          <div className="mt-1 text-xl font-black text-slate-900 dark:text-white">
+            {stats?.totalSiswa ?? 0}{' '}
+            <span className="text-xs font-normal text-slate-400">Peserta</span>
+          </div>
+        </div>
+
+        <div
+          className={`p-4 rounded-2xl border shadow-xs transition ${
+            trashCount > 0
+              ? 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50'
+              : 'bg-white/80 dark:bg-slate-900/80 border-slate-200/80 dark:border-slate-800/80'
+          }`}
+        >
+          <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
+            <span>Recycle Bin Topik</span>
+            <Trash2
+              className={`w-3.5 h-3.5 ${
+                trashCount > 0 ? 'text-rose-500 animate-pulse' : 'text-slate-400'
+              }`}
+            />
+          </div>
+          <div
+            className={`mt-1 text-xl font-black ${
+              trashCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'
+            }`}
+          >
+            {trashCount}{' '}
+            <span className="text-xs font-normal text-slate-400">Terhapus</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. AREA FITUR UTAMA: RECYCLE BIN & PEMULIHAN TOPIK SOAL */}
+      <div className="bg-white/90 dark:bg-slate-900/85 border border-rose-200/80 dark:border-rose-900/40 rounded-3xl shadow-sm dark:shadow-xl backdrop-blur-xl overflow-hidden">
+        <div className="border-b border-rose-100 dark:border-rose-900/30 p-5 sm:p-6 bg-gradient-to-r from-rose-50/60 to-orange-50/40 dark:from-rose-950/30 dark:to-orange-950/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-2xl bg-rose-600 text-white shadow-md">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-black text-slate-900 dark:text-white text-base">
+                  Recycle Bin Modul & Topik Soal
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                  {trashCount} Item Terhapus
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                Kelola topik mata pelajaran dan butir soal yang dihapus. Anda dapat memulihkan (Restore) kembali ke daftar aktif atau menghapus permanen.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            {trashCount > 0 && (
+              <button
+                type="button"
+                onClick={handleEmptyTrash}
+                disabled={trashActionLoading}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Kosongkan Recycle Bin</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="p-5 sm:p-6 space-y-4">
+          {/* Filter Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-300">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <span>Show</span>
+                <select
+                  value={trashEntriesPerPage}
+                  onChange={(e) => {
+                    setTrashEntriesPerPage(Number(e.target.value))
+                    setTrashCurrentPage(1)
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-xs focus:outline-none focus:border-rose-500 font-semibold"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span>entries</span>
+              </div>
+
+              {/* Filter Modul */}
+              <div className="flex items-center gap-1.5 ml-2">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">Modul:</span>
+                <select
+                  value={trashSelectedModul}
+                  onChange={(e) => {
+                    setTrashSelectedModul(e.target.value)
+                    setTrashCurrentPage(1)
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-rose-500 cursor-pointer"
+                >
+                  <option value="SEMUA">-- Semua Modul --</option>
+                  {rawModulNames.map((modName) => (
+                    <option key={modName} value={modName}>
+                      {modName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+              <span>Cari di Sampah:</span>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={trashSearchQuery}
+                  onChange={(e) => {
+                    setTrashSearchQuery(e.target.value)
+                    setTrashCurrentPage(1)
+                  }}
+                  placeholder="Cari kode/nama topik..."
+                  className="pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-xs focus:outline-none focus:border-rose-500 text-slate-900 dark:text-white"
+                />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              </div>
+            </div>
+          </div>
+
+          {/* Table Recycle Bin */}
+          <div className="border border-slate-200 dark:border-white/10 rounded-2xl overflow-x-auto shadow-xs">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-white/10">
+                  <th className="py-3 px-3.5 w-12 text-center">
+                    <input
+                      type="checkbox"
+                      checked={
+                        selectedTrashIds.length === filteredTrashItems.length &&
+                        filteredTrashItems.length > 0
+                      }
+                      onChange={handleToggleSelectAllTrash}
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                    />
+                  </th>
+                  <th className="py-3 px-3 w-10 text-center">No.</th>
+                  <th className="py-3 px-3">Modul</th>
+                  <th className="py-3 px-3">Topik / Mata Pelajaran</th>
+                  <th className="py-3 px-3 text-center">Tingkat</th>
+                  <th className="py-3 px-3 text-center">Total Soal</th>
+                  <th className="py-3 px-3 text-center">Status</th>
+                  <th className="py-3 px-3 text-center w-48">Aksi Pemulihan</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                {paginatedTrashItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center">
+                      <div className="flex flex-col items-center justify-center space-y-2 text-slate-400">
+                        <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center border border-emerald-200 dark:border-emerald-800">
+                          <CheckCircle2 className="w-6 h-6" />
+                        </div>
+                        <p className="font-bold text-slate-700 dark:text-slate-200 text-sm">
+                          Recycle Bin Bersih & Kosong
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+                          Tidak ada topik atau butir soal yang berada di keranjang sampah. Seluruh data topik aktif tersimpan aman.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedTrashItems.map((item: any, idx: number) => {
+                    const countSoal = item._count?.soalList || item.soalList?.length || 0
+                    const modulName = item.namaModul || item.modul?.nama || 'Default'
+                    const isSelected = selectedTrashIds.includes(item.id)
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`hover:bg-rose-50/30 dark:hover:bg-rose-950/20 transition ${
+                          isSelected ? 'bg-rose-50/70 dark:bg-rose-950/40' : ''
+                        }`}
+                      >
+                        <td className="py-3 px-3.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectTrashRow(item.id)}
+                            className="w-3.5 h-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-3 px-3 text-center font-medium text-slate-500">
+                          {(trashCurrentPage - 1) * trashEntriesPerPage + idx + 1}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/10">
+                            {modulName}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <span>{item.nama}</span>
+                            <span className="text-[10px] font-mono font-normal text-slate-400">
+                              ({item.kode})
+                            </span>
+                          </div>
+                          {item.jurusan && item.jurusan !== 'UMUM' && (
+                            <div className="text-[10px] text-slate-400">Jurusan: {item.jurusan}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">
+                            Kelas {item.tingkat || 10}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                            {countSoal} Butir Soal
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                            Di Recycle Bin
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Restore Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleRestoreSingle(item)}
+                              disabled={trashActionLoading}
+                              title="Pulihkan topik ini kembali aktif"
+                              className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer shadow-xs transition"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Pulihkan</span>
+                            </button>
+
+                            {/* Download Single Backup Before Deleting */}
+                            <button
+                              type="button"
+                              onClick={() => handleBackupSingle(item)}
+                              title="Unduh Cadangan JSON Soal Topik Ini"
+                              className="p-1.5 rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 cursor-pointer transition"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Permanent Delete Button */}
+                            <button
+                              type="button"
+                              onClick={() => handlePermanentDeleteSingle(item)}
+                              disabled={trashActionLoading}
+                              title="Hapus Topik & Soal Secara Permanen"
+                              className="p-1.5 rounded-xl border border-rose-200 dark:border-rose-900/50 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Table Footer & Bulk Operations */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 pt-2">
+            <div>
+              Menampilkan{' '}
+              {filteredTrashItems.length === 0
+                ? 0
+                : (trashCurrentPage - 1) * trashEntriesPerPage + 1}{' '}
+              sampai {Math.min(trashCurrentPage * trashEntriesPerPage, filteredTrashItems.length)} dari{' '}
+              {filteredTrashItems.length} topik di sampah
+            </div>
+
+            <div className="flex items-center gap-1 self-end sm:self-auto">
+              <button
+                type="button"
+                disabled={trashCurrentPage <= 1}
+                onClick={() => setTrashCurrentPage((p) => Math.max(1, p - 1))}
+                className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 cursor-pointer"
+              >
+                Sebelumnya
+              </button>
+
+              {Array.from({ length: totalTrashPages }).map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setTrashCurrentPage(i + 1)}
+                  className={`w-7 h-7 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                    trashCurrentPage === i + 1
+                      ? 'bg-rose-600 text-white border-rose-600'
+                      : 'border-slate-300 dark:border-white/10 bg-white dark:bg-slate-800 hover:bg-slate-50'
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                disabled={trashCurrentPage >= totalTrashPages}
+                onClick={() => setTrashCurrentPage((p) => Math.min(totalTrashPages, p + 1))}
+                className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 cursor-pointer"
+              >
+                Selanjutnya
+              </button>
+            </div>
+          </div>
+
+          {/* Bulk Action Buttons Toolbar */}
+          {trashCount > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-white/5">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleBulkRestore}
+                  disabled={selectedTrashIds.length === 0 || trashActionLoading}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Pulihkan ({selectedTrashIds.length}) Terpilih</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBackupBulk}
+                  disabled={selectedTrashIds.length === 0}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Backup ({selectedTrashIds.length}) Soal Terpilih (.JSON)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkPermanentDelete}
+                  disabled={selectedTrashIds.length === 0 || trashActionLoading}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Hapus Permanen ({selectedTrashIds.length}) Terpilih</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleToggleSelectAllTrash}
+                className="px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-white/15 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer"
+              >
+                {selectedTrashIds.length === filteredTrashItems.length && filteredTrashItems.length > 0
+                  ? 'Batal Pilih Semua'
+                  : 'Pilih Semua'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 3. Area Ekspor & Cadangan Basis Data (Backup) */}
       <div className="bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-sm dark:shadow-xl backdrop-blur-xl overflow-hidden">
         <div className="border-b border-slate-100 dark:border-slate-800/80 p-5 sm:p-6 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -498,7 +1203,7 @@ export function BackupDataView({
         </div>
       </div>
 
-      {/* 3. Area Restore / Pemulihan Data */}
+      {/* 4. Area Restore / Pemulihan Data */}
       <div className="bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-sm dark:shadow-xl backdrop-blur-xl overflow-hidden">
         <div className="border-b border-slate-100 dark:border-slate-800/80 p-5 sm:p-6 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -578,7 +1283,7 @@ export function BackupDataView({
         </div>
       </div>
 
-      {/* 4. Area Pembersihan & Penghapusan Data (Maintenance) */}
+      {/* 5. Area Pembersihan & Penghapusan Data (Maintenance) */}
       <div className="bg-white/90 dark:bg-slate-900/85 border border-rose-200/80 dark:border-rose-900/40 rounded-3xl shadow-sm dark:shadow-xl backdrop-blur-xl overflow-hidden">
         <div className="border-b border-rose-100 dark:border-rose-900/30 p-5 sm:p-6 bg-rose-50/40 dark:bg-rose-950/20 flex items-center justify-between">
           <div className="flex items-center gap-2.5">

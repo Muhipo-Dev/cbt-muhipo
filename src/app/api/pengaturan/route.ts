@@ -53,7 +53,7 @@ export async function GET() {
         data: {
           id: 'default-settings',
           schoolName: 'SMA Muhammadiyah 1 Ponorogo',
-          appTitle: 'CBT SMA MUHIPO',
+          appTitle: 'CBT',
           academicYear: '2026/2027',
           semester: 'Ganjil',
           timezone: 'Asia/Jakarta',
@@ -100,7 +100,7 @@ export async function GET() {
       data: {
         id: 'default-settings',
         schoolName: 'SMA Muhammadiyah 1 Ponorogo',
-        appTitle: 'CBT SMA MUHIPO',
+        appTitle: 'CBT',
         academicYear: '2026/2027',
         semester: 'Ganjil',
         timezone: 'Asia/Jakarta',
@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
       create: {
         id: 'default-settings',
         schoolName: schoolName?.trim() || 'SMA Muhammadiyah 1 Ponorogo',
-        appTitle: appTitle?.trim() || 'CBT SMA MUHIPO',
+        appTitle: appTitle?.trim() || 'CBT',
         academicYear: academicYear?.trim() || '2026/2027',
         semester: semester?.trim() || 'Ganjil',
         timezone: timezone?.trim() || 'Asia/Jakarta',

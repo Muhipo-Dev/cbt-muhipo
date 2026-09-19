@@ -37,6 +37,9 @@ model User {
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  @@index([role])
+  @@index([kelasId])
 }
 
 model Kelas {
@@ -73,6 +76,8 @@ model UjianKelas {
   createdAt DateTime @default(now())
 
   @@unique([ujianId, kelasId])
+  @@index([ujianId])
+  @@index([kelasId])
 }
 
 // Modul (Kontainer Induk Kategori Topik CBT)
@@ -114,6 +119,10 @@ model MataPelajaran {
   
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
+
+  @@index([modulId])
+  @@index([status])
+  @@index([kode])
 }
 
 model GuruMataPelajaran {
@@ -151,6 +160,9 @@ model Soal {
   
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+
+  @@index([mataPelajaranId])
+  @@index([tipeSoal])
 }
 
 model OpsiJawaban {
@@ -164,6 +176,8 @@ model OpsiJawaban {
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([soalId])
 }
 
 model Ujian {
@@ -192,6 +206,11 @@ model Ujian {
   
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
+
+  @@index([mataPelajaranId])
+  @@index([status])
+  @@index([waktuMulai])
+  @@index([waktuSelesai])
 }
 
 model PesertaUjian {
@@ -221,11 +240,14 @@ model PesertaUjian {
   
   jawabanPeserta  JawabanPeserta[]
   logs            LogAktivitasUjian[]
-
+  
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
   @@unique([ujianId, siswaId])
+  @@index([siswaId])
+  @@index([ujianId])
+  @@index([status])
 }
 
 model JawabanPeserta {
@@ -243,11 +265,13 @@ model JawabanPeserta {
   isBenar         Boolean?
   skor            Float          @default(0.0)
   catatanKoreksi  String?        @db.Text
-
+  
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   @@unique([pesertaUjianId, soalId])
+  @@index([pesertaUjianId])
+  @@index([soalId])
 }
 
 model LogAktivitasUjian {

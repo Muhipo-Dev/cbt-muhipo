@@ -42,6 +42,8 @@ export function PesertaDaftarView({
     kelasId: kelasList[0]?.id || '',
     jenisKelamin: 'L',
   })
+  const [resetPasswordModal, setResetPasswordModal] = useState<any>(null)
+  const [newPasswordInput, setNewPasswordInput] = useState('')
   const [saving, setSaving] = useState(false)
 
   const handleOpenCreate = () => {
@@ -133,27 +135,36 @@ export function PesertaDaftarView({
   }
 
   const handleResetPassword = (item: any) => {
-    showConfirm(
-      'Reset Password Peserta?',
-      `Reset kata sandi untuk ${item.name} (${item.username}) ke default "123456"?`,
-      async () => {
-        try {
-          const res = await fetch('/api/admin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'RESET_PASSWORD', userId: item.id, newPassword: '123456' }),
-          })
-          const json = await res.json()
-          if (json.success) {
-            showNotification('Password Direset', json.message || 'Password berhasil direset ke 123456', 'success')
-          } else {
-            showNotification('Gagal', json.message || 'Gagal reset password', 'error')
-          }
-        } catch (err: any) {
-          showNotification('Error', 'Gagal reset: ' + err.message, 'error')
-        }
+    setResetPasswordModal(item)
+    setNewPasswordInput('')
+  }
+
+  const handleConfirmResetPassword = async () => {
+    if (!resetPasswordModal) return
+    const pass = newPasswordInput.trim()
+    if (!pass) {
+      showNotification('Peringatan', 'Silakan masukkan kata sandi baru untuk siswa.', 'warning')
+      return
+    }
+
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'RESET_PASSWORD', userId: resetPasswordModal.id, newPassword: pass }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        showNotification('Password Direset', json.message || `Password ${resetPasswordModal.name} berhasil diubah menjadi "${pass}"`, 'success')
+        setResetPasswordModal(null)
+        setNewPasswordInput('')
+        onRefresh()
+      } else {
+        showNotification('Gagal', json.message || 'Gagal reset password', 'error')
       }
-    )
+    } catch (err: any) {
+      showNotification('Error', 'Gagal reset: ' + err.message, 'error')
+    }
   }
 
   const handleExportExcel = () => {
@@ -303,7 +314,7 @@ export function PesertaDaftarView({
                           type="button"
                           onClick={() => handleResetPassword(s)}
                           className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition cursor-pointer"
-                          title="Reset Password ke 123456"
+                          title="Reset Kata Sandi Siswa"
                         >
                           <KeyRound className="w-4 h-4" />
                         </button>
@@ -333,18 +344,80 @@ export function PesertaDaftarView({
         </div>
       </div>
 
-      {/* Modal Tambah / Edit Peserta */}
+      {/* Modal Reset Password Manual Siswa */}
+      {resetPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                <KeyRound className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white text-sm">Reset Kata Sandi Siswa</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {resetPasswordModal.name} ({resetPasswordModal.username})
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Kata Sandi Baru (Diisi Manual) *
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={newPasswordInput}
+                onChange={(e) => setNewPasswordInput(e.target.value)}
+                placeholder="Masukkan kata sandi baru..."
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:border-amber-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleConfirmResetPassword()
+                  }
+                }}
+              />
+              <p className="text-[11px] text-slate-400 mt-1.5">
+                Ketikkan kata sandi baru yang diinginkan. Siswa akan langsung menggunakan kata sandi ini.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setResetPasswordModal(null)
+                  setNewPasswordInput('')
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResetPassword}
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md transition cursor-pointer"
+              >
+                Simpan Password Baru
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tambah / Edit Siswa */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
-              {editingItem ? 'Edit Data Peserta Ujian' : 'Tambah Peserta Ujian Baru'}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-2xl">
+            <h3 className="font-black text-base text-slate-900 dark:text-white mb-4">
+              {editingItem ? 'Edit Data Peserta' : 'Tambah Peserta Baru'}
             </h3>
 
-            <form onSubmit={handleSave} className="space-y-3.5">
+            <form onSubmit={handleSave} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Nama Lengkap Siswa *
+                  Nama Lengkap *
                 </label>
                 <input
                   type="text"
@@ -455,4 +528,3 @@ export function PesertaDaftarView({
     </div>
   )
 }
-

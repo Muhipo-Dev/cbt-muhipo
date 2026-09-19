@@ -345,12 +345,12 @@ export default function LembarUjianPage({
 
       if (resJson.data?.isLocked) {
         alert(
-          `AKUN UJIAN ANDA TERKUNCI!\n\nAnda telah mencapai batas maksimal 5 kali pelanggaran keamanan (keluar halaman ujian / berpindah aplikasi / berpindah tab). Silakan hubungi Pengawas / Proktor Ruang untuk membuka kunci ujian Anda.`
+          `AKUN UJIAN ANDA TERKUNCI!\n\nTerdeteksi pelanggaran keamanan (keluar halaman ujian / berpindah aplikasi / berpindah tab). Sistem otomatis langsung mengunci ujian Anda. Silakan hubungi Pengawas / Proktor Ruang untuk membuka kunci ujian Anda.`
         );
         router.push('/siswa');
       } else if (currentViolation > 0) {
         setCheatWarning(
-          `Peringatan Pelanggaran (${currentViolation}/5): Dilarang keluar dari halaman ujian atau berpindah aplikasi! Akun akan terkunci otomatis pada pelanggaran ke-5.`
+          `Peringatan Pelanggaran (${currentViolation}x): Dilarang keluar dari halaman ujian atau berpindah aplikasi! Akun akan langsung terkunci otomatis.`
         );
       }
     } catch (e) {
@@ -549,7 +549,7 @@ export default function LembarUjianPage({
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center text-slate-800 dark:text-slate-100">
         <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4 shadow-sm" />
-        <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Menyiapkan Lembar Ujian CBT SMA MUHIPO...</p>
+        <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Menyiapkan Lembar Ujian CBT...</p>
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Memuat soal dan preferensi ujian</p>
       </div>
     );
@@ -563,7 +563,7 @@ export default function LembarUjianPage({
   const totalRagu = Object.values(jawabanMap).filter((j) => j.raguRagu).length;
 
   return (
-    <div className="min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between selection:bg-emerald-500 selection:text-white select-none font-sans touch-manipulation overscroll-none pb-20 sm:pb-4">
+    <div className="min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between selection:bg-emerald-500 selection:text-white select-none font-sans touch-manipulation overscroll-none pb-16 sm:pb-3">
       {/* Modal Aktivasi Keamanan & Screen Recording */}
       {ujianInfo?.lockBrowser && (
         <SecurityLockModal
@@ -573,22 +573,22 @@ export default function LembarUjianPage({
         />
       )}
 
-      {/* Sticky Header CBT (Light & Dark Modern Style) */}
-      <header className="sticky top-0 z-30 px-3 sm:px-8 py-2.5 sm:py-3 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200/90 dark:border-white/10 backdrop-blur-md flex items-center justify-between shadow-xs">
+      {/* Sticky Header CBT Compact (Light & Dark Modern Style) */}
+      <header className="sticky top-0 z-30 px-2.5 sm:px-6 lg:px-8 py-2 sm:py-2.5 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200/90 dark:border-white/10 backdrop-blur-md flex items-center justify-between shadow-xs">
         {/* Left: Info Ujian & Nomor Soal */}
-        <div className="flex items-center gap-2 sm:gap-3.5 min-w-0">
-          <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-600 font-extrabold text-white text-sm sm:text-base shadow-sm shadow-emerald-600/30 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-600 font-extrabold text-white text-xs sm:text-sm shadow-xs shadow-emerald-600/30 shrink-0">
             {currentIndex + 1}
           </div>
           <div className="min-w-0">
-            <h1 className="text-xs sm:text-base font-extrabold text-slate-900 dark:text-white truncate">
+            <h1 className="text-xs sm:text-sm lg:text-base font-extrabold text-slate-900 dark:text-white truncate">
               {ujianInfo?.judul || 'Lembar Ujian CBT'}
             </h1>
             <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5">
-              <span className="text-[10px] sm:text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 sm:px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800 font-mono shrink-0">
+              <span className="text-[9px] sm:text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200/60 dark:border-emerald-800 font-mono shrink-0">
                 Soal {currentIndex + 1} / {soalList.length}
               </span>
-              <span className="text-[10px] sm:text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate hidden xs:inline">
+              <span className="text-[9px] sm:text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate hidden xs:inline">
                 • {currentSoal?.tipeSoal ? currentSoal.tipeSoal.replace('_', ' ') : ''}
               </span>
             </div>
@@ -596,11 +596,11 @@ export default function LembarUjianPage({
         </div>
 
         {/* Center: Realtime Countdown Timer & Sync Indicator */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl shadow-2xs">
-            <Clock className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${sisaDetik < 300 ? 'text-rose-600 animate-pulse' : 'text-emerald-600 dark:text-emerald-400'}`} />
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 px-2 sm:px-3 py-1 rounded-xl shadow-2xs">
+            <Clock className={`w-3.5 h-3.5 ${sisaDetik < 300 ? 'text-rose-600 animate-pulse' : 'text-emerald-600 dark:text-emerald-400'}`} />
             <span
-              className={`font-mono text-xs sm:text-base font-extrabold tracking-wider ${
+              className={`font-mono text-xs sm:text-sm font-extrabold tracking-wider ${
                 sisaDetik < 300 ? 'text-rose-600 font-black' : 'text-slate-800 dark:text-slate-200'
               }`}
             >
@@ -610,7 +610,7 @@ export default function LembarUjianPage({
 
           {/* Autosave Server Sync Status Indicator */}
           <div
-            className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all ${
+            className={`hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${
               syncStatus === 'saving'
                 ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/80 animate-pulse'
                 : syncStatus === 'error'
@@ -751,25 +751,25 @@ export default function LembarUjianPage({
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-between">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-3xl p-6 sm:p-10 shadow-sm dark:shadow-xl space-y-6">
+      <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col justify-between">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-xs dark:shadow-xl space-y-4 sm:space-y-5">
           {/* Question Audio Player (Jika tipe listening) */}
           {currentSoal.mediaAudio && (
-            <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                <Volume2 className="w-5 h-5" />
+            <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                <Volume2 className="w-4 h-4" />
               </div>
-              <audio ref={audioRef} controls src={currentSoal.mediaAudio} className="w-full h-8" />
+              <audio ref={audioRef} controls src={currentSoal.mediaAudio} className="w-full h-7" />
             </div>
           )}
 
           {/* Question Media Gambar (Jika ada) */}
           {currentSoal.mediaGambar && (
-            <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 p-2 max-w-lg mx-auto">
+            <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 p-1.5 max-w-lg mx-auto">
               <img
                 src={currentSoal.mediaGambar}
                 alt="Gambar Soal"
-                className="w-full h-auto object-contain rounded-xl"
+                className="w-full h-auto object-contain rounded-lg max-h-64 sm:max-h-80"
               />
             </div>
           )}
@@ -778,10 +778,10 @@ export default function LembarUjianPage({
           <div
             className={`text-slate-900 dark:text-slate-100 ${
               fontSize === 'large'
-                ? 'text-lg leading-loose'
+                ? 'text-base sm:text-lg leading-relaxed'
                 : fontSize === 'xlarge'
-                ? 'text-xl leading-loose'
-                : 'text-base sm:text-[17px] leading-relaxed'
+                ? 'text-lg sm:text-xl leading-relaxed'
+                : 'text-sm sm:text-base leading-relaxed'
             }`}
           >
             <MathRenderer content={currentSoal.pertanyaan} />
@@ -789,7 +789,7 @@ export default function LembarUjianPage({
 
           {/* Opsi Jawaban: Pilihan Ganda & Benar Salah */}
           {(currentSoal.tipeSoal === 'PG' || currentSoal.tipeSoal === 'BENAR_SALAH') && (
-            <div className="space-y-3 pt-6 border-t border-slate-100 dark:border-white/10">
+            <div className="space-y-2 sm:space-y-2.5 pt-4 border-t border-slate-100 dark:border-white/10">
               {currentSoal.opsiJawaban.map((opsi) => {
                 const isSelected = currentJawaban.jawabanDipilih === opsi.id;
 
@@ -798,14 +798,14 @@ export default function LembarUjianPage({
                     key={opsi.id}
                     type="button"
                     onClick={() => handleSelectOpsi(currentSoal.id, opsi.id)}
-                    className={`w-full text-left p-4 sm:p-4.5 rounded-2xl border transition-all flex items-start gap-4 cursor-pointer ${
+                    className={`w-full text-left p-3 sm:p-3.5 rounded-xl border transition-all flex items-start gap-3 cursor-pointer ${
                       isSelected
-                        ? 'bg-emerald-50/90 dark:bg-emerald-950/50 border-emerald-500 dark:border-emerald-400 text-emerald-950 dark:text-emerald-200 shadow-sm ring-1 ring-emerald-400/50'
+                        ? 'bg-emerald-50/90 dark:bg-emerald-950/50 border-emerald-500 dark:border-emerald-400 text-emerald-950 dark:text-emerald-200 shadow-xs ring-1 ring-emerald-400/50'
                         : 'bg-white dark:bg-slate-950/60 hover:bg-slate-50/80 dark:hover:bg-slate-800/60 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
                     }`}
                   >
                     <div
-                      className={`flex-shrink-0 w-8 h-8 rounded-xl font-extrabold flex items-center justify-center text-xs transition ${
+                      className={`flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg font-extrabold flex items-center justify-center text-xs transition ${
                         isSelected
                           ? 'bg-emerald-600 text-white shadow-xs'
                           : 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
@@ -813,7 +813,7 @@ export default function LembarUjianPage({
                     >
                       {opsi.label}
                     </div>
-                    <div className={`flex-1 pt-0.5 ${isSelected ? 'font-medium text-emerald-950 dark:text-emerald-100' : 'text-slate-800 dark:text-slate-200'}`}>
+                    <div className={`flex-1 pt-0.5 text-xs sm:text-sm ${isSelected ? 'font-medium text-emerald-950 dark:text-emerald-100' : 'text-slate-800 dark:text-slate-200'}`}>
                       <MathRenderer content={opsi.konten} />
                     </div>
                   </button>
@@ -824,8 +824,8 @@ export default function LembarUjianPage({
 
           {/* Opsi Jawaban: Pilihan Ganda Kompleks (Multiple Select) */}
           {currentSoal.tipeSoal === 'PG_KOMPLEKS' && (
-            <div className="space-y-3 pt-6 border-t border-slate-100 dark:border-white/10">
-              <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2">
+            <div className="space-y-2 sm:space-y-2.5 pt-4 border-t border-slate-100 dark:border-white/10">
+              <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 px-3 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1.5">
                 <span>💡</span>
                 <span>Pilihan Ganda Kompleks: Anda dapat memilih lebih dari satu jawaban yang benar.</span>
               </div>
@@ -843,14 +843,14 @@ export default function LembarUjianPage({
                     key={opsi.id}
                     type="button"
                     onClick={() => handleSelectOpsiKompleks(currentSoal.id, opsi.id)}
-                    className={`w-full text-left p-4 rounded-2xl border transition-all flex items-start gap-4 cursor-pointer ${
+                    className={`w-full text-left p-3 sm:p-3.5 rounded-xl border transition-all flex items-start gap-3 cursor-pointer ${
                       isSelected
-                        ? 'bg-teal-50/90 dark:bg-teal-950/50 border-teal-500 dark:border-teal-400 text-teal-950 dark:text-teal-200 shadow-sm ring-1 ring-teal-400/50'
+                        ? 'bg-teal-50/90 dark:bg-teal-950/50 border-teal-500 dark:border-teal-400 text-teal-950 dark:text-teal-200 shadow-xs ring-1 ring-teal-400/50'
                         : 'bg-white dark:bg-slate-950/60 hover:bg-slate-50/80 dark:hover:bg-slate-800/60 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
                     }`}
                   >
                     <div
-                      className={`flex-shrink-0 w-8 h-8 rounded-lg font-bold flex items-center justify-center text-xs transition ${
+                      className={`flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg font-extrabold flex items-center justify-center text-xs transition ${
                         isSelected
                           ? 'bg-teal-600 text-white shadow-xs'
                           : 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
@@ -858,7 +858,7 @@ export default function LembarUjianPage({
                     >
                       {isSelected ? '✓' : opsi.label}
                     </div>
-                    <div className={`flex-1 pt-0.5 ${isSelected ? 'font-medium text-teal-950 dark:text-teal-100' : 'text-slate-800 dark:text-slate-200'}`}>
+                    <div className={`flex-1 pt-0.5 text-xs sm:text-sm ${isSelected ? 'font-medium text-teal-950 dark:text-teal-100' : 'text-slate-800 dark:text-slate-200'}`}>
                       <MathRenderer content={opsi.konten} />
                     </div>
                   </button>
@@ -869,11 +869,11 @@ export default function LembarUjianPage({
 
           {/* Opsi Jawaban: Mencocokkan / Menjodohkan (4-7 Kotak Kiri & Kanan) */}
           {currentSoal.tipeSoal === 'MENJODOHKAN' && (
-            <div className="space-y-4 pt-6 border-t border-slate-100 dark:border-white/10">
-              <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 text-blue-900 dark:text-blue-300 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2">
+            <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-white/10">
+              <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 text-blue-900 dark:text-blue-300 px-3 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1.5">
                 <span>🔄</span>
                 <span>
-                  Soal Mencocokkan: Pasangkan setiap kotak di kolom kiri dengan pilihan pasangan yang paling tepat di kolom kanan.
+                  Soal Mencocokkan: Pasangkan setiap kotak di kolom kiri dengan pilihan pasangan yang tepat di kolom kanan.
                 </span>
               </div>
 
@@ -908,7 +908,7 @@ export default function LembarUjianPage({
                 }
 
                 return (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {matchingPairs.map((pair, pIdx) => {
                       const selectedRight = currentMatches[pair.left] || '';
                       const isMatched = Boolean(selectedRight);
@@ -916,24 +916,24 @@ export default function LembarUjianPage({
                       return (
                         <div
                           key={pIdx}
-                          className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          className={`p-2.5 sm:p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
                             isMatched
                               ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-400 dark:border-blue-500/60 shadow-2xs'
                               : 'bg-white dark:bg-slate-950/60 border-slate-200 dark:border-white/10'
                           }`}
                         >
                           {/* Kotak Kiri */}
-                          <div className="flex items-center gap-3 flex-1">
-                            <span className="w-7 h-7 rounded-xl bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs shrink-0 shadow-xs">
+                          <div className="flex items-center gap-2.5 flex-1">
+                            <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs shrink-0 shadow-xs">
                               {pIdx + 1}
                             </span>
-                            <div className="font-semibold text-slate-900 dark:text-white text-sm sm:text-base">
+                            <div className="font-semibold text-slate-900 dark:text-white text-xs sm:text-sm">
                               <MathRenderer content={pair.left} />
                             </div>
                           </div>
 
                           {/* Arrow Indikator */}
-                          <div className="hidden sm:flex text-slate-400 font-bold px-2">
+                          <div className="hidden sm:flex text-slate-400 font-bold px-1 text-xs">
                             ➔
                           </div>
 
@@ -942,7 +942,7 @@ export default function LembarUjianPage({
                             <select
                               value={selectedRight}
                               onChange={(e) => handleSelectMatching(currentSoal.id, pair.left, e.target.value)}
-                              className={`w-full p-2.5 sm:p-3 rounded-xl text-xs sm:text-sm font-semibold border cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                              className={`w-full p-2 rounded-lg text-xs font-semibold border cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                                 isMatched
                                   ? 'bg-blue-600 text-white border-blue-600 font-bold'
                                   : 'bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-300'
@@ -973,8 +973,8 @@ export default function LembarUjianPage({
 
           {/* Input Jawaban: Isian Singkat */}
           {currentSoal.tipeSoal === 'ISIAN' && (
-            <div className="pt-6 border-t border-slate-100 dark:border-white/10 space-y-2.5">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            <div className="pt-4 border-t border-slate-100 dark:border-white/10 space-y-2">
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                 Ketik Jawaban Singkat Anda:
               </label>
               <input
@@ -982,36 +982,36 @@ export default function LembarUjianPage({
                 value={currentJawaban.jawabanDipilih || ''}
                 onChange={(e) => handleInputTeks(currentSoal.id, e.target.value)}
                 placeholder="Ketikkan jawaban di sini..."
-                className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-slate-900 dark:text-white text-base focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
+                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-slate-900 dark:text-white text-sm focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
               />
             </div>
           )}
 
           {/* Input Jawaban: Esai / Uraian */}
           {currentSoal.tipeSoal === 'ESAI' && (
-            <div className="pt-6 border-t border-slate-100 dark:border-white/10 space-y-2.5">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            <div className="pt-4 border-t border-slate-100 dark:border-white/10 space-y-2">
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                 Tuliskan Uraian Lengkap Jawaban Anda:
               </label>
               <textarea
-                rows={6}
+                rows={5}
                 value={currentJawaban.jawabanDipilih || ''}
                 onChange={(e) => handleInputTeks(currentSoal.id, e.target.value)}
                 placeholder="Tuliskan langkah pengerjaan atau uraian jawaban secara jelas dan terstruktur..."
-                className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-slate-900 dark:text-white text-sm focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition leading-relaxed"
+                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-slate-900 dark:text-white text-xs sm:text-sm focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition leading-relaxed"
               />
             </div>
           )}
         </div>
 
-        {/* Bottom Navigation Toolbar (Sticky di Mobile agar sangat responsif & nyaman) */}
-        <div className="fixed sm:static bottom-0 left-0 right-0 z-20 sm:mt-6 flex items-center justify-between gap-2 sm:gap-3 bg-white/95 dark:bg-slate-900/95 sm:bg-white sm:dark:bg-slate-900 border-t sm:border border-slate-200/90 dark:border-white/10 p-3 sm:p-4 sm:rounded-3xl shadow-lg sm:shadow-xs dark:shadow-xl backdrop-blur-md">
+        {/* Bottom Navigation Toolbar (Compact & Ergonomis di Android & Desktop) */}
+        <div className="fixed sm:static bottom-0 left-0 right-0 z-20 sm:mt-4 flex items-center justify-between gap-2 bg-white/95 dark:bg-slate-900/95 sm:bg-white sm:dark:bg-slate-900 border-t sm:border border-slate-200/90 dark:border-white/10 p-2 sm:p-3 sm:rounded-2xl shadow-lg sm:shadow-xs dark:shadow-xl backdrop-blur-md safe-area-bottom">
           {/* Tombol Sebelumnya */}
           <button
             type="button"
             disabled={currentIndex === 0}
             onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-            className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer border border-slate-200 dark:border-white/10 active:scale-95"
+            className="flex items-center gap-1 px-3 sm:px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer border border-slate-200 dark:border-white/10 active:scale-95"
           >
             <ChevronLeft className="w-4 h-4" />
             <span className="hidden xs:inline">Sebelumnya</span>
@@ -1021,9 +1021,9 @@ export default function LembarUjianPage({
           <button
             type="button"
             onClick={handleToggleRagu}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 rounded-xl text-xs font-extrabold transition cursor-pointer border active:scale-95 ${
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer border active:scale-95 ${
               currentJawaban.raguRagu
-                ? 'bg-amber-500 text-white border-amber-600 shadow-sm shadow-amber-500/20'
+                ? 'bg-amber-500 text-white border-amber-600 shadow-xs shadow-amber-500/20'
                 : 'bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60'
             }`}
           >
@@ -1036,16 +1036,16 @@ export default function LembarUjianPage({
             <button
               type="button"
               onClick={() => setShowSubmitModal(true)}
-              className="flex items-center gap-1.5 px-4 sm:px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-xs font-extrabold text-white shadow-md shadow-emerald-600/20 transition cursor-pointer active:scale-95"
+              className="flex items-center gap-1.5 px-3.5 sm:px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-xs font-extrabold text-white shadow-sm shadow-emerald-600/20 transition cursor-pointer active:scale-95"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-3.5 h-3.5" />
               <span>Selesai</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={() => setCurrentIndex((prev) => Math.min(soalList.length - 1, prev + 1))}
-              className="flex items-center gap-1 sm:gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-sm shadow-emerald-600/20 transition cursor-pointer active:scale-95"
+              className="flex items-center gap-1 px-3.5 sm:px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs shadow-emerald-600/20 transition cursor-pointer active:scale-95"
             >
               <span>Selanjutnya</span>
               <ChevronRight className="w-4 h-4" />

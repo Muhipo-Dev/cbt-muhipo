@@ -2,8 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import NextImage from 'next/image';
 import { SchoolBrandHeader } from '@/components/SchoolBrandHeader';
 import { AppFooter } from '@/components/layout/AppFooter';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { NotificationModal, NotificationType } from '@/components/NotificationModal';
 import {
   MonitorPlay,
@@ -23,6 +25,8 @@ import {
   Compass,
   Check,
   AlertTriangle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 export default function ProktorPage() {
@@ -40,6 +44,58 @@ export default function ProktorPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [securityModalData, setSecurityModalData] = useState<any>(null);
   const [showProktorGuideModal, setShowProktorGuideModal] = useState(false);
+
+  // Modal Ubah Password Siswa
+  const [passwordModal, setPasswordModal] = useState<any>(null);
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [showPasswordText, setShowPasswordText] = useState(false);
+
+  const handleOpenChangePassword = (peserta: any) => {
+    setPasswordModal(peserta);
+    setNewPasswordInput('');
+    setShowPasswordText(false);
+  };
+
+  const handleConfirmChangePassword = async () => {
+    if (!passwordModal) return;
+    const pass = newPasswordInput.trim();
+    if (!pass) {
+      showNotification('Peringatan', 'Silakan masukkan kata sandi baru untuk peserta.', 'warning');
+      return;
+    }
+
+    try {
+      setIsSavingPassword(true);
+      const res = await fetch('/api/proktor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'RESET_PASSWORD',
+          siswaId: passwordModal.siswaId || passwordModal.id,
+          pesertaUjianId: passwordModal.pesertaUjianId,
+          newPassword: pass,
+        }),
+      });
+      const resJson = await res.json();
+      if (resJson.success) {
+        showNotification(
+          'Password Berhasil Diubah',
+          resJson.message || `Password siswa "${passwordModal.name}" berhasil diubah menjadi "${pass}"`,
+          'success'
+        );
+        setPasswordModal(null);
+        setNewPasswordInput('');
+        fetchMonitorData(true);
+      } else {
+        showNotification('Gagal', resJson.message || 'Gagal mengubah password siswa', 'error');
+      }
+    } catch (e: any) {
+      showNotification('Error', 'Gagal mengubah password: ' + e.message, 'error');
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
 
   // In-App Notification / Dialog Modal State
   const [notifModal, setNotifModal] = useState<{
@@ -109,7 +165,7 @@ export default function ProktorPage() {
   }>({
     logoUrl: '/pic_logo.png',
     backgroundUrl: '/muhipo-log.jpg',
-    appTitle: 'CBT SMA MUHIPO',
+    appTitle: 'CBT',
     schoolName: 'SMA Muhammadiyah 1 Ponorogo',
   });
 
@@ -122,7 +178,7 @@ export default function ProktorPage() {
           setSettings({
             logoUrl: json.data.logoUrl || '/pic_logo.png',
             backgroundUrl: json.data.backgroundUrl || '/muhipo-log.jpg',
-            appTitle: json.data.appTitle || 'CBT SMA MUHIPO',
+            appTitle: json.data.appTitle || 'CBT',
             schoolName: json.data.schoolName || 'SMA Muhammadiyah 1 Ponorogo',
           });
         }
@@ -367,22 +423,49 @@ export default function ProktorPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
         <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-sm font-medium text-slate-400">Menghubungkan ke Ruang Proktor CBT SMA MUHIPO...</p>
+        <p className="text-sm font-medium text-slate-400">Menghubungkan ke Ruang Proktor CBT...</p>
       </div>
     );
   }
 
+  const activeBg = settings.backgroundUrl || '/muhipo-log.jpg';
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-cyan-500 selection:text-white">
+    <div className="min-h-screen relative text-slate-900 dark:text-slate-100 flex flex-col justify-between selection:bg-cyan-500 selection:text-white transition-colors duration-300 overflow-x-hidden">
+      {/* 1. Background Wallpaper */}
+      <div className="fixed inset-0 -z-30 w-full h-full overflow-hidden pointer-events-none">
+        {activeBg.startsWith('http') || activeBg.startsWith('data:') ? (
+          <img
+            src={activeBg}
+            alt="Latar Belakang SMA MUHIPO"
+            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
+          />
+        ) : (
+          <NextImage
+            src={activeBg}
+            alt="Latar Belakang SMA MUHIPO"
+            fill
+            priority
+            unoptimized
+            sizes="100vw"
+            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
+          />
+        )}
+      </div>
+
+      {/* 2. Glassmorphism Backdrop */}
+      <div className="fixed inset-0 bg-slate-100/80 dark:bg-slate-950/65 dark:bg-gradient-to-b dark:from-slate-950/75 dark:via-slate-900/60 dark:to-slate-950/80 backdrop-blur-[2px] -z-20 pointer-events-none transition-colors duration-300" />
+
       {/* Proktor Topbar */}
-      <header className="px-6 py-4 bg-slate-900/90 border-b border-slate-800 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between">
+      <header className="px-6 py-4 bg-white/95 dark:bg-slate-900/90 border-b border-slate-200/90 dark:border-slate-800 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between">
         <SchoolBrandHeader
           subtitle="Manajemen Ujian SMA Muhammadiyah 1 Ponorogo"
           logoUrl={settings.logoUrl}
-          appTitle={settings.appTitle || 'CBT SMA MUHIPO'}
+          appTitle={settings.appTitle || 'CBT'}
         />
 
         <div className="flex items-center gap-3">
+          <ThemeToggle size="sm" />
           <button
             onClick={() => setShowProktorGuideModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 border border-cyan-500/30 text-xs font-bold text-white transition cursor-pointer shadow-md shadow-cyan-600/20"
@@ -393,7 +476,7 @@ export default function ProktorPage() {
 
           <button
             onClick={() => fetchMonitorData(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 transition cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh Data</span>
@@ -401,7 +484,7 @@ export default function ProktorPage() {
 
           <button
             onClick={handleLogout}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-rose-950/60 border border-slate-700 hover:border-rose-800 text-xs font-semibold text-rose-300 transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/60 border border-slate-200 dark:border-slate-700 hover:border-rose-300 dark:hover:border-rose-800 text-xs font-semibold text-rose-600 dark:text-rose-300 transition cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Keluar</span>
@@ -678,6 +761,16 @@ export default function ProktorPage() {
                             </button>
                           ) : null}
 
+                          <button
+                            type="button"
+                            onClick={() => handleOpenChangePassword(peserta)}
+                            title="Ubah Kata Sandi Peserta"
+                            className="px-2 py-1 rounded-lg bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-800 text-emerald-300 text-[11px] font-semibold transition cursor-pointer"
+                          >
+                            <KeyRound className="w-3.5 h-3.5 inline mr-0.5" />
+                            Password
+                          </button>
+
                           {!isSelesai && (
                             <button
                               type="button"
@@ -698,6 +791,129 @@ export default function ProktorPage() {
           </div>
         </div>
       </main>
+
+      {/* Password Change Modal */}
+      {passwordModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Ubah Password Peserta</h3>
+                <p className="text-xs text-slate-400">
+                  Ganti kata sandi siswa secara langsung saat ujian.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Nama Lengkap:</span>
+                <span className="font-bold text-white">{passwordModal.name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Username / ID:</span>
+                <span className="font-mono font-bold text-cyan-400">{passwordModal.username}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Kelas:</span>
+                <span className="font-semibold text-slate-300">{passwordModal.kelas || '-'}</span>
+              </div>
+              {passwordModal.plainPassword && (
+                <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                  <span className="text-slate-400">Password Saat Ini:</span>
+                  <span className="font-mono font-bold text-amber-400">{passwordModal.plainPassword}</span>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Kata Sandi Baru:
+              </label>
+              <div className="relative">
+                <input
+                  type={showPasswordText ? 'text' : 'password'}
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleConfirmChangePassword();
+                    }
+                  }}
+                  placeholder="Masukkan kata sandi baru..."
+                  className="w-full py-2.5 px-3.5 pr-10 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordText(!showPasswordText)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 transition cursor-pointer"
+                  title={showPasswordText ? 'Sembunyikan' : 'Tampilkan'}
+                >
+                  {showPasswordText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                <span className="text-[10.5px] text-slate-400">Pilihan Cepat:</span>
+                <button
+                  type="button"
+                  onClick={() => setNewPasswordInput('123456')}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                >
+                  Default 123456
+                </button>
+                {passwordModal.username && (
+                  <button
+                    type="button"
+                    onClick={() => setNewPasswordInput(passwordModal.username)}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                  >
+                    Gunakan Username
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isSavingPassword}
+                onClick={() => {
+                  setPasswordModal(null);
+                  setNewPasswordInput('');
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition cursor-pointer disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isSavingPassword}
+                onClick={handleConfirmChangePassword}
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white shadow-lg shadow-amber-700/30 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {isSavingPassword ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Simpan Password</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Extra Time Modal */}
       {extraTimeModal && (

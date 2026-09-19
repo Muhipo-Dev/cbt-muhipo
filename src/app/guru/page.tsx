@@ -72,7 +72,7 @@ export default function GuruDashboardPage() {
   // Settings State (Logo & Wallpaper)
   const [settingsForm, setSettingsForm] = useState({
     schoolName: 'SMA Muhammadiyah 1 Ponorogo',
-    appTitle: 'CBT SMA MUHIPO',
+    appTitle: 'CBT',
     academicYear: '2026/2027',
     semester: 'Ganjil',
     logoUrl: '/pic_logo.png',
@@ -1224,7 +1224,7 @@ export default function GuruDashboardPage() {
           <img
             src={activeBg}
             alt="Latar Belakang SMA MUHIPO"
-            className="object-cover object-center w-full h-full scale-105"
+            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
           />
         ) : (
           <NextImage
@@ -1234,13 +1234,13 @@ export default function GuruDashboardPage() {
             priority
             unoptimized
             sizes="100vw"
-            className="object-cover object-center w-full h-full scale-105"
+            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
           />
         )}
       </div>
 
       {/* 2. Glassmorphism Backdrop Overlay Dinamis */}
-      <div className="fixed inset-0 bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-[2px] -z-20 pointer-events-none transition-colors duration-300" />
+      <div className="fixed inset-0 bg-slate-100/80 dark:bg-slate-950/65 dark:bg-gradient-to-b dark:from-slate-950/75 dark:via-slate-900/60 dark:to-slate-950/80 backdrop-blur-[2px] -z-20 pointer-events-none transition-colors duration-300" />
 
       {/* 3. Kerangka Sidebar Induk Terpadu (Hanya muncul ketika masuk di menu Bank Soal atau Koreksi Rekap) */}
       {activeTab !== 'dashboard' && (
@@ -1264,7 +1264,7 @@ export default function GuruDashboardPage() {
       >
         {/* Navbar Induk Terpadu */}
         <AppNavbar
-          appTitle={settingsForm.appTitle && settingsForm.appTitle !== 'CBT' && settingsForm.appTitle !== 'CBT MUHIPO' ? settingsForm.appTitle : 'CBT SMA MUHIPO'}
+          appTitle={settingsForm.appTitle ? settingsForm.appTitle : 'CBT'}
           subtitle="Manajemen Ujian Guru SMA Muhammadiyah 1 Ponorogo"
           logoUrl={settingsForm.logoUrl}
           onToggleSidebar={activeTab !== 'dashboard' ? () => setSidebarOpen(true) : undefined}

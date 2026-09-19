@@ -103,9 +103,9 @@ export function SecurityLockModal({
           <div className="flex items-start gap-2 sm:gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <b className="text-slate-900 text-xs">3. Batas Toleransi Pelanggaran (Maksimal 5x):</b>
+              <b className="text-slate-900 text-xs">3. Larangan Pelanggaran (1x Langsung Terkunci):</b>
               <span className="text-slate-500 block text-[11px] mt-0.5">
-                Setelah masa 5 detik berakhir, jika berpindah tab, berpindah aplikasi, atau keluar fullscreen, sistem membunyikan alarm. Pada <b>pelanggaran ke-5</b>, akun ujian akan <b>otomatis terkunci</b> dan wajib dibuka oleh pengawas.
+                Setelah masa adaptasi 5 detik berakhir, jika berpindah tab, berpindah aplikasi, atau keluar fullscreen, sistem akan <b>langsung mengunci otomatis</b> lembar ujian Anda tanpa toleransi dan wajib dibuka oleh pengawas/proktor.
               </span>
             </div>
           </div>

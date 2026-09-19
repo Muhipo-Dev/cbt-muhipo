@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Jika pelanggaran fatal (mencapai batas maksimal 5 kali), kunci ujian otomatis
-      if (totalPelanggaran >= 5) {
+      // Jika terjadi pelanggaran (1 kali pelanggaran), kunci ujian otomatis tanpa toleransi
+      if (totalPelanggaran >= 1) {
         await prisma.pesertaUjian.update({
           where: { id: pesertaUjianId },
           data: { status: 'TERKUNCI' },

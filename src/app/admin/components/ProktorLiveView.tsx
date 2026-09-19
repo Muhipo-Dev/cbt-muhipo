@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Radio,
   Eye,
+  EyeOff,
   RefreshCw,
   Maximize2,
   ShieldAlert,
@@ -22,6 +23,7 @@ import {
   Smartphone,
   Calendar,
   Layers,
+  KeyRound,
 } from 'lucide-react'
 
 interface ProktorLiveViewProps {
@@ -51,6 +53,58 @@ export function ProktorLiveView({
 
   // Modal Audit Log Pelanggaran & Peringatan Siswa
   const [inspectModal, setInspectModal] = useState<any>(null)
+
+  // Modal Ubah Password Siswa
+  const [passwordModal, setPasswordModal] = useState<any>(null)
+  const [newPasswordInput, setNewPasswordInput] = useState<string>('')
+  const [isSavingPassword, setIsSavingPassword] = useState<boolean>(false)
+  const [showPasswordText, setShowPasswordText] = useState<boolean>(false)
+
+  const handleOpenChangePassword = (p: any) => {
+    setPasswordModal(p)
+    setNewPasswordInput('')
+    setShowPasswordText(false)
+  }
+
+  const handleConfirmChangePassword = async () => {
+    if (!passwordModal) return
+    const pass = newPasswordInput.trim()
+    if (!pass) {
+      showNotification('Peringatan', 'Silakan masukkan kata sandi baru untuk peserta.', 'warning')
+      return
+    }
+
+    try {
+      setIsSavingPassword(true)
+      const res = await fetch('/api/proktor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'RESET_PASSWORD',
+          siswaId: passwordModal.siswaId || passwordModal.id,
+          pesertaUjianId: passwordModal.pesertaUjianId,
+          newPassword: pass,
+        }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        showNotification(
+          'Password Berhasil Diubah',
+          json.message || `Password siswa "${passwordModal.name}" berhasil diubah menjadi "${pass}"`,
+          'success'
+        )
+        setPasswordModal(null)
+        setNewPasswordInput('')
+        onRefresh()
+      } else {
+        showNotification('Gagal', json.message || 'Gagal mengubah password siswa', 'error')
+      }
+    } catch (err: any) {
+      showNotification('Error', 'Gagal mengubah password: ' + err.message, 'error')
+    } finally {
+      setIsSavingPassword(false)
+    }
+  }
 
   const activeUjianList = proktorData?.ujianList || proktorData?.activeUjianList || []
 
@@ -416,6 +470,13 @@ export function ProktorLiveView({
                           >
                             <Clock className="w-3.5 h-3.5" />
                           </button>
+                          <button
+                            onClick={() => handleOpenChangePassword(p)}
+                            className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition cursor-pointer"
+                            title="Ubah Password Peserta"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -572,7 +633,147 @@ export function ProktorLiveView({
                   <Clock className="w-3.5 h-3.5" />
                   <span>+Tambah Waktu</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = { ...inspectModal }
+                    setInspectModal(null)
+                    handleOpenChangePassword(target)
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs cursor-pointer transition flex items-center gap-1.5"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Ubah Password</span>
+                </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. MODAL UBAH PASSWORD SISWA */}
+      {passwordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-black text-base text-slate-900 dark:text-white">
+                  Ubah Kata Sandi Peserta
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Ganti password siswa secara langsung saat sesi ujian berlangsung.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-white/5 space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">Nama Siswa:</span>
+                <span className="font-bold text-slate-900 dark:text-white">{passwordModal.name}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">Username / ID:</span>
+                <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{passwordModal.username}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">Kelas:</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">{passwordModal.kelas || '-'}</span>
+              </div>
+              {passwordModal.plainPassword && (
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60 dark:border-white/5">
+                  <span className="text-slate-500">Password Saat Ini:</span>
+                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{passwordModal.plainPassword}</span>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                Kata Sandi Baru:
+              </label>
+              <div className="relative">
+                <input
+                  type={showPasswordText ? 'text' : 'password'}
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleConfirmChangePassword()
+                    }
+                  }}
+                  placeholder="Masukkan password baru..."
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordText(!showPasswordText)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                  title={showPasswordText ? 'Sembunyikan' : 'Tampilkan'}
+                >
+                  {showPasswordText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                <span className="text-[10.5px] text-slate-400">Pilihan Cepat:</span>
+                <button
+                  type="button"
+                  onClick={() => setNewPasswordInput('123456')}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer"
+                >
+                  Default 123456
+                </button>
+                {passwordModal.username && (
+                  <button
+                    type="button"
+                    onClick={() => setNewPasswordInput(passwordModal.username)}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer"
+                  >
+                    Gunakan Username
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2">
+                Siswa dapat langsung login kembali menggunakan kata sandi baru ini.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isSavingPassword}
+                onClick={() => {
+                  setPasswordModal(null)
+                  setNewPasswordInput('')
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition cursor-pointer disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isSavingPassword}
+                onClick={handleConfirmChangePassword}
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {isSavingPassword ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Simpan Password</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

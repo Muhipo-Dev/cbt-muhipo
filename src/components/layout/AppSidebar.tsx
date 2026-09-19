@@ -74,20 +74,20 @@ export function AppSidebar({
         }`}
       >
         {/* Sidebar Header: Jam Server Real-Time */}
-        <div className="h-16 flex items-center justify-between px-4 bg-slate-950/70 border-b border-slate-800/80 backdrop-blur-md shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-2 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 shadow-inner flex items-center justify-center shrink-0">
-              <Clock className="w-5 h-5 animate-pulse" />
+        <div className="h-14 sm:h-15 flex items-center justify-between px-3.5 bg-slate-950/80 border-b border-slate-800/80 backdrop-blur-md shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 shadow-inner flex items-center justify-center shrink-0">
+              <Clock className="w-4 h-4 animate-pulse" />
             </div>
             <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-1.5 font-mono font-bold text-white text-base tracking-tight leading-none">
+              <div className="flex items-center gap-1 font-mono font-bold text-white text-sm tracking-tight leading-none">
                 <span>{clock.timeString}</span>
-                <span className="text-[10px] font-sans font-semibold px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">
+                <span className="text-[9px] font-sans font-semibold px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">
                   WIB
                 </span>
               </div>
               <span
-                className="text-[11px] text-slate-400 truncate font-medium mt-1 leading-tight"
+                className="text-[10px] text-slate-400 truncate font-medium mt-0.5 leading-tight"
                 title={clock.dateString}
               >
                 {clock.dateString}
@@ -97,14 +97,14 @@ export function AppSidebar({
           <button
             type="button"
             onClick={onClose}
-            className="lg:hidden p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+            className="lg:hidden p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Sidebar Menu Items with Accordions */}
-        <div className="flex-1 overflow-y-auto py-3 px-2.5 space-y-1 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 custom-scrollbar">
           {items.map((item) => {
             const Icon = item.icon
             const hasSub = !!item.subItems && item.subItems.length > 0
@@ -119,30 +119,30 @@ export function AppSidebar({
                   <button
                     type="button"
                     onClick={() => toggleGroup(item.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 text-xs sm:text-sm font-semibold cursor-pointer ${
+                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition-all duration-150 text-xs font-semibold cursor-pointer ${
                       isChildActive
                         ? 'bg-blue-600/20 text-white font-bold border border-blue-500/30'
                         : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
                       <Icon
-                        className={`w-4 h-4 shrink-0 ${
+                        className={`w-3.5 h-3.5 shrink-0 ${
                           isChildActive ? 'text-blue-400' : 'text-slate-400'
                         }`}
                       />
                       <span className="truncate">{item.name}</span>
                     </div>
                     <ChevronDown
-                      className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                      className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 ${
                         isGroupExpanded ? 'rotate-0' : '-rotate-90'
                       }`}
                     />
                   </button>
 
-                  {/* Submenu Items */}
+                  {/* Sub-items List (Collapsible) */}
                   {isGroupExpanded && (
-                    <div className="pl-3 pr-1 py-1 space-y-0.5 border-l border-slate-700/60 ml-4 my-1">
+                    <div className="pl-3.5 pr-1 py-0.5 space-y-0.5 border-l border-slate-700/60 ml-3 mt-0.5">
                       {item.subItems?.map((sub) => {
                         const isSubActive = activeId === sub.id
                         return (
@@ -153,17 +153,15 @@ export function AppSidebar({
                               onSelect(sub.id)
                               onClose()
                             }}
-                            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 text-xs font-medium cursor-pointer text-left ${
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 cursor-pointer ${
                               isSubActive
-                                ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-600/30'
-                                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
+                                ? 'bg-blue-600 text-white font-bold shadow-xs'
+                                : 'text-slate-400 hover:text-white hover:bg-white/5'
                             }`}
                           >
-                            <span
-                              className={`w-2 h-2 rounded-full border shrink-0 transition ${
-                                isSubActive
-                                  ? 'bg-white border-white'
-                                  : 'border-slate-500 bg-transparent'
+                            <Circle
+                              className={`w-1.5 h-1.5 shrink-0 ${
+                                isSubActive ? 'text-white fill-white' : 'text-slate-500 fill-slate-500'
                               }`}
                             />
                             <span className="truncate">{sub.name}</span>
@@ -176,7 +174,7 @@ export function AppSidebar({
               )
             }
 
-            // Direct Tab Item
+            // Direct Tab Item without subitems
             return (
               <button
                 key={item.id}
@@ -185,18 +183,23 @@ export function AppSidebar({
                   onSelect(item.id)
                   onClose()
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all duration-200 text-xs sm:text-sm font-semibold cursor-pointer text-left ${
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition-all duration-150 text-xs font-semibold cursor-pointer ${
                   isDirectActive
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-bold'
+                    ? 'bg-blue-600 text-white font-bold shadow-sm shadow-blue-600/30'
                     : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
-                <Icon
-                  className={`w-4 h-4 shrink-0 ${
-                    isDirectActive ? 'text-white' : 'text-slate-400'
-                  }`}
-                />
-                <span className="truncate">{item.name}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Icon
+                    className={`w-3.5 h-3.5 shrink-0 ${
+                      isDirectActive ? 'text-white' : 'text-slate-400'
+                    }`}
+                  />
+                  <span className="truncate">{item.name}</span>
+                </div>
+                {isDirectActive && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shrink-0" />
+                )}
               </button>
             )
           })}

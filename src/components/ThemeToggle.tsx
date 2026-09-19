@@ -93,7 +93,7 @@ export function ThemeToggle({ className = '', size = 'default' }: ThemeTogglePro
             isDark ? 'opacity-0 scale-50' : 'opacity-100 scale-100'
           }`}
         >
-          <Cloud className="w-3.5 h-3.5 text-white fill-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.1)] pointer-events-none" />
+          <Cloud className="w-3.5 h-3.5 text-white fill-white/90 pointer-events-none" />
         </span>
 
         {/* Indikator Bintang Mode Malam */}
@@ -102,22 +102,22 @@ export function ThemeToggle({ className = '', size = 'default' }: ThemeTogglePro
             isDark ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse drop-shadow-[0_0_6px_rgba(252,211,77,0.8)] pointer-events-none" />
+          <Sparkles className="w-3.5 h-3.5 text-amber-300 pointer-events-none" />
         </span>
       </span>
 
       {/* Tuas Geser Beranimasi Halus (Animated Sliding Knob) */}
       <span
-        className={`relative z-10 flex items-center justify-center rounded-full transition-transform duration-300 transform-gpu ease-out shadow-md pointer-events-none ${knobSize} ${
+        className={`relative z-10 flex items-center justify-center rounded-full transition-transform duration-300 transform-gpu ease-out shadow-sm pointer-events-none ${knobSize} ${
           isDark
-            ? `${translateDist} bg-slate-900 border border-amber-400/60 text-amber-300 shadow-indigo-500/50`
-            : 'translate-x-0 bg-white border border-amber-300 text-amber-500 shadow-amber-500/30'
+            ? `${translateDist} bg-slate-900 border border-amber-400/60 text-amber-300`
+            : 'translate-x-0 bg-white border border-amber-300 text-amber-500'
         }`}
       >
         {isDark ? (
-          <Moon className="w-3.5 h-3.5 fill-amber-300 transition-transform duration-300 rotate-[-15deg] drop-shadow-[0_0_4px_rgba(252,211,77,0.5)] pointer-events-none" />
+          <Moon className="w-3.5 h-3.5 fill-amber-300 transition-transform duration-300 rotate-[-15deg] pointer-events-none" />
         ) : (
-          <Sun className="w-3.5 h-3.5 fill-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.6)] pointer-events-none" />
+          <Sun className="w-3.5 h-3.5 fill-amber-400 pointer-events-none" />
         )}
       </span>
 

@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react'
 import {
   Home,
   ChevronRight,
-  Printer,
   Edit,
   Trash2,
   RefreshCw,
@@ -289,11 +288,6 @@ export function ModulDaftarView({
     }
   }
 
-  // Cetak Daftar Soal
-  const handlePrint = () => {
-    window.print()
-  }
-
   // Backup Soal Topik Ini (JSON)
   const handleBackupTopicSoal = async () => {
     if (!selectedMapelId) {
@@ -481,15 +475,6 @@ export function ModulDaftarView({
             >
               <Download className="w-3.5 h-3.5" />
               <span>Backup Soal Topik (.JSON)</span>
-            </button>
-            <span className="text-slate-300 dark:text-slate-700">|</span>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer font-medium"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Cetak Daftar Soal</span>
             </button>
           </div>
         </div>
