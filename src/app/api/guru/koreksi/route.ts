@@ -13,6 +13,9 @@ export async function GET(request: NextRequest) {
     const ujianId = searchParams.get('ujianId');
 
     let ujianList = await prisma.ujian.findMany({
+      where: {
+        mataPelajaran: { status: { not: 'TERHAPUS' } },
+      },
       include: {
         mataPelajaran: true,
       },

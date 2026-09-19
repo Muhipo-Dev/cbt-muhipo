@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    const ujianWhereClause: any = {};
+    const ujianWhereClause: any = {
+      mataPelajaran: { status: { not: 'TERHAPUS' } },
+    };
     if (user.role === 'GURU') {
       if (filterHari === 'SEMUA') {
         ujianWhereClause.OR = [

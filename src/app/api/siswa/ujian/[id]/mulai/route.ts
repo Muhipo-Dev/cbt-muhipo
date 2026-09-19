@@ -35,8 +35,8 @@ export async function POST(
       },
     });
 
-    if (!ujian) {
-      return NextResponse.json({ success: false, message: 'Jadwal ujian tidak ditemukan.' }, { status: 404 });
+    if (!ujian || ujian.mataPelajaran?.status === 'TERHAPUS') {
+      return NextResponse.json({ success: false, message: 'Jadwal ujian tidak ditemukan atau telah dihapus.' }, { status: 404 });
     }
 
     // 2. Verifikasi Kesiapan Butir Soal di Topik / Mata Pelajaran

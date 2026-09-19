@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
         pesertaUjian: {
           where: {
             ujian: {
+              mataPelajaran: { status: { not: 'TERHAPUS' } },
               OR: [
                 { ujianKelas: { none: {} } },
                 ...(user.kelasNama ? [{ ujianKelas: { some: { kelas: { nama: user.kelasNama } } } }] : []),
