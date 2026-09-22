@@ -22,6 +22,9 @@ import {
   ArrowUpRight,
   Archive,
   Info,
+  Code2,
+  Terminal,
+  FileCode,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -47,16 +50,24 @@ export function BackupDataView({
   onNavigateToTopik,
 }: BackupDataViewProps) {
   const [downloadingJson, setDownloadingJson] = useState(false)
+  const [downloadingSql, setDownloadingSql] = useState(false)
   const [downloadingSoal, setDownloadingSoal] = useState(false)
   const [downloadingJadwal, setDownloadingJadwal] = useState(false)
   const [downloadingHasil, setDownloadingHasil] = useState(false)
   const [exportingNilai, setExportingNilai] = useState(false)
   const [exportingSiswa, setExportingSiswa] = useState(false)
 
-  // Restore State
+  // Restore State JSON
   const [restoreFile, setRestoreFile] = useState<File | null>(null)
   const [restorePreview, setRestorePreview] = useState<any | null>(null)
   const [restoring, setRestoring] = useState(false)
+
+  // Restore State SQL (.sql)
+  const [restoreSqlFile, setRestoreSqlFile] = useState<File | null>(null)
+  const [restoreSqlText, setRestoreSqlText] = useState<string>('')
+  const [restoringSql, setRestoringSql] = useState(false)
+  const [sqlStatementsCount, setSqlStatementsCount] = useState<number>(0)
+  const [showHeidiGuide, setShowHeidiGuide] = useState(false)
 
   // Maintenance & Wipe State
   const [wipeAction, setWipeAction] = useState<string | null>(null)
@@ -345,6 +356,35 @@ export function BackupDataView({
   }
 
   // --- BACKUP DOWNLOAD ACTIONS ---
+  // Download MySQL Database Dump (.SQL)
+  const handleDownloadBackupSql = async () => {
+    try {
+      setDownloadingSql(true)
+      const res = await fetch('/api/admin/backup/sql')
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null)
+        throw new Error(errJson?.message || 'Gagal mengekspor basis data SQL')
+      }
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      a.download = `CBT_MUHIPO_MYSQL_DUMP_${dateStr}.sql`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      showNotification('Berhasil', 'File cadangan basis data SQL (.sql) berhasil diunduh. Siap digunakan di HeidiSQL atau sistem CBT.', 'success')
+    } catch (err: any) {
+      showNotification('Gagal', err.message || 'Gagal mengunduh backup SQL', 'error')
+    } finally {
+      setDownloadingSql(false)
+    }
+  }
+
   // Download Full Database JSON
   const handleDownloadBackupJson = async () => {
     try {
@@ -569,6 +609,72 @@ export function BackupDataView({
           showNotification('Error', 'Gagal restore: ' + err.message, 'error')
         } finally {
           setRestoring(false)
+        }
+      },
+      'warning'
+    )
+  }
+
+  // Handle File SQL (.sql) Restore Selection
+  const handleSelectRestoreSqlFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setRestoreSqlFile(file)
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string
+        if (text && text.trim().length > 0) {
+          setRestoreSqlText(text)
+          // Rough statement count estimate
+          const statements = text.split(';').filter((s) => s.trim().length > 0)
+          setSqlStatementsCount(statements.length)
+        } else {
+          showNotification('File Kosong', 'File SQL tidak memiliki isi/perintah.', 'warning')
+          setRestoreSqlFile(null)
+          setRestoreSqlText('')
+          setSqlStatementsCount(0)
+        }
+      } catch (err) {
+        showNotification('File Korup', 'Gagal membaca isi file SQL.', 'error')
+        setRestoreSqlFile(null)
+        setRestoreSqlText('')
+        setSqlStatementsCount(0)
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  // Execute SQL Script Restore
+  const handleExecuteRestoreSql = () => {
+    if (!restoreSqlText) return
+
+    showConfirm(
+      'Konfirmasi Eksekusi SQL Dump',
+      `Apakah Anda yakin ingin mengeksekusi dump SQL ini (${sqlStatementsCount} statement query)? Seluruh data akan diupdate / di-insert langsung ke database MySQL CBT MUHIPO.`,
+      async () => {
+        try {
+          setRestoringSql(true)
+          const res = await fetch('/api/admin/backup/sql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sql: restoreSqlText }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Eksekusi SQL Berhasil', json.message || 'File SQL berhasil diimpor ke basis data!', 'success')
+            setRestoreSqlFile(null)
+            setRestoreSqlText('')
+            setSqlStatementsCount(0)
+            onRefresh()
+          } else {
+            showNotification('Gagal Impor SQL', json.message || 'Gagal mengeksekusi file SQL', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal impor SQL: ' + err.message, 'error')
+        } finally {
+          setRestoringSql(false)
         }
       },
       'warning'
@@ -1047,16 +1153,63 @@ export function BackupDataView({
 
       {/* 3. Area Ekspor & Cadangan Basis Data (Backup) */}
       <div className="bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-sm dark:shadow-xl backdrop-blur-xl overflow-hidden">
-        <div className="border-b border-slate-100 dark:border-slate-800/80 p-5 sm:p-6 flex items-center justify-between">
+        <div className="border-b border-slate-100 dark:border-slate-800/80 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <Download className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
-              Ekspor & Unduh Cadangan Data (Backup)
-            </h3>
+            <div>
+              <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
+                Ekspor & Unduh Cadangan Data (Backup)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Tersedia format JSON untuk pemulihan instan web CBT dan format SQL Dump untuk MySQL / MariaDB / HeidiSQL.
+              </p>
+            </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowHeidiGuide(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-amber-700 dark:text-amber-300 text-xs font-bold hover:bg-amber-100 transition cursor-pointer self-start sm:self-auto shadow-xs"
+          >
+            <Database className="w-3.5 h-3.5 text-amber-600" />
+            <span>Panduan HeidiSQL & MySQL</span>
+          </button>
         </div>
 
         <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Card 0: MySQL SQL Database Dump (.SQL) */}
+          <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-amber-500/15 border-2 border-amber-500/40 dark:border-amber-500/30 flex flex-col justify-between space-y-4 shadow-sm relative overflow-hidden">
+            <div className="absolute -top-6 -right-6 w-24 h-24 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-md">
+                  <Database className="w-5 h-5" />
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+                  MySQL & HeidiSQL
+                </span>
+              </div>
+              <h4 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span>Export MySQL Dump (.SQL)</span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              </h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Skrip SQL standar MySQL lengkap dengan struktur data untuk impor langsung lewat <strong>HeidiSQL</strong>, <strong>phpMyAdmin</strong>, atau panel restore CBT.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleDownloadBackupSql}
+                disabled={downloadingSql}
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-black text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                <span>{downloadingSql ? 'Mengekspor SQL...' : 'Download Database (.SQL)'}</span>
+              </button>
+            </div>
+          </div>
+
           {/* Card 1: Full JSON Backup */}
           <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/10 border border-blue-200/80 dark:border-blue-900/40 flex flex-col justify-between space-y-4">
             <div className="space-y-2">
@@ -1203,83 +1356,155 @@ export function BackupDataView({
         </div>
       </div>
 
-      {/* 4. Area Restore / Pemulihan Data */}
+      {/* 4. Area Restore / Pemulihan Data (JSON & SQL) */}
       <div className="bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-sm dark:shadow-xl backdrop-blur-xl overflow-hidden">
         <div className="border-b border-slate-100 dark:border-slate-800/80 p-5 sm:p-6 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Upload className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-            <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
-              Pulihkan Data dari File Cadangan (Restore)
-            </h3>
+            <div>
+              <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
+                Pulihkan Basis Data (Restore / Impor)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Pilih opsi pemulihan: file JSON CBT atau file SQL Dump MySQL / HeidiSQL.
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="p-5 sm:p-6 space-y-4">
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-white/10 flex flex-col items-center justify-center text-center space-y-2">
-            <FileJson className="w-8 h-8 text-indigo-500" />
-            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-              Pilih file cadangan JSON CBT MUHIPO untuk memulihkan database
-            </p>
-            <input
-              type="file"
-              accept=".json"
-              onChange={handleSelectRestoreFile}
-              className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-300 cursor-pointer"
-            />
+        <div className="p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Kolom A: Restore File SQL MySQL (.sql) */}
+          <div className="p-5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 space-y-4 flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-600 text-white">
+                  <Database className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Impor Database SQL (.SQL)
+                  </h4>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                    Mendukung file dump SQL dari HeidiSQL, phpMyAdmin, atau ekspor CBT.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-dashed border-amber-300 dark:border-amber-800/80 flex flex-col items-center justify-center text-center space-y-2">
+                <FileCode className="w-7 h-7 text-amber-500" />
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Pilih file .sql untuk dieksekusi ke MySQL
+                </p>
+                <input
+                  type="file"
+                  accept=".sql,text/plain"
+                  onChange={handleSelectRestoreSqlFile}
+                  className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 dark:file:bg-amber-950 dark:file:text-amber-300 cursor-pointer"
+                />
+              </div>
+
+              {restoreSqlFile && (
+                <div className="p-3.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-amber-200 dark:border-amber-800 space-y-2 text-xs">
+                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-200 font-semibold">
+                    <span className="flex items-center gap-1.5 truncate max-w-[200px]">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span className="truncate">{restoreSqlFile.name}</span>
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {(restoreSqlFile.size / 1024).toFixed(1)} KB
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 p-2 rounded-lg border border-amber-200/60">
+                    Estimasi <strong>{sqlStatementsCount}</strong> query statement siap dieksekusi.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleExecuteRestoreSql}
+              disabled={!restoreSqlText || restoringSql}
+              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-40"
+            >
+              <Database className="w-4 h-4" />
+              <span>{restoringSql ? 'Mengeksekusi SQL ke Basis Data...' : 'Jalankan Impor SQL Sekarang'}</span>
+            </button>
           </div>
 
-          {restorePreview && (
-            <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900/50 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>File Cadangan Valid Terverifikasi</span>
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  Tanggal Cadangan: {new Date(restorePreview.meta?.exportedAt).toLocaleString('id-ID')}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                <div className="p-2 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-indigo-100 dark:border-indigo-900">
-                  <span className="text-[10px] text-slate-500 block">Peserta:</span>
-                  <span className="font-bold text-slate-800 dark:text-white">
-                    {restorePreview.meta?.counts?.users || 0} Pengguna
-                  </span>
+          {/* Kolom B: Restore File JSON (.json) */}
+          <div className="p-5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/50 space-y-4 flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-600 text-white">
+                  <FileJson className="w-4 h-4" />
                 </div>
-                <div className="p-2 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-indigo-100 dark:border-indigo-900">
-                  <span className="text-[10px] text-slate-500 block">Topik:</span>
-                  <span className="font-bold text-slate-800 dark:text-white">
-                    {restorePreview.meta?.counts?.mataPelajaran || 0} Mapel
-                  </span>
-                </div>
-                <div className="p-2 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-indigo-100 dark:border-indigo-900">
-                  <span className="text-[10px] text-slate-500 block">Soal:</span>
-                  <span className="font-bold text-slate-800 dark:text-white">
-                    {restorePreview.meta?.counts?.soal || 0} Butir Soal
-                  </span>
-                </div>
-                <div className="p-2 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-indigo-100 dark:border-indigo-900">
-                  <span className="text-[10px] text-slate-500 block">Ujian:</span>
-                  <span className="font-bold text-slate-800 dark:text-white">
-                    {restorePreview.meta?.counts?.ujian || 0} Sesi Tes
-                  </span>
+                <div>
+                  <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Impor Cadangan JSON (.JSON)
+                  </h4>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                    Format asli CBT MUHIPO untuk sinkronisasi dan restore data tanpa bentrok FK.
+                  </p>
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2">
-                <button
-                  type="button"
-                  onClick={handleExecuteRestore}
-                  disabled={restoring}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>{restoring ? 'Memulihkan Basis Data...' : 'Jalankan Pemulihan Database Sekarang'}</span>
-                </button>
+              <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-dashed border-indigo-300 dark:border-indigo-800/80 flex flex-col items-center justify-center text-center space-y-2">
+                <FileJson className="w-7 h-7 text-indigo-500" />
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Pilih file .json cadangan CBT MUHIPO
+                </p>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleSelectRestoreFile}
+                  className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200 dark:file:bg-indigo-950 dark:file:text-indigo-300 cursor-pointer"
+                />
               </div>
+
+              {restorePreview && (
+                <div className="p-3.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-indigo-200 dark:border-indigo-800 space-y-2 text-xs">
+                  <div className="flex items-center justify-between text-indigo-900 dark:text-indigo-200 font-bold">
+                    <span className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Cadangan JSON Valid</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {new Date(restorePreview.meta?.exportedAt).toLocaleDateString('id-ID')}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1 text-[10px] text-slate-600 dark:text-slate-300 text-center">
+                    <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg">
+                      <div className="font-black text-slate-900 dark:text-white">{restorePreview.meta?.counts?.users || 0}</div>
+                      <div>User</div>
+                    </div>
+                    <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg">
+                      <div className="font-black text-slate-900 dark:text-white">{restorePreview.meta?.counts?.mataPelajaran || 0}</div>
+                      <div>Mapel</div>
+                    </div>
+                    <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg">
+                      <div className="font-black text-slate-900 dark:text-white">{restorePreview.meta?.counts?.soal || 0}</div>
+                      <div>Soal</div>
+                    </div>
+                    <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg">
+                      <div className="font-black text-slate-900 dark:text-white">{restorePreview.meta?.counts?.ujian || 0}</div>
+                      <div>Ujian</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+
+            <button
+              type="button"
+              onClick={handleExecuteRestore}
+              disabled={!restorePreview || restoring}
+              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-40"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>{restoring ? 'Memulihkan Basis Data...' : 'Jalankan Pemulihan JSON Sekarang'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1418,6 +1643,95 @@ export function BackupDataView({
           </div>
         </div>
       </div>
+
+      {/* 6. Modal Panduan Ekspor / Impor Menggunakan HeidiSQL & MySQL */}
+      {showHeidiGuide && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-2xl w-full shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Panduan Koneksi & Impor / Ekspor HeidiSQL
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Aplikasi HeidiSQL memudahkan pengelolaan basis data MySQL CBT MUHIPO langsung dari Desktop.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHeidiGuide(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs text-slate-600 dark:text-slate-300">
+              {/* Step 1 */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
+                <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[11px] font-black flex items-center justify-center">1</span>
+                  <span>Koneksi HeidiSQL ke CBT MUHIPO</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <div>Network Type: <strong className="text-amber-600 dark:text-amber-400">MariaDB or MySQL (TCP/IP)</strong></div>
+                  <div>Hostname / IP: <strong className="text-amber-600 dark:text-amber-400">127.0.0.1</strong> / localhost</div>
+                  <div>User: <strong className="text-amber-600 dark:text-amber-400">root</strong></div>
+                  <div>Password: <em>(kosongkan jika default XAMPP)</em></div>
+                  <div>Port: <strong className="text-amber-600 dark:text-amber-400">3306</strong></div>
+                  <div>Database: <strong className="text-amber-600 dark:text-amber-400">cbt_muhipo</strong></div>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 space-y-2">
+                <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-amber-600 text-white text-[11px] font-black flex items-center justify-center">2</span>
+                  <span>Cara Impor File .SQL di HeidiSQL</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-300 pl-1 leading-relaxed">
+                  <li>Buka HeidiSQL dan masuk ke sesi koneksi server database.</li>
+                  <li>Pilih database <strong>cbt_muhipo</strong> pada panel sebelah kiri.</li>
+                  <li>Klik menu <strong>File</strong> &gt; <strong>Load SQL file...</strong> (atau tekan <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">Ctrl+O</kbd>).</li>
+                  <li>Pilih file cadangan <code>.sql</code> yang Anda unduh dari web CBT MUHIPO.</li>
+                  <li>Tekan tombol <strong>Run / Execute SQL</strong> (ikon Play biru atau tombol <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">F9</kbd>).</li>
+                  <li>Seluruh tabel dan data akan otomatis terisi dan siap dipakai di aplikasi CBT.</li>
+                </ol>
+              </div>
+
+              {/* Step 3 */}
+              <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/40 space-y-2">
+                <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] font-black flex items-center justify-center">3</span>
+                  <span>Cara Ekspor Database dari HeidiSQL</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-300 pl-1 leading-relaxed">
+                  <li>Klik kanan pada database <strong>cbt_muhipo</strong> di panel kiri HeidiSQL.</li>
+                  <li>Pilih <strong>Export database as SQL</strong>.</li>
+                  <li>Pilih opsi Database: <em>Create / Drop</em> (opsional), Tables: <em>Create / Drop</em>, Data: <em>Insert</em>.</li>
+                  <li>Tentukan target file output (misal: <code>backup_cbt.sql</code>) lalu klik <strong>Export</strong>.</li>
+                </ol>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowHeidiGuide(false)}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs transition cursor-pointer"
+              >
+                Tutup Panduan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
