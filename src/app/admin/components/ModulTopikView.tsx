@@ -216,17 +216,24 @@ export function ModulTopikView({
   // Save Topik (Create / Update)
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.kode.trim() || !form.nama.trim()) {
-      showNotification('Peringatan', 'Kode dan Nama Topik wajib diisi', 'warning')
+    if (!form.nama.trim()) {
+      showNotification('Peringatan', 'Nama Topik wajib diisi', 'warning')
       return
     }
 
     try {
       setSaving(true)
       const action = editingItem ? 'UPDATE_MAPEL' : 'CREATE_MAPEL'
+      const generatedKode =
+        form.kode.trim() ||
+        `${form.nama
+          .trim()
+          .slice(0, 4)
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`
       const payload: any = {
         action,
-        kode: form.kode.trim().toUpperCase(),
+        kode: generatedKode,
         nama: form.nama.trim(),
         namaModul: form.modul,
         modul: form.modul,
@@ -1034,20 +1041,6 @@ export function ModulTopikView({
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
-                  Kode Topik: <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={form.kode}
-                  onChange={(e) => setForm({ ...form, kode: e.target.value })}
-                  placeholder="Contoh: MAT-X, BIND-XII"
-                  className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-mono uppercase text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                />
               </div>
 
               <div>

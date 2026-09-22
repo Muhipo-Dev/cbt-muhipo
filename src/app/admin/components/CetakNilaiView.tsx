@@ -164,7 +164,7 @@ export function CetakNilaiView({
                 .filter((m: any) => m.status !== 'TERHAPUS')
                 .map((m: any) => (
                   <option key={m.id} value={m.id}>
-                    {m.kode ? `[${m.kode}] ` : ''}{m.nama} (Kls {m.tingkat || 10})
+                    {m.nama} (Kls {m.tingkat || 10})
                   </option>
                 ))}
             </select>

@@ -1837,7 +1837,7 @@ export default function GuruDashboardPage() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Cari nama bank soal / kode..."
+                    placeholder="Cari bank soal atau mata pelajaran..."
                     className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400"
                   />
                 </div>

@@ -441,7 +441,7 @@ export function TesDaftarView({
               setSearch(e.target.value)
               setCurrentPage(1)
             }}
-            placeholder="Cari kode ujian, judul tes, atau nama topik mapel..."
+            placeholder="Cari judul tes ujian atau nama topik mapel..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
           />
         </div>
