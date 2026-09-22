@@ -185,12 +185,8 @@ export function ModulSoalView({
   }
 
   // Active topic object
-  const currentTopic = items.find((it) => it.id === activeMapelId) || mapelData || {
-    id: '',
-    nama: 'Bahasa Indonesia dan Literasi',
-    kode: 'Default',
-  }
-  const topicDisplayName = currentTopic?.nama || 'Topik Terpilih'
+  const currentTopic = items.find((it) => it.id === activeMapelId) || mapelData || null
+  const topicDisplayName = currentTopic?.nama || ''
 
   // Automatic Math & Science Topic Detection
   const isMathTopic = useMemo(() => {
@@ -801,7 +797,11 @@ export function ModulSoalView({
       >
         <div className="px-4 py-2.5 bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-white/10 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-slate-800 dark:text-white">
-            {editingSoalId ? `Edit Soal: ${topicDisplayName}` : `Mengelola Soal ${topicDisplayName}`}
+            {editingSoalId
+              ? `Edit Soal: ${topicDisplayName || 'Topik Terpilih'}`
+              : topicDisplayName
+                ? `Mengelola Soal: ${topicDisplayName}`
+                : 'Tulis Butir Soal Baru'}
           </h2>
           <div className="flex items-center gap-2">
             {isMathTopic && (
@@ -1378,7 +1378,7 @@ export function ModulSoalView({
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-white/10 rounded-md shadow-xs overflow-hidden">
         <div className="px-4 py-2.5 bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-white/10 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-800 dark:text-white">
-            Daftar Soal {topicDisplayName}
+            {topicDisplayName ? `Daftar Soal: ${topicDisplayName}` : 'Daftar Butir Soal'}
           </h2>
           <button
             type="button"
