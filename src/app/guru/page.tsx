@@ -1893,11 +1893,15 @@ export default function GuruDashboardPage() {
                               const defaultTipe = 'PAS';
                               const recommended = getRecommendedKelasList(kelasList, bs.tingkat);
                               const autoKelasIds = recommended.length > 0 ? recommended.map((k) => k.id) : [];
+                              const modulNama = (bs.namaModul || bs.modul?.nama || 'Penilaian').trim();
+                              const cleanModul = modulNama.toLowerCase() === 'default' ? 'Penilaian' : modulNama;
+                              const tingkatStr = bs.tingkat ? `Kelas ${bs.tingkat}` : '';
+                              const autoJudul = [cleanModul, bs.nama, tingkatStr].filter(Boolean).join(' - ');
                               setDistributeModal(bs);
                               setDistributeForm({
                                 tipeUjian: defaultTipe,
-                                kodeUjian: `${defaultTipe}-${bs.kodeBank}-${new Date().getFullYear()}`,
-                                judul: `${defaultTipe} ${bs.nama}`,
+                                kodeUjian: `${defaultTipe}-${bs.kodeBank || 'UJIAN'}-${new Date().getFullYear()}`,
+                                judul: autoJudul,
                                 durasiMenit: bs.durasiMenit || 90,
                                 kelasIds: autoKelasIds,
                                 waktuMulai: formatLocalDatetime(),
@@ -1981,11 +1985,15 @@ export default function GuruDashboardPage() {
                             const defaultTipe = 'PAS';
                             const recommended = getRecommendedKelasList(kelasList, selectedBankSoal.tingkat);
                             const autoKelasIds = recommended.length > 0 ? recommended.map((k) => k.id) : [];
+                            const modulNama = (selectedBankSoal.namaModul || selectedBankSoal.modul?.nama || 'Penilaian').trim();
+                            const cleanModul = modulNama.toLowerCase() === 'default' ? 'Penilaian' : modulNama;
+                            const tingkatStr = selectedBankSoal.tingkat ? `Kelas ${selectedBankSoal.tingkat}` : '';
+                            const autoJudul = [cleanModul, selectedBankSoal.nama, tingkatStr].filter(Boolean).join(' - ');
                             setDistributeModal(selectedBankSoal);
                             setDistributeForm({
                               tipeUjian: defaultTipe,
-                              kodeUjian: `${defaultTipe}-${selectedBankSoal.kodeBank}-${new Date().getFullYear()}`,
-                              judul: `${defaultTipe} ${selectedBankSoal.nama}`,
+                              kodeUjian: `${defaultTipe}-${selectedBankSoal.kodeBank || 'UJIAN'}-${new Date().getFullYear()}`,
+                              judul: autoJudul,
                               durasiMenit: selectedBankSoal.durasiMenit || 90,
                               kelasIds: autoKelasIds,
                               waktuMulai: formatLocalDatetime(),
@@ -3794,11 +3802,15 @@ export default function GuruDashboardPage() {
                     value={distributeForm.tipeUjian}
                     onChange={(e) => {
                       const newTipe = e.target.value;
+                      const tipeObj = DAFTAR_TIPE_UJIAN.find((t) => t.value === newTipe);
+                      const prefixTipe = tipeObj?.label.split('(')[0].trim() || newTipe;
+                      const tingkatStr = distributeModal?.tingkat ? `Kelas ${distributeModal.tingkat}` : '';
+                      const autoJudul = [prefixTipe, distributeModal?.nama, tingkatStr].filter(Boolean).join(' - ');
                       setDistributeForm({
                         ...distributeForm,
                         tipeUjian: newTipe,
-                        kodeUjian: `${newTipe}-${distributeModal.kodeBank}-${new Date().getFullYear()}`,
-                        judul: `${newTipe} ${distributeModal.nama}`,
+                        kodeUjian: `${newTipe}-${distributeModal?.kodeBank || 'UJIAN'}-${new Date().getFullYear()}`,
+                        judul: autoJudul,
                       });
                     }}
                     className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-bold"

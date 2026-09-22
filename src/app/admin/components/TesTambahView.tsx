@@ -32,13 +32,23 @@ export function TesTambahView({
     if (a.status !== 'NONAKTIF' && b.status === 'NONAKTIF') return -1
     return (a.nama || '').localeCompare(b.nama || '')
   })
-  const defaultSelectedId = items.find((it) => it.status !== 'NONAKTIF')?.id || items[0]?.id || ''
+  const generateJudulTes = (mapelItem: any) => {
+    if (!mapelItem) return ''
+    const modulName = (mapelItem.namaModul || mapelItem.modul?.nama || 'Ujian CBT').trim()
+    const cleanModul = modulName.toLowerCase() === 'default' ? 'Penilaian' : modulName
+    const mapelName = (mapelItem.nama || 'Mata Pelajaran').trim()
+    const tingkatStr = mapelItem.tingkat ? `Kelas ${mapelItem.tingkat}` : ''
+    return [cleanModul, mapelName, tingkatStr].filter(Boolean).join(' - ')
+  }
+
+  const defaultSelectedItem = items.find((it) => it.status !== 'NONAKTIF') || items[0]
+  const defaultSelectedId = defaultSelectedItem?.id || ''
   const now = new Date()
   const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
   const [form, setForm] = useState({
     kodeUjian: `TES-${Date.now().toString().slice(-4)}`,
-    judul: '',
+    judul: generateJudulTes(defaultSelectedItem),
     deskripsi: '',
     mataPelajaranId: defaultSelectedId,
     durasiMenit: 90,
@@ -136,6 +146,7 @@ export function TesTambahView({
                 setForm({
                   ...form,
                   mataPelajaranId: e.target.value,
+                  judul: generateJudulTes(target),
                   durasiMenit: target?.durasiMenit || 90,
                 })
               }}

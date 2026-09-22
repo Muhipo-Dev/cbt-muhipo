@@ -47,6 +47,15 @@ export function TesDaftarView({
   )
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('ALL')
+  const generateJudulTes = (mapelItem: any) => {
+    if (!mapelItem) return ''
+    const modulName = (mapelItem.namaModul || mapelItem.modul?.nama || 'Ujian CBT').trim()
+    const cleanModul = modulName.toLowerCase() === 'default' ? 'Penilaian' : modulName
+    const mapelName = (mapelItem.nama || 'Mata Pelajaran').trim()
+    const tingkatStr = mapelItem.tingkat ? `Kelas ${mapelItem.tingkat}` : ''
+    return [cleanModul, mapelName, tingkatStr].filter(Boolean).join(' - ')
+  }
+
   const [filterModul, setFilterModul] = useState('SEMUA')
   const [entriesPerPage, setEntriesPerPage] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
@@ -723,10 +732,18 @@ export function TesDaftarView({
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Topik / Mata Pelajaran *
                   </label>
-                  <select
+                    <select
                     required
                     value={editForm.mataPelajaranId}
-                    onChange={(e) => setEditForm({ ...editForm, mataPelajaranId: e.target.value })}
+                    onChange={(e) => {
+                      const target = itemsMapel.find((b) => b.id === e.target.value)
+                      setEditForm({
+                        ...editForm,
+                        mataPelajaranId: e.target.value,
+                        judul: generateJudulTes(target) || editForm.judul,
+                        durasiMenit: target?.durasiMenit || editForm.durasiMenit,
+                      })
+                    }}
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
                   >
                     {itemsMapel.map((bs) => (
@@ -738,9 +755,23 @@ export function TesDaftarView({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Judul Tes *
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Judul Tes *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = itemsMapel.find((b) => b.id === editForm.mataPelajaranId)
+                        if (target) {
+                          setEditForm({ ...editForm, judul: generateJudulTes(target) })
+                        }
+                      }}
+                      className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      Generate Otomatis
+                    </button>
+                  </div>
                   <input
                     type="text"
                     required
