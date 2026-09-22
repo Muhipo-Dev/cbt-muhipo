@@ -16,7 +16,7 @@ export async function POST(
 
     const { id: ujianId } = await context.params;
     const body = await request.json();
-    const { soalId, jawabanDipilih, raguRagu, sisaDetik } = body;
+    const { soalId, jawabanDipilih, raguRagu, sisaDetik, batchJawaban } = body;
 
     const pesertaUjian = await prisma.pesertaUjian.findUnique({
       where: {
@@ -37,25 +37,64 @@ export async function POST(
       );
     }
 
-    // Upsert Jawaban Peserta
-    await prisma.jawabanPeserta.upsert({
-      where: {
-        pesertaUjianId_soalId: {
+    // 1. Batch sync dari IndexedDB Client Caching
+    if (Array.isArray(batchJawaban) && batchJawaban.length > 0) {
+      for (const item of batchJawaban) {
+        if (!item.soalId) continue;
+        await prisma.jawabanPeserta.upsert({
+          where: {
+            pesertaUjianId_soalId: {
+              pesertaUjianId: pesertaUjian.id,
+              soalId: item.soalId,
+            },
+          },
+          update: {
+            jawabanDipilih: item.jawabanDipilih !== undefined ? String(item.jawabanDipilih) : undefined,
+            raguRagu: item.raguRagu !== undefined ? Boolean(item.raguRagu) : undefined,
+          },
+          create: {
+            pesertaUjianId: pesertaUjian.id,
+            soalId: item.soalId,
+            jawabanDipilih: item.jawabanDipilih !== undefined ? String(item.jawabanDipilih) : '',
+            raguRagu: item.raguRagu !== undefined ? Boolean(item.raguRagu) : false,
+          },
+        });
+      }
+
+      if (sisaDetik !== undefined) {
+        await prisma.pesertaUjian.update({
+          where: { id: pesertaUjian.id },
+          data: { sisaDetik: Number(sisaDetik) },
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `${batchJawaban.length} jawaban berhasil disinkronisasi dari IndexedDB ke Server`,
+      });
+    }
+
+    // 2. Single item autosave
+    if (soalId) {
+      await prisma.jawabanPeserta.upsert({
+        where: {
+          pesertaUjianId_soalId: {
+            pesertaUjianId: pesertaUjian.id,
+            soalId,
+          },
+        },
+        update: {
+          jawabanDipilih: jawabanDipilih !== undefined ? String(jawabanDipilih) : undefined,
+          raguRagu: raguRagu !== undefined ? Boolean(raguRagu) : undefined,
+        },
+        create: {
           pesertaUjianId: pesertaUjian.id,
           soalId,
+          jawabanDipilih: jawabanDipilih !== undefined ? String(jawabanDipilih) : '',
+          raguRagu: raguRagu !== undefined ? Boolean(raguRagu) : false,
         },
-      },
-      update: {
-        jawabanDipilih: jawabanDipilih !== undefined ? String(jawabanDipilih) : undefined,
-        raguRagu: raguRagu !== undefined ? Boolean(raguRagu) : undefined,
-      },
-      create: {
-        pesertaUjianId: pesertaUjian.id,
-        soalId,
-        jawabanDipilih: jawabanDipilih !== undefined ? String(jawabanDipilih) : '',
-        raguRagu: raguRagu !== undefined ? Boolean(raguRagu) : false,
-      },
-    });
+      });
+    }
 
     // Update sisa detik
     if (sisaDetik !== undefined) {

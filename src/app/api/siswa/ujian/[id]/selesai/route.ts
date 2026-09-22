@@ -45,12 +45,24 @@ export async function POST(
     }
 
     // Auto-Grading Soal Objektif & Isian Langsung dari Topik / Mata Pelajaran
-    const soalList = pesertaUjian.ujian.mataPelajaran.soalList;
+    let soalList = pesertaUjian.ujian.mataPelajaran.soalList;
+    if (pesertaUjian.urutanSoalIds) {
+      try {
+        const orderIds = JSON.parse(pesertaUjian.urutanSoalIds);
+        if (Array.isArray(orderIds) && orderIds.length > 0) {
+          const orderSet = new Set(orderIds);
+          soalList = soalList.filter((s) => orderSet.has(s.id));
+        }
+      } catch (e) {
+        // use default soalList
+      }
+    }
     const jawabanMap = new Map(pesertaUjian.jawabanPeserta.map((j) => [j.soalId, j]));
 
     let totalNilaiPG = 0;
     let totalNilaiEsai = 0;
     let maxNilaiObjektif = 0;
+    let totalBobotEsai = 0;
     let adaSoalEsai = false;
 
     for (const soal of soalList) {
@@ -159,6 +171,7 @@ export async function POST(
         }
       } else if (soal.tipeSoal === TipeSoal.ESAI) {
         adaSoalEsai = true;
+        totalBobotEsai += bobot;
       }
     }
 
@@ -166,8 +179,15 @@ export async function POST(
     const maxNilai = mapel.nilaiMaksimal ?? 100.0;
     const minNilai = mapel.nilaiMinimal ?? 0.0;
 
-    const rawTotalPG = Number(totalNilaiPG.toFixed(2));
-    const rawTotalEsai = Number(totalNilaiEsai.toFixed(2));
+    const totalBobotAssigned = maxNilaiObjektif + totalBobotEsai;
+    let rawTotalPG = totalNilaiPG;
+    let rawTotalEsai = totalNilaiEsai;
+
+    if (totalBobotAssigned > 0) {
+      rawTotalPG = Number(((totalNilaiPG / totalBobotAssigned) * maxNilai).toFixed(2));
+      rawTotalEsai = Number(((totalNilaiEsai / totalBobotAssigned) * maxNilai).toFixed(2));
+    }
+
     const finalNilaiPG = Math.min(maxNilai, Math.max(minNilai, rawTotalPG));
     const finalNilaiEsai = Math.min(maxNilai, Math.max(minNilai, rawTotalEsai));
     const rawTotal = Number((finalNilaiPG + finalNilaiEsai).toFixed(2));

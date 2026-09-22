@@ -42,6 +42,8 @@ export function TesTambahView({
     deskripsi: '',
     mataPelajaranId: defaultSelectedId,
     durasiMenit: 90,
+    minSoal: '' as string | number,
+    maxSoal: '' as string | number,
     waktuMulai: formatLocalDatetime(now),
     waktuSelesai: formatLocalDatetime(nextWeek),
     acakSoal: true,
@@ -204,6 +206,50 @@ export function TesTambahView({
               className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
             />
           </div>
+        </div>
+
+        {/* Kuota Butir Soal per Siswa */}
+        <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-bold text-blue-950 dark:text-blue-300">
+              Distribusi & Kuota Butir Soal per Siswa (Opsional)
+            </label>
+            <span className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold bg-blue-100/70 dark:bg-blue-900/40 px-2 py-0.5 rounded-md">
+              Fisher-Yates (Knuth) Shuffle
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Minimal Soal Ditampilkan
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={form.minSoal}
+                onChange={(e) => setForm({ ...form, minSoal: e.target.value })}
+                placeholder="Contoh: 30 (Kosongkan jika semua)"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Maksimal Soal Ditampilkan
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={form.maxSoal}
+                onChange={(e) => setForm({ ...form, maxSoal: e.target.value })}
+                placeholder="Contoh: 30 (Kosongkan jika semua)"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            💡 <em>Contoh: Jika bank soal memiliki 40 butir soal dan diatur 30 soal, sistem mengacak seluruh butir soal menggunakan <strong>Algoritma Fisher-Yates Shuffle</strong> sehingga setiap peserta menerima 30 butir soal secara acak, merata, dan probabilitas seimbang.</em>
+          </p>
         </div>
 
         {/* Parameter Pengerjaan & Anti-Cheat */}

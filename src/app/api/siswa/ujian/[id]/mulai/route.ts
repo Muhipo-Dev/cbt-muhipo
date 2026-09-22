@@ -153,9 +153,43 @@ export async function POST(
 
     if (peserta.status === 'BELUM_MULAI' || peserta.status === 'RESET_LOGIN') {
       let soalIds = (ujian.mataPelajaran.soalList as any[]).map((s: any) => s.id);
-      if (ujian.acakSoal) {
-        soalIds = soalIds.sort(() => Math.random() - 0.5);
+      const totalTersedia = soalIds.length;
+
+      // 1. Tentukan target kuota butir soal untuk peserta ini (berdasarkan minSoal & maxSoal)
+      let targetCount = totalTersedia;
+      let minLimit = (ujian as any).minSoal && (ujian as any).minSoal > 0 ? Number((ujian as any).minSoal) : null;
+      let maxLimit = (ujian as any).maxSoal && (ujian as any).maxSoal > 0 ? Number((ujian as any).maxSoal) : null;
+
+      // Normalisasi jika input minLimit lebih besar dari maxLimit
+      if (minLimit && maxLimit && minLimit > maxLimit) {
+        const temp = minLimit;
+        minLimit = maxLimit;
+        maxLimit = temp;
       }
+
+      if (maxLimit) {
+        if (minLimit && minLimit < maxLimit) {
+          // Range acak antara minLimit dan maxLimit
+          targetCount = Math.floor(Math.random() * (maxLimit - minLimit + 1)) + minLimit;
+        } else {
+          targetCount = maxLimit;
+        }
+        targetCount = Math.min(targetCount, totalTersedia);
+      } else if (minLimit) {
+        targetCount = Math.min(minLimit, totalTersedia);
+      }
+
+      // 2. Pengacakan merata (Fisher-Yates / Knuth Shuffle Algorithm)
+      // Memastikan distribusi probabilitas kemunculan setiap butir soal di bank soal (contoh 40 soal) sepenuhnya adil dan tidak bias
+      if (ujian.acakSoal || maxLimit || minLimit) {
+        for (let i = soalIds.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [soalIds[i], soalIds[j]] = [soalIds[j], soalIds[i]];
+        }
+      }
+
+      // 3. Ambil sejumlah targetCount butir soal terpilih hasil Fisher-Yates Shuffle
+      const selectedSoalIds = soalIds.slice(0, targetCount);
 
       peserta = await prisma.pesertaUjian.update({
         where: { id: peserta.id },
@@ -163,7 +197,7 @@ export async function POST(
           status: 'SEDANG_MENGERJAKAN',
           waktuMulai: now,
           sisaDetik: currentSisaDetik,
-          urutanSoalIds: JSON.stringify(soalIds),
+          urutanSoalIds: JSON.stringify(selectedSoalIds),
         },
       });
 

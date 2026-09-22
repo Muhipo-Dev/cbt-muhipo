@@ -19,6 +19,8 @@ import {
   Send,
   HelpCircle,
   Sparkles,
+  Database,
+  HardDriveDownload,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -31,6 +33,21 @@ import {
   detectDeviceSecurityInfo,
 } from '@/lib/cbt-security';
 import { SecurityLockModal } from '@/components/SecurityLockModal';
+import {
+  saveAnswerToIndexedDB,
+  markAnswersAsSynced,
+  getAllCachedAnswersFromIndexedDB,
+  saveExamSessionToIndexedDB,
+  getExamSessionFromIndexedDB,
+  syncPendingAnswersToServer,
+  exportExamAnswersBackupJSON,
+} from '@/lib/cbt-indexeddb';
+import {
+  detectExambroApp,
+  saveAnswerToAndroidExambro,
+  fetchAnswersFromAndroidExambro,
+  registerGlobalExambroBridge,
+} from '@/lib/cbt-exambro-bridge';
 
 interface OpsiJawaban {
   id: string;
@@ -83,9 +100,10 @@ export default function LembarUjianPage({
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>('normal');
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('saved');
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'offline_saved' | 'error'>('saved');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [cheatWarning, setCheatWarning] = useState<string | null>(null);
+  const [isExambro, setIsExambro] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -95,14 +113,53 @@ export default function LembarUjianPage({
   const securityUnlockedAtRef = useRef<number | null>(null);
   const lastViolationTimeRef = useRef<number>(0);
 
-  // 1. Fetch Soal & Status Ujian
+  // 1. Inisialisasi Android Exambro Native Bridge & Fetch Soal dengan Dukungan Fallback IndexedDB
   useEffect(() => {
+    // Deteksi apakah sedang berjalan di aplikasi Android CBT Exambro
+    const exambroInfo = detectExambroApp();
+    setIsExambro(exambroInfo.isExambro);
+
+    // Daftarkan Global JavaScript Hooks (window.cbtExambro*) agar aplikasi Android dapat berkomunikasi dua arah
+    registerGlobalExambroBridge({
+      onRestoreAnswers: (restoredAnswers) => {
+        setJawabanMap((prev) => ({
+          ...prev,
+          ...restoredAnswers,
+        }));
+      },
+    });
+
     fetchUjianData();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
     };
   }, [ujianId]);
+
+  // Background Auto-Sync: Mengirim jawaban tertunda dari IndexedDB ke Server CBT saat koneksi pulih
+  useEffect(() => {
+    if (!ujianId) return;
+
+    const attemptAutoSync = async () => {
+      if (isSubmittedRef.current) return;
+      try {
+        const res = await syncPendingAnswersToServer(ujianId, sisaDetik);
+        if (res.success && res.syncedCount > 0) {
+          setSyncStatus('saved');
+        }
+      } catch (e) {
+        // silent sync retry
+      }
+    };
+
+    const syncInterval = setInterval(attemptAutoSync, 6000);
+    window.addEventListener('online', attemptAutoSync);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('online', attemptAutoSync);
+    };
+  }, [ujianId, sisaDetik]);
 
   const fetchUjianData = async () => {
     try {
@@ -115,6 +172,25 @@ export default function LembarUjianPage({
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        // Coba fallback ke cadangan sesi ujian IndexedDB jika server down
+        const cachedSession = await getExamSessionFromIndexedDB(ujianId);
+        if (cachedSession && cachedSession.soalList?.length) {
+          setUjianInfo(cachedSession.ujianInfo);
+          setPesertaUjianId(cachedSession.pesertaUjianId || null);
+          setSoalList(cachedSession.soalList);
+          const cachedAnswers = await getAllCachedAnswersFromIndexedDB(ujianId);
+          const map: Record<string, JawabanState> = {};
+          cachedSession.soalList.forEach((s: SoalItem) => {
+            map[s.id] = {
+              jawabanDipilih: cachedAnswers[s.id]?.jawabanDipilih || '',
+              raguRagu: cachedAnswers[s.id]?.raguRagu || false,
+            };
+          });
+          setJawabanMap(map);
+          setSyncStatus('offline_saved');
+          return;
+        }
+
         alert(data.message || 'Gagal memuat ujian');
         router.push('/siswa');
         return;
@@ -125,21 +201,88 @@ export default function LembarUjianPage({
       setSoalList(data.data.soalList);
       setSisaDetik(data.data.ujian.sisaWaktuDetik || 0);
 
-      // Inisialisasi jawaban tersimpan
+      // 1. Simpan salinan sesi ujian ke IndexedDB
+      await saveExamSessionToIndexedDB(ujianId, {
+        pesertaUjianId: data.data.pesertaUjianId,
+        ujianInfo: data.data.ujian,
+        soalList: data.data.soalList,
+      });
+
+      // 2. Ambil cache jawaban offline lokal dari IndexedDB & Native Android Exambro
+      const localCachedAnswers = await getAllCachedAnswersFromIndexedDB(ujianId);
+      const nativeExambroAnswers = await fetchAnswersFromAndroidExambro(ujianId);
+
+      // Inisialisasi jawaban tersimpan & merge dengan cache IndexedDB + Exambro
       const map: Record<string, JawabanState> = {};
       data.data.soalList.forEach((s: SoalItem) => {
         map[s.id] = { jawabanDipilih: '', raguRagu: false };
       });
+
+      // Isi dari data server
       data.data.jawabanTersimpan?.forEach((j: any) => {
         map[j.soalId] = {
           jawabanDipilih: j.jawabanDipilih || '',
           raguRagu: Boolean(j.raguRagu),
         };
+        // Simpan jawaban server ke IndexedDB sebagai data ter-sync
+        saveAnswerToIndexedDB({
+          ujianId,
+          soalId: j.soalId,
+          jawabanDipilih: j.jawabanDipilih || '',
+          raguRagu: Boolean(j.raguRagu),
+          syncedToServer: true,
+        });
       });
+
+      // Merge dengan cache IndexedDB lokal
+      Object.keys(localCachedAnswers).forEach((soalId) => {
+        const local = localCachedAnswers[soalId];
+        if (local && !local.syncedToServer && local.jawabanDipilih) {
+          map[soalId] = {
+            jawabanDipilih: local.jawabanDipilih,
+            raguRagu: local.raguRagu,
+          };
+        }
+      });
+
+      // Merge dengan cache Native Android Exambro jika ada
+      if (nativeExambroAnswers && typeof nativeExambroAnswers === 'object') {
+        Object.keys(nativeExambroAnswers).forEach((soalId) => {
+          const nativeItem = (nativeExambroAnswers as any)[soalId];
+          if (nativeItem?.jawabanDipilih && !map[soalId]?.jawabanDipilih) {
+            map[soalId] = {
+              jawabanDipilih: nativeItem.jawabanDipilih,
+              raguRagu: Boolean(nativeItem.raguRagu),
+            };
+          }
+        });
+      }
+
       setJawabanMap(map);
+
+      // Coba sinkronisasi jika ada sisa jawaban pending di IndexedDB
+      syncPendingAnswersToServer(ujianId, data.data.ujian.sisaWaktuDetik);
     } catch (err) {
-      console.error(err);
-      router.push('/siswa');
+      console.error('Koneksi server terganggu, mencoba pulihkan dari IndexedDB:', err);
+      // Fallback ke cache IndexedDB
+      const cachedSession = await getExamSessionFromIndexedDB(ujianId);
+      if (cachedSession && cachedSession.soalList?.length) {
+        setUjianInfo(cachedSession.ujianInfo);
+        setPesertaUjianId(cachedSession.pesertaUjianId || null);
+        setSoalList(cachedSession.soalList);
+        const cachedAnswers = await getAllCachedAnswersFromIndexedDB(ujianId);
+        const map: Record<string, JawabanState> = {};
+        cachedSession.soalList.forEach((s: SoalItem) => {
+          map[s.id] = {
+            jawabanDipilih: cachedAnswers[s.id]?.jawabanDipilih || '',
+            raguRagu: cachedAnswers[s.id]?.raguRagu || false,
+          };
+        });
+        setJawabanMap(map);
+        setSyncStatus('offline_saved');
+      } else {
+        router.push('/siswa');
+      }
     } finally {
       setLoading(false);
     }
@@ -358,9 +501,9 @@ export default function LembarUjianPage({
     }
   };
 
-  // 4. Autosave Jawaban ke Server Realtime & Local State
+  // 4. Autosave Jawaban ke IndexedDB Client Caching & Server Realtime
   const saveJawaban = async (soalId: string, value: string, ragu: boolean, immediate = true) => {
-    // 1. Update local state secara instan
+    // 1. Update React Local State
     setJawabanMap((prev) => ({
       ...prev,
       [soalId]: {
@@ -369,7 +512,24 @@ export default function LembarUjianPage({
       },
     }));
 
-    // Fungsi kirim payload ke server
+    // 2. Simpan seketika ke IndexedDB Client Caching & Native Android Exambro
+    saveAnswerToIndexedDB({
+      ujianId,
+      soalId,
+      jawabanDipilih: value,
+      raguRagu: ragu,
+      sisaDetik,
+      syncedToServer: false,
+    });
+    saveAnswerToAndroidExambro({
+      ujianId,
+      soalId,
+      jawabanDipilih: value,
+      raguRagu: ragu,
+      sisaDetik,
+    });
+
+    // 3. Fungsi kirim payload ke server CBT
     const sendPayload = async () => {
       setSyncStatus('saving');
       try {
@@ -385,13 +545,16 @@ export default function LembarUjianPage({
         });
         const data = await res.json();
         if (res.ok && data.success) {
+          // Tandai di IndexedDB bahwa data butir ini sudah terkirim ke server
+          await markAnswersAsSynced(ujianId, [soalId]);
           setSyncStatus('saved');
         } else {
-          setSyncStatus('error');
+          // Tetap aman di IndexedDB
+          setSyncStatus('offline_saved');
         }
       } catch (e) {
-        console.warn('Gagal sync jawaban ke server, tersimpan lokal.');
-        setSyncStatus('error');
+        console.warn('[CBT Offline Sync] Server tidak dapat dijangkau. Jawaban aman tersimpan di IndexedDB browser.');
+        setSyncStatus('offline_saved');
       }
     };
 
@@ -478,11 +641,32 @@ export default function LembarUjianPage({
     saveJawaban(soalId, JSON.stringify(mapping), curr.raguRagu, true);
   };
 
+  // Unduh Cadangan Jawaban Darurat (Emergency Export)
+  const handleDownloadEmergencyBackup = async () => {
+    try {
+      const jsonString = await exportExamAnswersBackupJSON(ujianId);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `CADANGAN_JAWABAN_CBT_${ujianInfo?.kodeUjian || 'UJIAN'}_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Gagal mengunduh cadangan jawaban.');
+    }
+  };
+
   // Submit / Selesai Ujian
   const handleSelesaiUjian = async (isAuto = false) => {
     setSubmitting(true);
     isSubmittedRef.current = true; // Tandai ujian sudah diselesaikan agar tidak trigger false-positive anti cheat
     try {
+      // Sinkronisasi sisa jawaban tertunda di IndexedDB sebelum final submit
+      await syncPendingAnswersToServer(ujianId, sisaDetik);
+
       const res = await fetch(`/api/siswa/ujian/${ujianId}/selesai`, {
         method: 'POST',
       });
@@ -520,7 +704,9 @@ export default function LembarUjianPage({
       router.push('/siswa');
     } catch (e) {
       isSubmittedRef.current = false;
-      alert('Terjadi kesalahan saat mengumpulkan ujian.');
+      alert(
+        'Terjadi kendala koneksi ke server saat pengumpulan. Seluruh jawaban Anda tetap AMAN tersimpan di komputer ini (IndexedDB). Silakan laporkan ke proktor ruang atau klik tombol Cadangan Jawaban.'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -608,40 +794,53 @@ export default function LembarUjianPage({
             </span>
           </div>
 
-          {/* Autosave Server Sync Status Indicator */}
+          {/* Autosave Server Sync & IndexedDB Offline Status Indicator */}
           <div
-            className={`hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${
+            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold border transition-all ${
               syncStatus === 'saving'
                 ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/80 animate-pulse'
-                : syncStatus === 'error'
-                ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/80'
+                : syncStatus === 'offline_saved' || syncStatus === 'error'
+                ? 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800/80'
                 : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/80'
             }`}
             title={
               syncStatus === 'saving'
                 ? 'Menyimpan jawaban ke server...'
-                : syncStatus === 'error'
-                ? 'Koneksi lambat, tersimpan lokal'
-                : 'Semua jawaban tersimpan aman di server'
+                : syncStatus === 'offline_saved' || syncStatus === 'error'
+                ? 'Server terputus/mati. Jawaban 100% AMAN tersimpan di IndexedDB browser siswa dan akan otomatis tersinkronisasi saat server aktif kembali.'
+                : 'Semua jawaban tersimpan aman di server dan dicadangkan ke IndexedDB'
             }
           >
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                syncStatus === 'saving'
-                  ? 'bg-amber-500 animate-ping'
-                  : syncStatus === 'error'
-                  ? 'bg-rose-500'
-                  : 'bg-emerald-500'
-              }`}
-            />
+            {syncStatus === 'offline_saved' || syncStatus === 'error' ? (
+              <Database className="w-3 h-3 text-sky-600 dark:text-sky-400 shrink-0" />
+            ) : (
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  syncStatus === 'saving'
+                    ? 'bg-amber-500 animate-ping'
+                    : 'bg-emerald-500'
+                }`}
+              />
+            )}
             <span>
               {syncStatus === 'saving'
                 ? 'Menyimpan...'
-                : syncStatus === 'error'
-                ? 'Tersimpan Lokal'
-                : 'Autosave Aktif'}
+                : syncStatus === 'offline_saved' || syncStatus === 'error'
+                ? 'Cadangan Offline (IndexedDB)'
+                : 'Tersimpan Online'}
             </span>
           </div>
+
+          {/* Badge Indikator Android CBT Exambro App */}
+          {isExambro && (
+            <div
+              className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80 text-[10px] font-bold shadow-2xs"
+              title="Aplikasi Android CBT Exambro Kiosk aktif dengan sinkronisasi native bridge storage ganda"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+              <span>Exambro Kiosk</span>
+            </div>
+          )}
         </div>
 
         {/* Right: Quick Tools (ThemeToggle, Font size, Grid Modal, Fullscreen) */}
@@ -1158,6 +1357,19 @@ export default function LembarUjianPage({
                 ⚠️ Anda masih memiliki <b>{totalRagu}</b> soal berstatus Ragu-ragu.
               </p>
             )}
+
+            {/* Tombol Cadangan Darurat IndexedDB */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={handleDownloadEmergencyBackup}
+                className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-white/10 text-[11px] font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                title="Cadangan jawaban yang tersimpan di IndexedDB komputer ini"
+              >
+                <HardDriveDownload className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                <span>Unduh Cadangan Jawaban Offline (.json)</span>
+              </button>
+            </div>
 
             <div className="flex gap-3 pt-2">
               <button

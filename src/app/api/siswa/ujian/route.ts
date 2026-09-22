@@ -98,7 +98,16 @@ export async function GET(request: NextRequest) {
         (u.mataPelajaran?.pembuat?.role === 'GURU' ? u.mataPelajaran?.pembuat?.name : 'Guru Pengampu');
 
       const allSoal = u.mataPelajaran?.soalList || [];
-      const totalSoal = u.mataPelajaran?._count?.soalList ?? allSoal.length;
+      const totalSoalBank = u.mataPelajaran?._count?.soalList ?? allSoal.length;
+      let totalSoal = totalSoalBank;
+      if (p?.urutanSoalIds) {
+        try {
+          const parsed = JSON.parse(p.urutanSoalIds);
+          if (Array.isArray(parsed) && parsed.length > 0) totalSoal = parsed.length;
+        } catch (e) {}
+      } else if ((u as any).maxSoal && (u as any).maxSoal > 0) {
+        totalSoal = Math.min(totalSoalBank, (u as any).maxSoal);
+      }
       const soalEsaiCount = allSoal.filter((s) => s.tipeSoal === 'ESAI' || s.tipeSoal === 'ISIAN').length;
       const soalPgObjektifCount = Math.max(0, totalSoal - soalEsaiCount);
       const isHanyaPG = totalSoal > 0 && soalEsaiCount === 0;

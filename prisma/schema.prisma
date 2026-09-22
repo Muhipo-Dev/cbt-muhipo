@@ -193,6 +193,9 @@ model Ujian {
   waktuMulai        DateTime       // Jadwal mulai dibuka
   waktuSelesai      DateTime       // Jadwal berakhir
   
+  minSoal           Int?           // Minimal butir soal yang ditampilkan ke siswa (opsional)
+  maxSoal           Int?           // Maksimal butir soal yang ditampilkan ke siswa (opsional)
+  
   acakSoal          Boolean        @default(true)
   acakOpsi          Boolean        @default(true)
   tampilkanHasil    Boolean        @default(false)
