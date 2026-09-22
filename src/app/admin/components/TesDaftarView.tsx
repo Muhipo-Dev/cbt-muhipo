@@ -840,21 +840,33 @@ export function TesDaftarView({
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
                       <span>Minimal Jawaban Siswa</span>
-                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">(Wajib)</span>
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">(Kunci Selesai)</span>
                     </label>
                     <input
                       type="number"
                       min={0}
                       value={editForm.minJawaban}
                       onChange={(e) => setEditForm({ ...editForm, minJawaban: e.target.value })}
-                      placeholder="Contoh: 25 (Batas submit)"
+                      placeholder="Contoh: 25 (Kosongkan jika bebas)"
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                  💡 <em>Jika <strong>Minimal Jawaban Siswa</strong> diisi (misal: 25), siswa yang menjawab kurang dari 25 butir soal tidak dapat menyelesaikan/mengumpulkan ujian hingga kuota minimal terpenuhi.</em>
-                </p>
+
+                <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-blue-100/80 dark:border-white/5 space-y-1 text-[10.5px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  <div className="flex items-start gap-1.5 font-bold text-blue-900 dark:text-blue-300">
+                    <span className="text-blue-600 dark:text-blue-400">💡</span>
+                    <span>Panduan & Contoh Konfigurasi:</span>
+                  </div>
+                  <ul className="list-disc list-inside space-y-0.5 pl-1">
+                    <li>
+                      <b className="text-slate-800 dark:text-slate-200">Kunci Minimal Jawaban:</b> Jika diisi <b>25</b>, siswa yang menjawab &lt; 25 butir soal tidak dapat mengumpulkan lembar jawaban.
+                    </li>
+                    <li>
+                      <b className="text-slate-800 dark:text-slate-200">Distribusi Soal:</b> Jika Maksimal Soal diatur <b>30</b> dari total 40 soal bank soal, sistem mengacak menggunakan <b>Algoritma Fisher-Yates</b>.
+                    </li>
+                  </ul>
+                </div>
               </div>
 
               {/* Opsi Pengerjaan & Keamanan Anti-Cheat */}

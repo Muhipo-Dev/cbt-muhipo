@@ -253,21 +253,36 @@ export function TesTambahView({
             <div>
               <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
                 <span>Minimal Jawaban Siswa</span>
-                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">(Wajib)</span>
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">(Kunci Selesai)</span>
               </label>
               <input
                 type="number"
                 min={0}
                 value={form.minJawaban}
                 onChange={(e) => setForm({ ...form, minJawaban: e.target.value })}
-                placeholder="Contoh: 25 (Batas submit)"
+                placeholder="Contoh: 25 (Kosongkan jika bebas)"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-            💡 <em>Jika <strong>Minimal Jawaban Siswa</strong> diisi (misal: 25), siswa yang menjawab kurang dari 25 butir soal tidak dapat menyelesaikan/mengumpulkan ujian hingga kuota minimal terpenuhi. Jika bank soal diatur kuota soal, sistem mengacak menggunakan <strong>Algoritma Fisher-Yates Shuffle</strong>.</em>
-          </p>
+
+          <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-blue-100/80 dark:border-white/5 space-y-1.5 text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+            <div className="flex items-start gap-1.5 font-bold text-blue-900 dark:text-blue-300">
+              <span className="text-blue-600 dark:text-blue-400">💡</span>
+              <span>Panduan & Contoh Cara Kerja Konfigurasi:</span>
+            </div>
+            <ul className="list-disc list-inside space-y-1 pl-1 text-[11px] text-slate-600 dark:text-slate-400">
+              <li>
+                <b className="text-slate-800 dark:text-slate-200">Kunci Minimal Jawaban Siswa:</b> Jika diatur <b>25</b>, maka siswa yang baru menjawab di bawah 25 butir soal (misal: baru 18 soal) <b>TIDAK BISA</b> mengumpulkan ujian. Tombol submit akan terkunci otomatis dan muncul peringatan kekurangan soal.
+              </li>
+              <li>
+                <b className="text-slate-800 dark:text-slate-200">Distribusi Kuota Soal (Fisher-Yates):</b> Jika bank soal memiliki <b>40 butir soal</b> dan Maksimal Soal diatur <b>30</b>, setiap siswa menerima 30 soal acak merata dengan probabilitas seimbang.
+              </li>
+              <li>
+                <b className="text-slate-800 dark:text-slate-200">Pengecualian Waktu Habis:</b> Jika waktu pengerjaan ujian habis otomatis (00:00), seluruh jawaban yang telah diisi siswa akan tetap otomatis dikumpulkan agar hasil kerja siswa tidak hilang.
+              </li>
+            </ul>
+          </div>
         </div>
 
         {/* Parameter Pengerjaan & Anti-Cheat */}
