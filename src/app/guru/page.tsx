@@ -3883,6 +3883,7 @@ export default function GuruDashboardPage() {
                   </label>
                   <input
                     type="datetime-local"
+                    step="60"
                     required
                     value={distributeForm.waktuMulai}
                     onChange={(e) => setDistributeForm({ ...distributeForm, waktuMulai: e.target.value })}

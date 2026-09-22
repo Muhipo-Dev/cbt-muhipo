@@ -276,6 +276,7 @@ export async function POST(
           judul: ujian.judul,
           kodeUjian: ujian.kodeUjian,
           durasiMenit: ujian.durasiMenit,
+          minJawaban: (ujian as any).minJawaban ?? null,
           sisaWaktuDetik: currentSisaDetik,
           lockBrowser: ujian.lockBrowser,
           mapel: ujian.mataPelajaran.nama,

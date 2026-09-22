@@ -44,6 +44,7 @@ export function TesTambahView({
     durasiMenit: 90,
     minSoal: '' as string | number,
     maxSoal: '' as string | number,
+    minJawaban: '' as string | number,
     waktuMulai: formatLocalDatetime(now),
     waktuSelesai: formatLocalDatetime(nextWeek),
     acakSoal: true,
@@ -115,7 +116,7 @@ export function TesTambahView({
           <Plus className="w-5 h-5 text-blue-500" />
           <span>Tambah & Terbitkan Jadwal Tes Baru</span>
         </h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
           Formulir pembuatan tes ujian CBT berdasarkan Topik / Mata Pelajaran.
         </p>
       </div>
@@ -187,6 +188,7 @@ export function TesTambahView({
             </label>
             <input
               type="datetime-local"
+              step="60"
               required
               value={form.waktuMulai}
               onChange={(e) => setForm({ ...form, waktuMulai: e.target.value })}
@@ -200,6 +202,7 @@ export function TesTambahView({
             </label>
             <input
               type="datetime-local"
+              step="60"
               required
               value={form.waktuSelesai}
               onChange={(e) => setForm({ ...form, waktuSelesai: e.target.value })}
@@ -208,17 +211,17 @@ export function TesTambahView({
           </div>
         </div>
 
-        {/* Kuota Butir Soal per Siswa */}
+        {/* Kuota Butir Soal per Siswa & Syarat Minimal Jawaban */}
         <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 space-y-2.5">
           <div className="flex items-center justify-between">
             <label className="block text-xs font-bold text-blue-950 dark:text-blue-300">
-              Distribusi & Kuota Butir Soal per Siswa (Opsional)
+              Distribusi, Kuota Butir Soal & Kunci Minimal Jawaban (Opsional)
             </label>
             <span className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold bg-blue-100/70 dark:bg-blue-900/40 px-2 py-0.5 rounded-md">
               Fisher-Yates (Knuth) Shuffle
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Minimal Soal Ditampilkan
@@ -246,9 +249,24 @@ export function TesTambahView({
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
               />
             </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                <span>Minimal Jawaban Siswa</span>
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">(Wajib)</span>
+              </label>
+              <input
+                type="number"
+                min={0}
+                value={form.minJawaban}
+                onChange={(e) => setForm({ ...form, minJawaban: e.target.value })}
+                placeholder="Contoh: 25 (Batas submit)"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-            💡 <em>Contoh: Jika bank soal memiliki 40 butir soal dan diatur 30 soal, sistem mengacak seluruh butir soal menggunakan <strong>Algoritma Fisher-Yates Shuffle</strong> sehingga setiap peserta menerima 30 butir soal secara acak, merata, dan probabilitas seimbang.</em>
+            💡 <em>Jika <strong>Minimal Jawaban Siswa</strong> diisi (misal: 25), siswa yang menjawab kurang dari 25 butir soal tidak dapat menyelesaikan/mengumpulkan ujian hingga kuota minimal terpenuhi. Jika bank soal diatur kuota soal, sistem mengacak menggunakan <strong>Algoritma Fisher-Yates Shuffle</strong>.</em>
           </p>
         </div>
 

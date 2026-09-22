@@ -661,6 +661,18 @@ export default function LembarUjianPage({
 
   // Submit / Selesai Ujian
   const handleSelesaiUjian = async (isAuto = false) => {
+    // Validasi Minimal Jawaban
+    const minJawaban = ujianInfo?.minJawaban ? Number(ujianInfo.minJawaban) : null;
+    if (!isAuto && minJawaban && minJawaban > 0) {
+      if (totalTerjawab < minJawaban) {
+        alert(
+          `Gagal Mengumpulkan Ujian!\n\nSyarat minimal jawaban belum terpenuhi. Anda baru menjawab ${totalTerjawab} butir soal, sedangkan tes ini mewajibkan minimal ${minJawaban} butir soal terjawab.`
+        );
+        setShowSubmitModal(false);
+        return;
+      }
+    }
+
     setSubmitting(true);
     isSubmittedRef.current = true; // Tandai ujian sudah diselesaikan agar tidak trigger false-positive anti cheat
     try {
@@ -669,8 +681,17 @@ export default function LembarUjianPage({
 
       const res = await fetch(`/api/siswa/ujian/${ujianId}/selesai`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isAuto }),
       });
       const data = await res.json();
+
+      if (!data.success) {
+        isSubmittedRef.current = false;
+        alert(data.message || 'Gagal menyelesaikan ujian.');
+        setSubmitting(false);
+        return;
+      }
 
       // Keluar dari layar penuh secara otomatis
       await exitUniversalFullscreen();
@@ -1352,6 +1373,31 @@ export default function LembarUjianPage({
               </div>
             </div>
 
+            {/* Informasi & Peringatan Minimal Jawaban */}
+            {ujianInfo?.minJawaban && Number(ujianInfo.minJawaban) > 0 && (
+              <div
+                className={`p-3 rounded-2xl border text-left text-xs ${
+                  totalTerjawab < Number(ujianInfo.minJawaban)
+                    ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-rose-800 dark:text-rose-300'
+                    : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold">
+                  {totalTerjawab < Number(ujianInfo.minJawaban) ? (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  )}
+                  <span>Syarat Minimal Jawaban: {ujianInfo.minJawaban} Soal</span>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed">
+                  {totalTerjawab < Number(ujianInfo.minJawaban)
+                    ? `⚠️ Anda belum dapat mengumpulkan ujian karena baru menjawab ${totalTerjawab} butir soal (Kurang ${Number(ujianInfo.minJawaban) - totalTerjawab} soal lagi).`
+                    : `✓ Syarat minimal jawaban telah terpenuhi (${totalTerjawab}/${ujianInfo.minJawaban} soal).`}
+                </p>
+              </div>
+            )}
+
             {totalRagu > 0 && (
               <p className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 text-left font-medium">
                 ⚠️ Anda masih memiliki <b>{totalRagu}</b> soal berstatus Ragu-ragu.
@@ -1381,9 +1427,12 @@ export default function LembarUjianPage({
               </button>
               <button
                 type="button"
-                disabled={submitting}
+                disabled={
+                  submitting ||
+                  (ujianInfo?.minJawaban && Number(ujianInfo.minJawaban) > 0 && totalTerjawab < Number(ujianInfo.minJawaban))
+                }
                 onClick={() => handleSelesaiUjian(false)}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold text-white shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center justify-center gap-1.5"
               >
                 {submitting ? 'Mengumpulkan...' : 'Ya, Kumpulkan Jawaban'}
               </button>

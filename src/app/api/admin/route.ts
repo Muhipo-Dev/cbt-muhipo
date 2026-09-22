@@ -1206,6 +1206,7 @@ export async function POST(request: NextRequest) {
         durasiMenit,
         minSoal,
         maxSoal,
+        minJawaban,
         waktuMulai,
         waktuSelesai,
         lockBrowser,
@@ -1232,6 +1233,7 @@ export async function POST(request: NextRequest) {
           durasiMenit: Number(durasiMenit) || 90,
           minSoal: minSoal ? parseInt(String(minSoal), 10) : null,
           maxSoal: maxSoal ? parseInt(String(maxSoal), 10) : null,
+          minJawaban: minJawaban !== undefined && minJawaban !== '' ? parseInt(String(minJawaban), 10) : null,
           waktuMulai: waktuMulai ? new Date(waktuMulai) : new Date(),
           waktuSelesai: waktuSelesai
             ? new Date(waktuSelesai)
@@ -1294,6 +1296,7 @@ export async function POST(request: NextRequest) {
         durasiMenit,
         minSoal,
         maxSoal,
+        minJawaban,
         waktuMulai,
         waktuSelesai,
         lockBrowser,
@@ -1317,6 +1320,7 @@ export async function POST(request: NextRequest) {
           durasiMenit: durasiMenit ? Number(durasiMenit) : undefined,
           minSoal: minSoal !== undefined ? (minSoal ? parseInt(String(minSoal), 10) : null) : undefined,
           maxSoal: maxSoal !== undefined ? (maxSoal ? parseInt(String(maxSoal), 10) : null) : undefined,
+          minJawaban: minJawaban !== undefined ? (minJawaban !== '' ? parseInt(String(minJawaban), 10) : null) : undefined,
           waktuMulai: waktuMulai ? new Date(waktuMulai) : undefined,
           waktuSelesai: waktuSelesai ? new Date(waktuSelesai) : undefined,
           lockBrowser: lockBrowser !== undefined ? lockBrowser : undefined,

@@ -195,6 +195,7 @@ model Ujian {
   
   minSoal           Int?           // Minimal butir soal yang ditampilkan ke siswa (opsional)
   maxSoal           Int?           // Maksimal butir soal yang ditampilkan ke siswa (opsional)
+  minJawaban        Int?           // Jumlah minimal jawaban yang wajib dijawab siswa agar bisa menyelesaikan ujian (opsional)
   
   acakSoal          Boolean        @default(true)
   acakOpsi          Boolean        @default(true)

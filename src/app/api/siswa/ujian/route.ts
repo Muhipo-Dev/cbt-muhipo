@@ -146,6 +146,7 @@ export async function GET(request: NextRequest) {
         guruPengampu: guruPengampuNama,
         durasiMenit: u.durasiMenit,
         jumlahSoal: totalSoal,
+        minJawaban: (u as any).minJawaban ?? null,
         jumlahSoalPG: soalPgObjektifCount,
         jumlahSoalEsai: soalEsaiCount,
         isHanyaPG,

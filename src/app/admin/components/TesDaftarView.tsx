@@ -62,6 +62,7 @@ export function TesDaftarView({
     durasiMenit: 90,
     minSoal: '' as string | number,
     maxSoal: '' as string | number,
+    minJawaban: '' as string | number,
     waktuMulai: '',
     waktuSelesai: '',
     lockBrowser: true,
@@ -84,6 +85,7 @@ export function TesDaftarView({
       durasiMenit: u.durasiMenit,
       minSoal: u.minSoal ?? '',
       maxSoal: u.maxSoal ?? '',
+      minJawaban: u.minJawaban ?? '',
       waktuMulai: u.waktuMulai ? formatLocalDatetime(new Date(u.waktuMulai)) : '',
       waktuSelesai: u.waktuSelesai ? formatLocalDatetime(new Date(u.waktuSelesai)) : '',
       lockBrowser: u.lockBrowser !== false,
@@ -546,11 +548,18 @@ export function TesDaftarView({
                       </td>
                       <td className="py-3.5 px-4 font-medium text-slate-600 dark:text-slate-300">
                         <div>{mapelObj?.nama || '-'}</div>
-                        {u.maxSoal ? (
-                          <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/40">
-                            Kuota: {u.minSoal && u.minSoal !== u.maxSoal ? `${u.minSoal}-${u.maxSoal}` : u.maxSoal} Soal
-                          </span>
-                        ) : null}
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          {u.maxSoal ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/40">
+                              Kuota: {u.minSoal && u.minSoal !== u.maxSoal ? `${u.minSoal}-${u.maxSoal}` : u.maxSoal} Soal
+                            </span>
+                          ) : null}
+                          {u.minJawaban ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                              Min: {u.minJawaban} Jwb
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="space-y-0.5">
@@ -559,7 +568,10 @@ export function TesDaftarView({
                           </span>
                           <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
                             <Clock className="w-3 h-3 text-slate-400" />
-                            {new Date(u.waktuMulai).toLocaleDateString('id-ID', { dateStyle: 'medium' })}
+                            {new Date(u.waktuMulai).toLocaleDateString('id-ID', { dateStyle: 'medium' })}{' '}
+                            <span className="font-mono font-medium text-slate-700 dark:text-slate-300">
+                              {new Date(u.waktuMulai).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
                           </span>
                         </div>
                       </td>
@@ -763,6 +775,7 @@ export function TesDaftarView({
                   </label>
                   <input
                     type="datetime-local"
+                    step="60"
                     required
                     value={editForm.waktuMulai}
                     onChange={(e) => setEditForm({ ...editForm, waktuMulai: e.target.value })}
@@ -776,6 +789,7 @@ export function TesDaftarView({
                   </label>
                   <input
                     type="datetime-local"
+                    step="60"
                     required
                     value={editForm.waktuSelesai}
                     onChange={(e) => setEditForm({ ...editForm, waktuSelesai: e.target.value })}
@@ -784,17 +798,17 @@ export function TesDaftarView({
                 </div>
               </div>
 
-              {/* Kuota Butir Soal per Siswa */}
+              {/* Kuota Butir Soal per Siswa & Kunci Minimal Jawaban */}
               <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-blue-950 dark:text-blue-300">
-                    Distribusi & Kuota Butir Soal per Siswa (Opsional)
+                    Distribusi, Kuota Butir Soal & Kunci Minimal Jawaban (Opsional)
                   </label>
                   <span className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold bg-blue-100/70 dark:bg-blue-900/40 px-2 py-0.5 rounded-md">
                     Fisher-Yates (Knuth) Shuffle
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       Minimal Soal Ditampilkan
@@ -822,9 +836,24 @@ export function TesDaftarView({
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                      <span>Minimal Jawaban Siswa</span>
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">(Wajib)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editForm.minJawaban}
+                      onChange={(e) => setEditForm({ ...editForm, minJawaban: e.target.value })}
+                      placeholder="Contoh: 25 (Batas submit)"
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                  💡 <em>Contoh: Jika bank soal memiliki 40 butir soal dan diatur 30 soal, sistem mengacak seluruh butir soal menggunakan <strong>Algoritma Fisher-Yates Shuffle</strong> sehingga setiap peserta menerima 30 butir soal secara acak, merata, dan probabilitas seimbang.</em>
+                  💡 <em>Jika <strong>Minimal Jawaban Siswa</strong> diisi (misal: 25), siswa yang menjawab kurang dari 25 butir soal tidak dapat menyelesaikan/mengumpulkan ujian hingga kuota minimal terpenuhi.</em>
                 </p>
               </div>
 

@@ -44,6 +44,14 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'Data peserta tidak ditemukan' }, { status: 404 });
     }
 
+    let isAuto = false;
+    try {
+      const body = await request.json();
+      if (body && body.isAuto) isAuto = true;
+    } catch (e) {
+      // no body or non-json
+    }
+
     // Auto-Grading Soal Objektif & Isian Langsung dari Topik / Mata Pelajaran
     let soalList = pesertaUjian.ujian.mataPelajaran.soalList;
     if (pesertaUjian.urutanSoalIds) {
@@ -58,6 +66,28 @@ export async function POST(
       }
     }
     const jawabanMap = new Map(pesertaUjian.jawabanPeserta.map((j) => [j.soalId, j]));
+
+    // Validasi Minimal Jawaban Terisi (Kecuali jika waktu ujian habis otomatis)
+    const minJawaban = (pesertaUjian.ujian as any).minJawaban;
+    if (!isAuto && minJawaban && minJawaban > 0) {
+      const jumlahTerjawab = soalList.filter((s) => {
+        const j = jawabanMap.get(s.id);
+        if (!j || !j.jawabanDipilih) return false;
+        const val = j.jawabanDipilih.trim();
+        if (!val || val === '[]' || val === '{}') return false;
+        return true;
+      }).length;
+
+      if (jumlahTerjawab < minJawaban) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Syarat minimal jawaban belum terpenuhi! Anda baru menjawab ${jumlahTerjawab} dari minimal ${minJawaban} butir soal yang diwajibkan.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     let totalNilaiPG = 0;
     let totalNilaiEsai = 0;
