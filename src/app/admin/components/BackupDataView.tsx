@@ -1313,7 +1313,7 @@ export function BackupDataView({
                 Master Rekap Nilai Seluruh Ujian (Excel)
               </h4>
               <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Rekap komprehensif nilai seluruh siswa dari semua tes ujian (Skor PG, Skor Esai, Total Nilai CBT, KKM & Kelulusan).
+                Rekap komprehensif nilai seluruh siswa dari semua tes ujian (Skor PG, Skor Esai, Total Nilai CBT, dan Status Ujian).
               </p>
             </div>
             <button

@@ -1162,9 +1162,7 @@ export default function GuruDashboardPage() {
       return;
     }
 
-    const currentKkm = Number(koreksiData?.activeUjian?.bankSoal?.kkm ?? 75);
     const rows = listToExport.map((p: any, idx: number) => {
-      const isTuntas = Number(p.nilaiTotal ?? 0) >= currentKkm;
       const nilaiPGFormatted = p.nilaiPG != null ? Number(Number(p.nilaiPG).toFixed(2)) : 0;
       const nilaiEsaiFormatted = p.nilaiEsai != null ? Number(Number(p.nilaiEsai).toFixed(2)) : 0;
       const nilaiTotalFormatted = p.nilaiTotal != null ? Number(Number(p.nilaiTotal).toFixed(2)) : 0;
@@ -1178,9 +1176,7 @@ export default function GuruDashboardPage() {
         'Nilai PG/Pilihan': nilaiPGFormatted,
         'Nilai Isian/Essay': nilaiEsaiFormatted,
         'Total Nilai': nilaiTotalFormatted,
-        'KKM Mapel': currentKkm,
-        'Ketuntasan': isTuntas ? 'TUNTAS' : 'REMIDIAL',
-        'Status Ujian': p.status,
+        'Status Ujian': p.status || 'SELESAI',
       };
     });
 
@@ -1396,7 +1392,7 @@ export default function GuruDashboardPage() {
                       <BookOpen className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" />
                     </div>
                     <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-500 transition-colors">Buat Bank Soal</h4>
-                    <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight">Tentukan nama mapel, tingkat, jurusan, & KKM kelulusan.</p>
+                    <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight">Tentukan nama mapel, tingkat, dan jurusan.</p>
                   </div>
 
                   {/* Step 2 */}
@@ -1865,11 +1861,8 @@ export default function GuruDashboardPage() {
                               {bs.mataPelajaran?.nama} • Pengampu: <b className="text-slate-800 dark:text-slate-200">{bs.mataPelajaran?.gurus?.[0]?.guru?.name || (bs.pembuat?.role === 'GURU' ? bs.pembuat?.name : 'Guru Pengampu Mapel')}</b> • {bs.durasiMenit || 90} Mnt
                             </p>
                             <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[10.5px]">
-                              <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-700 dark:text-blue-300 font-semibold border border-blue-500/20">
-                                KKM: <b>{bs.kkm ?? 75}</b>
-                              </span>
                               <span className="px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
-                                Rentang: {bs.nilaiMinimal ?? 0} - {bs.nilaiMaksimal ?? 100}
+                                Skala Nilai: {bs.nilaiMinimal ?? 0} - {bs.nilaiMaksimal ?? 100}
                               </span>
                               {bs._count?.soalList > 0 && (
                                 <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-mono font-bold border border-emerald-500/20">
@@ -3024,44 +3017,11 @@ export default function GuruDashboardPage() {
                   )}
                 </div>
 
-                {/* VIEW 1: REKAP NILAI BERDASARKAN KKM KELAS */}
+                {/* VIEW 1: REKAP NILAI KELAS */}
                 {koreksiSubTab === 'rekap' && (
                   <div className="space-y-6">
-                    {/* Ringkasan Statistik Ketuntasan KKM */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-                      <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl p-4 shadow-sm backdrop-blur-xl">
-                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block uppercase">
-                          Target KKM Mapel
-                        </span>
-                        <div className="flex items-baseline gap-2 mt-1">
-                          <span className="text-2xl font-black text-blue-600 dark:text-blue-400">{currentKkm}</span>
-                          <span className="text-xs text-slate-500">Poin Minimal</span>
-                        </div>
-                        <p className="text-[10.5px] text-slate-400 mt-1">Acuan standar kelulusan</p>
-                      </div>
-
-                      <div className="bg-white/90 dark:bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-4 shadow-sm backdrop-blur-xl bg-gradient-to-br from-emerald-500/5 to-transparent">
-                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 block uppercase">
-                          Peserta Tuntas (≥ KKM)
-                        </span>
-                        <div className="flex items-baseline gap-2 mt-1">
-                          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{tuntasCount}</span>
-                          <span className="text-xs text-emerald-600/80 font-bold">({persenTuntas}%)</span>
-                        </div>
-                        <p className="text-[10.5px] text-slate-400 mt-1">Memenuhi kriteria ketuntasan</p>
-                      </div>
-
-                      <div className="bg-white/90 dark:bg-slate-900/90 border border-rose-500/30 rounded-2xl p-4 shadow-sm backdrop-blur-xl bg-gradient-to-br from-rose-500/5 to-transparent">
-                        <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400 block uppercase">
-                          Perlu Remidial (&lt; KKM)
-                        </span>
-                        <div className="flex items-baseline gap-2 mt-1">
-                          <span className="text-2xl font-black text-rose-600 dark:text-rose-400">{remidiCount}</span>
-                          <span className="text-xs text-rose-600/80 font-bold">({100 - persenTuntas}%)</span>
-                        </div>
-                        <p className="text-[10.5px] text-slate-400 mt-1">Belum mencapai KKM</p>
-                      </div>
-
+                    {/* Ringkasan Statistik Nilai */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                       <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl p-4 shadow-sm backdrop-blur-xl">
                         <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block uppercase">
                           Rata-Rata Nilai
@@ -3074,50 +3034,78 @@ export default function GuruDashboardPage() {
                           {selectedKoreksiKelas !== 'ALL' ? `Kelas ${selectedKoreksiKelas}` : 'Semua Rombel'}
                         </p>
                       </div>
-                    </div>
 
-                    {/* Tabel Rekapitulasi Nilai Per Kelas */}
-                    <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl shadow-sm dark:shadow-xl backdrop-blur-xl overflow-hidden">
-                      <div className="p-4 sm:p-5 border-b border-slate-200/80 dark:border-white/10 flex justify-between items-center">
-                        <div>
-                          <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                            Tabel Rekapitulasi Hasil Ujian & Ketuntasan Siswa
-                          </h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {selectedKoreksiKelas !== 'ALL' ? `Rombel Kelas ${selectedKoreksiKelas}` : 'Seluruh Rombel Kelas'} • Nilai otomatis dievaluasi terhadap KKM ({currentKkm})
-                          </p>
-                        </div>
-                        <span className="text-xs font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-xl">
-                          {filteredKoreksiPeserta.length} Peserta
+                      <div className="bg-white/90 dark:bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-4 shadow-sm backdrop-blur-xl bg-gradient-to-br from-emerald-500/5 to-transparent">
+                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 block uppercase">
+                          Nilai Tertinggi
                         </span>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                            {filteredKoreksiPeserta.length > 0
+                              ? Math.max(...filteredKoreksiPeserta.map((p: any) => Number(p.nilaiTotal) || 0))
+                              : 0}
+                          </span>
+                        </div>
+                        <p className="text-[10.5px] text-slate-400 mt-1">Skor tertinggi peserta</p>
                       </div>
 
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse text-xs">
-                          <thead>
-                            <tr className="bg-slate-50/80 dark:bg-slate-950/80 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-white/10">
-                              <th className="py-3 px-4 w-12 text-center">No</th>
+                      <div className="bg-white/90 dark:bg-slate-900/90 border border-blue-500/30 rounded-2xl p-4 shadow-sm backdrop-blur-xl bg-gradient-to-br from-blue-500/5 to-transparent">
+                        <span className="text-[11px] font-bold text-blue-700 dark:text-blue-400 block uppercase">
+                          Total Peserta
+                        </span>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="text-2xl font-black text-blue-600 dark:text-blue-400">{filteredKoreksiPeserta.length}</span>
+                          <span className="text-xs text-slate-500">Siswa</span>
+                        </div>
+                        <p className="text-[10.5px] text-slate-400 mt-1">Telah selesai mengerjakan</p>
+                      </div>
+                    </div>
+
+                    {/* Tabel Rekapitulasi Nilai Siswa */}
+                    <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div>
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+                            Rekapitulasi Nilai Peserta Ujian
+                          </h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {selectedKoreksiKelas !== 'ALL' ? `Rombel Kelas ${selectedKoreksiKelas}` : 'Seluruh Rombel Kelas'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleExportExcel}
+                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-md transition cursor-pointer"
+                        >
+                          <FileSpreadsheet className="w-4 h-4" />
+                          <span>Export Excel (.xlsx)</span>
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-white/10">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-white/10 font-bold uppercase tracking-wider text-[10.5px]">
+                            <tr>
+                              <th className="py-3 px-4 text-center w-12">No</th>
                               <th className="py-3 px-4">Nama Siswa</th>
                               <th className="py-3 px-4">Username / ID</th>
                               <th className="py-3 px-4">Kelas</th>
                               <th className="py-3 px-4 text-center">Nilai PG</th>
                               <th className="py-3 px-4 text-center">Nilai Isian/Esai</th>
                               <th className="py-3 px-4 text-center">Total Nilai</th>
-                              <th className="py-3 px-4 text-center">KKM</th>
-                              <th className="py-3 px-4 text-center">Status Ketuntasan</th>
+                              <th className="py-3 px-4 text-center">Status</th>
                               <th className="py-3 px-4 text-center">Aksi</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-200/60 dark:divide-white/5 text-slate-800 dark:text-slate-200">
                             {filteredKoreksiPeserta.length === 0 ? (
                               <tr>
-                                <td colSpan={10} className="text-center py-10 text-slate-400 italic">
+                                <td colSpan={9} className="text-center py-10 text-slate-400 italic">
                                   Tidak ada data peserta ujian untuk filter kelas ini.
                                 </td>
                               </tr>
                             ) : (
                               filteredKoreksiPeserta.map((p: any, idx: number) => {
-                                const isTuntas = Number(p.nilaiTotal ?? 0) >= currentKkm;
                                 const hasTulisan = p.jawabanPeserta?.some((j: any) => j.soal?.tipeSoal === 'ESAI' || j.soal?.tipeSoal === 'ISIAN');
                                 const displayPG = p.nilaiPG != null ? Number(Number(p.nilaiPG).toFixed(2)) : 0;
                                 const displayEsai = p.nilaiEsai != null ? Number(Number(p.nilaiEsai).toFixed(2)) : 0;
@@ -3144,16 +3132,9 @@ export default function GuruDashboardPage() {
                                     <td className="py-3 px-4 text-center font-mono font-extrabold text-sm text-slate-900 dark:text-white">
                                       {displayTotal}
                                     </td>
-                                    <td className="py-3 px-4 text-center font-mono font-semibold text-slate-400">
-                                      {currentKkm}
-                                    </td>
                                     <td className="py-3 px-4 text-center">
-                                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-black ${
-                                        isTuntas
-                                          ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
-                                          : 'bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
-                                      }`}>
-                                        {isTuntas ? '✓ TUNTAS' : '✗ REMIDIAL'}
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                        {p.status || 'SELESAI'}
                                       </span>
                                     </td>
                                     <td className="py-3 px-4 text-center">
@@ -3469,21 +3450,8 @@ export default function GuruDashboardPage() {
                 </div>
               </div>
 
-              {/* Standar Rentang Nilai & KKM */}
-              <div className="grid grid-cols-3 gap-3 p-3 bg-slate-100 dark:bg-slate-950/70 border border-slate-200 dark:border-white/10 rounded-2xl">
-                <div>
-                  <label className="block text-blue-600 dark:text-blue-400 font-semibold mb-1">Nilai KKM</label>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    max={100}
-                    value={newBankForm.kkm}
-                    onChange={(e) => setNewBankForm({ ...newBankForm, kkm: Number(e.target.value) })}
-                    placeholder="75"
-                    className="w-full p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono text-center font-bold"
-                  />
-                </div>
+              {/* Standar Rentang Nilai */}
+              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-100 dark:bg-slate-950/70 border border-slate-200 dark:border-white/10 rounded-2xl">
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Nilai Minimal</label>
                   <input
@@ -3630,21 +3598,8 @@ export default function GuruDashboardPage() {
                 </div>
               </div>
 
-              {/* Standar Rentang Nilai & KKM Edit */}
-              <div className="grid grid-cols-3 gap-3 p-3 bg-slate-100 dark:bg-slate-950/70 border border-slate-200 dark:border-white/10 rounded-2xl">
-                <div>
-                  <label className="block text-blue-600 dark:text-blue-400 font-semibold mb-1">Nilai KKM</label>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    max={100}
-                    value={editBankModal.kkm ?? 75}
-                    onChange={(e) => setEditBankModal({ ...editBankModal, kkm: Number(e.target.value) })}
-                    placeholder="75"
-                    className="w-full p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white font-mono text-center font-bold"
-                  />
-                </div>
+              {/* Standar Rentang Nilai Edit */}
+              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-100 dark:bg-slate-950/70 border border-slate-200 dark:border-white/10 rounded-2xl">
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Nilai Minimal</label>
                   <input
@@ -4287,7 +4242,7 @@ export default function GuruDashboardPage() {
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 space-y-1">
                     <b className="text-blue-600 dark:text-blue-400 font-bold block">Langkah 1: Buat Bank Soal</b>
                     <p className="text-xs leading-relaxed">
-                      Buka tab <b>Bank Soal</b> lalu klik tombol <b>+ Buat Bank Soal</b>. Masukkan nama bank soal, mata pelajaran, tingkat kelas (X/XI/XII), jurusan, dan KKM kelulusan.
+                      Buka tab <b>Bank Soal</b> lalu klik tombol <b>+ Buat Bank Soal</b>. Masukkan nama bank soal, mata pelajaran, tingkat kelas (X/XI/XII), dan jurusan.
                     </p>
                   </div>
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 space-y-1">

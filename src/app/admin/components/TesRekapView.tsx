@@ -174,14 +174,14 @@ export function TesRekapView({
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
         <div className="p-4 rounded-2xl bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 shadow-xs backdrop-blur-md">
           <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
             <span>Rata-Rata Nilai</span>
             <TrendingUp className="w-4 h-4 text-blue-500" />
           </div>
           <div className="mt-2 text-2xl font-black text-blue-600 dark:text-blue-400">{avgScore}</div>
-          <span className="text-[10px] text-slate-400 font-semibold">KKM Acuan: {kkm}</span>
+          <span className="text-[10px] text-slate-400 font-semibold">Total {totalStudents} Peserta</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 shadow-xs backdrop-blur-md">
@@ -195,22 +195,13 @@ export function TesRekapView({
 
         <div className="p-4 rounded-2xl bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 shadow-xs backdrop-blur-md">
           <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-            <span>Peserta Tuntas</span>
+            <span>Total Peserta</span>
             <CheckCircle2 className="w-4 h-4 text-purple-500" />
           </div>
           <div className="mt-2 text-2xl font-black text-purple-600 dark:text-purple-400">
-            {passedCount} <span className="text-xs text-slate-400 font-semibold">/ {totalStudents}</span>
+            {totalStudents} <span className="text-xs text-slate-400 font-semibold">Siswa</span>
           </div>
-          <span className="text-[10px] text-slate-400 font-semibold">{totalStudents - passedCount} Perlu Remidial</span>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 shadow-xs backdrop-blur-md">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-            <span>Ketuntasan Klasikal</span>
-            <BarChart2 className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="mt-2 text-2xl font-black text-amber-600 dark:text-amber-400">{passPercentage}%</div>
-          <span className="text-[10px] text-slate-400 font-semibold">Tuntas KKM &gt;= {kkm}</span>
+          <span className="text-[10px] text-slate-400 font-semibold">Telah Mengerjakan Tes</span>
         </div>
       </div>
 
@@ -233,10 +224,10 @@ export function TesRekapView({
             onChange={(e) => setSelectedKelas(e.target.value)}
             className="w-full px-3.5 py-2.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
           >
-            <option value="ALL">Semua Group / Kelas</option>
+            <option value="ALL">Semua Kelas ({data?.pesertaList?.length || 0})</option>
             {kelasOptions.map((k: any) => (
               <option key={k} value={k}>
-                Group: {k}
+                Kelas {k} ({data?.pesertaList?.filter((p: any) => p.kelas === k).length || 0})
               </option>
             ))}
           </select>
@@ -256,7 +247,7 @@ export function TesRekapView({
                 <th className="py-3.5 px-4 text-center">Nilai PG</th>
                 <th className="py-3.5 px-4 text-center">Nilai Esai</th>
                 <th className="py-3.5 px-4 text-center">Nilai Total</th>
-                <th className="py-3.5 px-4 text-center">Ketuntasan (KKM {kkm})</th>
+                <th className="py-3.5 px-4 text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
@@ -274,7 +265,6 @@ export function TesRekapView({
                 </tr>
               ) : (
                 filtered.map((p: any, idx: number) => {
-                  const isTuntas = (Number(p.nilaiTotal) || 0) >= kkm
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                       <td className="py-3.5 px-4 font-medium text-slate-400">{idx + 1}</td>
@@ -284,10 +274,10 @@ export function TesRekapView({
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
                         {p.siswa?.name}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
-                        {p.siswa?.kelas?.nama || '-'}
+                      <td className="py-3.5 px-4 font-semibold text-slate-600 dark:text-slate-300">
+                        {p.kelas || p.siswa?.kelas?.nama || '-'}
                       </td>
-                      <td className="py-3.5 px-4 text-center font-bold text-slate-700 dark:text-slate-300">
+                      <td className="py-3.5 px-4 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
                         {p.nilaiPG ?? 0}
                       </td>
                       <td className="py-3.5 px-4 text-center font-bold text-slate-700 dark:text-slate-300">
@@ -299,14 +289,8 @@ export function TesRekapView({
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <span
-                          className={`px-3 py-1 rounded-full text-[10px] font-extrabold border ${
-                            isTuntas
-                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                              : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30'
-                          }`}
-                        >
-                          {isTuntas ? '✓ TUNTAS' : '⚠ REMIDIAL'}
+                        <span className="px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                          {p.status || 'SELESAI'}
                         </span>
                       </td>
                     </tr>

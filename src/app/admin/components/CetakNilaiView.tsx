@@ -334,26 +334,24 @@ export function CetakNilaiView({
                 <th className="py-2 px-2.5 border-r border-slate-300 print:border-black text-center w-16">Nilai PG</th>
                 <th className="py-2 px-2.5 border-r border-slate-300 print:border-black text-center w-16">Nilai Esai</th>
                 <th className="py-2 px-3 border-r border-slate-300 print:border-black text-center w-20">Total Nilai</th>
-                <th className="py-2 px-3 border-r border-slate-300 print:border-black text-center w-24">Ketuntasan</th>
                 <th className="py-2 px-2.5 text-center w-24">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 print:divide-black">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-10 text-slate-500">
+                  <td colSpan={8} className="text-center py-10 text-slate-500">
                     Memuat data nilai siswa...
                   </td>
                 </tr>
               ) : filteredHasilList.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-10 text-slate-500 font-semibold">
+                  <td colSpan={8} className="text-center py-10 text-slate-500 font-semibold">
                     Tidak ada data nilai siswa untuk topik, tes, atau kelas yang dipilih.
                   </td>
                 </tr>
               ) : (
                 filteredHasilList.map((p: any, idx: number) => {
-                  const isTuntas = Number(p.nilaiTotal ?? 0) >= kkm
                   return (
                     <tr
                       key={p.id}
@@ -379,17 +377,6 @@ export function CetakNilaiView({
                       </td>
                       <td className="py-2 px-3 border-r border-slate-200 print:border-black text-center font-mono font-black text-sm">
                         {p.nilaiTotal ?? 0}
-                      </td>
-                      <td className="py-2 px-3 border-r border-slate-200 print:border-black text-center font-bold">
-                        <span
-                          className={
-                            isTuntas
-                              ? 'text-emerald-700 font-bold'
-                              : 'text-rose-700 font-bold'
-                          }
-                        >
-                          {isTuntas ? 'TUNTAS' : 'REMIDIAL'}
-                        </span>
                       </td>
                       <td className="py-2 px-2.5 text-center text-[10px] text-slate-600 uppercase">
                         {p.status || 'SELESAI'}

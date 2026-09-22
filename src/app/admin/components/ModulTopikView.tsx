@@ -1088,35 +1088,19 @@ export function ModulTopikView({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
-                    Nilai Maksimal Topik:
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={form.nilaiMaksimal}
-                    onChange={(e) => setForm({ ...form, nilaiMaksimal: Number(e.target.value) })}
-                    placeholder="Default: 100"
-                    className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none"
-                  />
-                  <span className="text-[10px] text-slate-400">Poin skala kalkulasi (100)</span>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
-                    KKM (Ketuntasan):
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.kkm}
-                    onChange={(e) => setForm({ ...form, kkm: Number(e.target.value) })}
-                    placeholder="Default: 75"
-                    className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none"
-                  />
-                  <span className="text-[10px] text-slate-400">Batas kelulusan minimal</span>
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  Nilai Maksimal Topik:
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.nilaiMaksimal}
+                  onChange={(e) => setForm({ ...form, nilaiMaksimal: Number(e.target.value) })}
+                  placeholder="Default: 100"
+                  className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none"
+                />
+                <span className="text-[10px] text-slate-400">Skala kalkulasi poin maksimal (contoh: 100)</span>
               </div>
 
               <div>
