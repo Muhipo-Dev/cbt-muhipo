@@ -12,6 +12,8 @@ import {
   GraduationCap,
   ShieldAlert,
   CheckCircle2,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -44,6 +46,8 @@ export function PesertaDaftarView({
   })
   const [resetPasswordModal, setResetPasswordModal] = useState<any>(null)
   const [newPasswordInput, setNewPasswordInput] = useState('')
+  const [showResetPassword, setShowResetPassword] = useState(false)
+  const [showFormPassword, setShowFormPassword] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const handleOpenCreate = () => {
@@ -137,6 +141,7 @@ export function PesertaDaftarView({
   const handleResetPassword = (item: any) => {
     setResetPasswordModal(item)
     setNewPasswordInput('')
+    setShowResetPassword(false)
   }
 
   const handleConfirmResetPassword = async () => {
@@ -158,6 +163,7 @@ export function PesertaDaftarView({
         showNotification('Password Direset', json.message || `Password ${resetPasswordModal.name} berhasil diubah menjadi "${pass}"`, 'success')
         setResetPasswordModal(null)
         setNewPasswordInput('')
+        setShowResetPassword(false)
         onRefresh()
       } else {
         showNotification('Gagal', json.message || 'Gagal reset password', 'error')
@@ -364,20 +370,30 @@ export function PesertaDaftarView({
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Kata Sandi Baru (Diisi Manual) *
               </label>
-              <input
-                type="text"
-                autoFocus
-                value={newPasswordInput}
-                onChange={(e) => setNewPasswordInput(e.target.value)}
-                placeholder="Masukkan kata sandi baru..."
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:border-amber-500"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleConfirmResetPassword()
-                  }
-                }}
-              />
+              <div className="relative">
+                <input
+                  type={showResetPassword ? 'text' : 'password'}
+                  autoFocus
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  placeholder="Masukkan kata sandi baru..."
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:border-amber-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleConfirmResetPassword()
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPassword(!showResetPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                  title={showResetPassword ? 'Sembunyikan Kata Sandi' : 'Lihat Kata Sandi'}
+                >
+                  {showResetPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               <p className="text-[11px] text-slate-400 mt-1.5">
                 Ketikkan kata sandi baru yang diinginkan. Siswa akan langsung menggunakan kata sandi ini.
               </p>
@@ -389,6 +405,7 @@ export function PesertaDaftarView({
                 onClick={() => {
                   setResetPasswordModal(null)
                   setNewPasswordInput('')
+                  setShowResetPassword(false)
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition cursor-pointer"
               >
@@ -448,13 +465,23 @@ export function PesertaDaftarView({
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Password {editingItem ? '(Kosongkan jika tetap)' : '*'}
                   </label>
-                  <input
-                    type="password"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder={editingItem ? '••••••••' : 'Default 123456'}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs focus:outline-none focus:border-blue-500 text-slate-900 dark:text-white"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showFormPassword ? 'text' : 'password'}
+                      value={form.password}
+                      onChange={(e) => setForm({ ...form, password: e.target.value })}
+                      placeholder={editingItem ? '••••••••' : 'Default 123456'}
+                      className="w-full px-3 py-2 pr-9 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs focus:outline-none focus:border-blue-500 text-slate-900 dark:text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowFormPassword(!showFormPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                      title={showFormPassword ? 'Sembunyikan Password' : 'Lihat Password'}
+                    >
+                      {showFormPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
               </div>
 
