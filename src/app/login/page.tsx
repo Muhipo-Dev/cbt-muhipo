@@ -13,6 +13,8 @@ import {
   GraduationCap,
   Shield,
   Clock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 export default function SingleSignInLoginPage() {
@@ -20,6 +22,7 @@ export default function SingleSignInLoginPage() {
   const [activePortal, setActivePortal] = useState<'SISWA' | 'ADMIN'>('SISWA');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [settings, setSettings] = useState({
@@ -207,13 +210,21 @@ export default function SingleSignInLoginPage() {
               <div className="relative">
                 <KeyRound className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={activePortal === 'SISWA' ? 'Masukkan Kata Sandi Peserta' : 'Masukkan kata sandi...'}
-                  className="w-full pl-10 pr-4 py-2 sm:py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:border-blue-500 transition"
+                  className="w-full pl-10 pr-10 py-2 sm:py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:border-blue-500 transition"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                  title={showPassword ? 'Sembunyikan Kata Sandi' : 'Lihat Kata Sandi'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
