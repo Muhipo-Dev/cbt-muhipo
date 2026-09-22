@@ -799,74 +799,63 @@ export function TesDaftarView({
               </div>
 
               {/* Kuota Butir Soal per Siswa & Kunci Minimal Jawaban */}
-              <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 space-y-2.5">
+              <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-blue-950 dark:text-blue-300">
-                    Distribusi, Kuota Butir Soal & Kunci Minimal Jawaban (Opsional)
+                    Distribusi & Kuota Butir Soal per Siswa (Opsional)
                   </label>
-                  <span className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold bg-blue-100/70 dark:bg-blue-900/40 px-2 py-0.5 rounded-md">
-                    Fisher-Yates (Knuth) Shuffle
+                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold bg-blue-100/70 dark:bg-blue-900/40 px-2 py-0.5 rounded-md">
+                    Fisher-Yates Shuffle
                   </span>
                 </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Minimal Soal Ditampilkan
+                      Min. Soal Ditampilkan
                     </label>
                     <input
                       type="number"
                       min={1}
                       value={editForm.minSoal}
                       onChange={(e) => setEditForm({ ...editForm, minSoal: e.target.value })}
-                      placeholder="Contoh: 30 (Kosongkan jika semua)"
+                      placeholder="Semua soal"
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Maksimal Soal Ditampilkan
+                      Maks. Soal Ditampilkan
                     </label>
                     <input
                       type="number"
                       min={1}
                       value={editForm.maxSoal}
                       onChange={(e) => setEditForm({ ...editForm, maxSoal: e.target.value })}
-                      placeholder="Contoh: 30 (Kosongkan jika semua)"
+                      placeholder="Semua soal"
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                      <span>Minimal Jawaban Siswa</span>
-                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">(Kunci Selesai)</span>
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Min. Wajib Dijawab
                     </label>
                     <input
                       type="number"
                       min={0}
                       value={editForm.minJawaban}
                       onChange={(e) => setEditForm({ ...editForm, minJawaban: e.target.value })}
-                      placeholder="Contoh: 25 (Kosongkan jika bebas)"
+                      placeholder="Bebas submit"
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
 
-                <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-blue-100/80 dark:border-white/5 space-y-1 text-[10.5px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  <div className="flex items-start gap-1.5 font-bold text-blue-900 dark:text-blue-300">
-                    <span className="text-blue-600 dark:text-blue-400">💡</span>
-                    <span>Panduan & Contoh Konfigurasi:</span>
-                  </div>
-                  <ul className="list-disc list-inside space-y-0.5 pl-1">
-                    <li>
-                      <b className="text-slate-800 dark:text-slate-200">Kunci Minimal Jawaban:</b> Jika diisi <b>25</b>, siswa yang menjawab &lt; 25 butir soal tidak dapat mengumpulkan lembar jawaban.
-                    </li>
-                    <li>
-                      <b className="text-slate-800 dark:text-slate-200">Distribusi Soal:</b> Jika Maksimal Soal diatur <b>30</b> dari total 40 soal bank soal, sistem mengacak menggunakan <b>Algoritma Fisher-Yates</b>.
-                    </li>
-                  </ul>
-                </div>
+                <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-relaxed bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-blue-100/60 dark:border-white/5">
+                  💡 <b>Petunjuk Singkat:</b> Kosongkan jika seluruh soal ditampilkan dan bebas dikumpulkan kapan saja. Jika <b>Min. Wajib Dijawab</b> diisi (misal: <i>25</i>), siswa wajib menjawab minimal 25 butir soal sebelum diperbolehkan menyelesaikan ujian.
+                </p>
               </div>
 
               {/* Opsi Pengerjaan & Keamanan Anti-Cheat */}
