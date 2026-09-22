@@ -146,7 +146,7 @@ export function TesHasilView({
           >
             {ujianList.map((u) => (
               <option key={u.id} value={u.id}>
-                [{u.kodeUjian}] {u.judul}
+                {u.judul}
               </option>
             ))}
           </select>

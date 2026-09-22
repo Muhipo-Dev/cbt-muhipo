@@ -432,15 +432,16 @@ export default function SiswaPortalPage() {
                       }`}
                     >
                       <div className="space-y-2.5">
-                        {/* Header Card: Kode & Status Badge */}
+                        {/* Header Card: Modul & Status Badge */}
                         <div className="flex justify-between items-start gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                            <span className="font-mono text-[11px] font-bold text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-600/15 border border-blue-200 dark:border-blue-400/20 truncate">
-                              {ujian.kodeUjian}
-                            </span>
-                            {ujian.modulNama && ujian.modulNama !== 'Default' && (
-                              <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 truncate max-w-[130px]">
+                            {ujian.modulNama && ujian.modulNama !== 'Default' ? (
+                              <span className="text-[11px] font-bold text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-600/15 border border-blue-200 dark:border-blue-400/20 truncate max-w-[150px]">
                                 {ujian.modulNama}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                Ujian CBT
                               </span>
                             )}
                           </div>

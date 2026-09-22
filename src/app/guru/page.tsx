@@ -1490,14 +1490,11 @@ export default function GuruDashboardPage() {
                           className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/60 dark:border-white/5 hover:border-blue-500/50 transition cursor-pointer space-y-2"
                         >
                           <div className="flex justify-between items-start">
-                            <span className="text-[11px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md">
-                              {bs.kodeBank}
-                            </span>
-                            <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate flex-1 mr-2">{bs.nama}</h4>
+                            <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono shrink-0">
                               {bs._count?.soalList || 0} Soal
                             </span>
                           </div>
-                          <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">{bs.nama}</h4>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
                             {bs.mataPelajaran?.nama} • Tingkat {bs.tingkat} ({bs.jurusan || 'UMUM'})
                           </p>
@@ -1634,7 +1631,7 @@ export default function GuruDashboardPage() {
                       ) : (
                         proktorData.ujianList.map((u: any) => (
                           <option key={u.id} value={u.id}>
-                            {u.kodeUjian} - {u.judul} {u.bankSoal?.mataPelajaran?.nama ? `(${u.bankSoal.mataPelajaran.nama})` : ''}
+                            {u.judul} {u.bankSoal?.mataPelajaran?.nama ? `(${u.bankSoal.mataPelajaran.nama})` : ''}
                           </option>
                         ))
                       )}
@@ -1863,10 +1860,7 @@ export default function GuruDashboardPage() {
                       >
                         <div className="flex justify-between items-start gap-2">
                           <div className="min-w-0 flex-1">
-                            <span className="text-[11px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md">
-                              {bs.kodeBank}
-                            </span>
-                            <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate">{bs.nama}</h4>
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">{bs.nama}</h4>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                               {bs.mataPelajaran?.nama} • Pengampu: <b className="text-slate-800 dark:text-slate-200">{bs.mataPelajaran?.gurus?.[0]?.guru?.name || (bs.pembuat?.role === 'GURU' ? bs.pembuat?.name : 'Guru Pengampu Mapel')}</b> • {bs.durasiMenit || 90} Mnt
                             </p>
@@ -1959,9 +1953,6 @@ export default function GuruDashboardPage() {
                     <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 shadow-sm dark:shadow-xl backdrop-blur-xl flex flex-col sm:row justify-between items-start sm:items-center gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md">
-                            {selectedBankSoal.kodeBank}
-                          </span>
                           <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                             {selectedBankSoal.mataPelajaran?.nama} • Pengampu: <b>{selectedBankSoal.mataPelajaran?.gurus?.[0]?.guru?.name || (selectedBankSoal.pembuat?.role === 'GURU' ? selectedBankSoal.pembuat?.name : 'Guru Pengampu Mapel')}</b> • Durasi: <b>{selectedBankSoal.durasiMenit || 90} Menit</b>
                           </span>
@@ -2933,7 +2924,7 @@ export default function GuruDashboardPage() {
                     >
                       {koreksiUjianList.map((u) => (
                         <option key={u.id} value={u.id}>
-                          {u.kodeUjian} - {u.judul}
+                          {u.judul}
                         </option>
                       ))}
                     </select>
@@ -3764,7 +3755,7 @@ export default function GuruDashboardPage() {
                     <option value="">-- Pilih Bank Soal --</option>
                     {bankSoalList.map((bs) => (
                       <option key={bs.id} value={bs.id}>
-                        {bs.nama} ({bs.kodeBank}) - {bs.mataPelajaran?.nama}
+                        {bs.nama} - {bs.mataPelajaran?.nama}
                       </option>
                     ))}
                   </select>
@@ -3829,7 +3820,7 @@ export default function GuruDashboardPage() {
                   <span>Kirim / Jadwalkan Ujian ke Kelas</span>
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Bank Soal: <b>{distributeModal.nama}</b> ({distributeModal.kodeBank})
+                  Bank Soal: <b>{distributeModal.nama}</b>
                 </p>
               </div>
               <button

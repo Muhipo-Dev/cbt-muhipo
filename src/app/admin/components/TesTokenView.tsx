@@ -193,8 +193,6 @@ export function TesTokenView({
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{u.kodeUjian}</span>
-                    <span className="text-slate-400">•</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200">{u.judul}</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">

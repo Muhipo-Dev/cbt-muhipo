@@ -156,7 +156,7 @@ export function TesDaftarView({
   const handleDelete = (ujian: any) => {
     showConfirm(
       'Hapus Jadwal Tes?',
-      `PERINGATAN: Apakah Anda yakin ingin menghapus tes "${ujian.judul}" (${ujian.kodeUjian})? Seluruh jawaban dan riwayat pengerjaan siswa untuk tes ini akan terhapus permanen.`,
+      `PERINGATAN: Apakah Anda yakin ingin menghapus tes "${ujian.judul}"? Seluruh jawaban dan riwayat pengerjaan siswa untuk tes ini akan terhapus permanen.`,
       async () => {
         try {
           const res = await fetch('/api/admin', {
@@ -496,7 +496,6 @@ export function TesDaftarView({
                     className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-3.5 h-3.5"
                   />
                 </th>
-                <th className="py-3.5 px-4">Kode Ujian</th>
                 <th className="py-3.5 px-4">Judul Tes Ujian</th>
                 <th className="py-3.5 px-4">Topik / Mapel</th>
                 <th className="py-3.5 px-4">Durasi & Jadwal</th>
@@ -508,7 +507,7 @@ export function TesDaftarView({
             <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
               {paginatedList.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-slate-400 font-medium">
+                  <td colSpan={7} className="text-center py-12 text-slate-400 font-medium">
                     Tidak ada jadwal tes yang sesuai filter.
                   </td>
                 </tr>
@@ -532,9 +531,6 @@ export function TesDaftarView({
                           onChange={() => toggleSelectRow(u.id)}
                           className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-3.5 h-3.5"
                         />
-                      </td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">
-                        {u.kodeUjian}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
                         <div className="flex items-center gap-1.5">

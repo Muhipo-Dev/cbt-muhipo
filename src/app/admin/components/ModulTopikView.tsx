@@ -746,7 +746,6 @@ export function ModulTopikView({
                           <td className="py-2.5 px-3">
                             <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                               <span>{item.nama}</span>
-                              <span className="text-[10px] font-mono font-normal text-slate-400">({item.kode})</span>
                             </div>
                             {item.jurusan && item.jurusan !== 'UMUM' && (
                               <div className="text-[10px] text-slate-400">Jurusan: {item.jurusan}</div>

@@ -506,7 +506,7 @@ export default function ProktorPage() {
                 {data?.activeUjian?.judul || 'Tidak Ada Jadwal Ujian Aktif'}
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Mapel: <b>{data?.activeUjian?.bankSoal?.mataPelajaran?.nama || '-'}</b> • Durasi: <b>{data?.activeUjian?.durasiMenit || 0} Menit</b> • Kode: <span className="font-mono text-cyan-400">{data?.activeUjian?.kodeUjian || '-'}</span>
+                Mapel: <b>{data?.activeUjian?.bankSoal?.mataPelajaran?.nama || '-'}</b> • Durasi: <b>{data?.activeUjian?.durasiMenit || 0} Menit</b>
               </p>
             </div>
 
@@ -535,7 +535,7 @@ export default function ProktorPage() {
               >
                 {data?.ujianList?.map((u: any) => (
                   <option key={u.id} value={u.id}>
-                    {u.kodeUjian} - {u.judul}
+                    {u.judul}
                   </option>
                 ))}
               </select>

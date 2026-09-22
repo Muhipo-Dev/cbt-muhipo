@@ -289,7 +289,7 @@ export function ProktorLiveView({
               ) : (
                 activeUjianList.map((u: any) => (
                   <option key={u.id} value={u.id}>
-                    {u.kodeUjian ? `[${u.kodeUjian}] ` : ''}{u.judul} - {u.bankSoal?.mataPelajaran?.nama || u.mataPelajaran?.nama || u.bankSoal?.nama || ''}
+                    {u.judul} - {u.bankSoal?.mataPelajaran?.nama || u.mataPelajaran?.nama || u.bankSoal?.nama || ''}
                   </option>
                 ))
               )}

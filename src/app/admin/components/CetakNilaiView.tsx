@@ -186,7 +186,7 @@ export function CetakNilaiView({
               ) : (
                 filteredUjianList.map((u: any) => (
                   <option key={u.id} value={u.id}>
-                    [{u.kodeUjian}] {u.judul}
+                    {u.judul}
                   </option>
                 ))
               )}
@@ -311,7 +311,7 @@ export function CetakNilaiView({
           <div>
             <span className="text-[10px] font-bold text-slate-500 uppercase block">Jadwal Tes:</span>
             <span className="font-bold text-slate-900">
-              {activeUjian?.judul || '-'} [{activeUjian?.kodeUjian || '-'}]
+              {activeUjian?.judul || '-'}
             </span>
           </div>
           <div>
