@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -142,19 +142,19 @@ model Soal {
   
   nomorUrut       Int              @default(1)
   tipeSoal        String           @default("PG") // PG, PG_KOMPLEKS, BENAR_SALAH, MENJODOHKAN, ISIAN, ESAI
-  pertanyaan      String           @db.LongText
+  pertanyaan      String           @db.Text
   mediaAudio      String?          @db.Text // URL atau path audio untuk listening
-  mediaGambar     String?          @db.LongText // URL atau base64 gambar ilustrasi
+  mediaGambar     String?          @db.Text // URL atau base64 gambar ilustrasi
   bobot           Float            @default(1.0) // Poin / bobot per butir soal
   
   // Opsi untuk PG & PG Kompleks / Pernyataan Benar Salah
   opsiJawaban     OpsiJawaban[]
   
   // Jawaban untuk Isian Singkat & Essay (Kunci teks / rubrik)
-  kunciJawabanTeks String?         @db.LongText
+  kunciJawabanTeks String?         @db.Text
   
   // Pasangan Menjodohkan (JSON string: [{ left: "...", right: "..." }])
-  matchingData     String?         @db.LongText
+  matchingData     String?         @db.Text
 
   jawabanPeserta   JawabanPeserta[]
   
@@ -170,8 +170,8 @@ model OpsiJawaban {
   soalId      String
   soal        Soal     @relation(fields: [soalId], references: [id], onDelete: Cascade)
   label       String   // A, B, C, D, E atau 1, 2, 3
-  konten      String   @db.LongText
-  gambar      String?  @db.LongText
+  konten      String   @db.Text
+  gambar      String?  @db.Text
   isBenar     Boolean  @default(false)
   
   createdAt   DateTime @default(now())
@@ -240,7 +240,7 @@ model PesertaUjian {
   userAgent       String?          @db.Text
   
   // Urutan soal teracak khusus untuk peserta ini (JSON Array ID Soal)
-  urutanSoalIds   String?          @db.LongText
+  urutanSoalIds   String?          @db.Text
   
   jawabanPeserta  JawabanPeserta[]
   logs            LogAktivitasUjian[]
@@ -263,7 +263,7 @@ model JawabanPeserta {
   soal            Soal           @relation(fields: [soalId], references: [id], onDelete: Cascade)
   
   // Jawaban yang dipilih (ID Opsi / Array ID Opsi JSON / Teks Jawaban / JSON Menjodohkan)
-  jawabanDipilih  String?        @db.LongText
+  jawabanDipilih  String?        @db.Text
   raguRagu        Boolean        @default(false)
   
   isBenar         Boolean?
@@ -288,7 +288,7 @@ model LogAktivitasUjian {
   
   aktivitas       String         // Contoh: "LOGIN", "MULAI_UJIAN", "TAB_SWITCH_ALERT", "FULLSCREEN_EXIT", "SELESAI_UJIAN"
   detail          String?        @db.Text
-  fotoBukti       String?        @db.LongText // Base64 screenshot snapshot saat pelanggaran terjadi
+  fotoBukti       String?        @db.Text // Base64 screenshot snapshot saat pelanggaran terjadi
   
   createdAt       DateTime       @default(now())
 }

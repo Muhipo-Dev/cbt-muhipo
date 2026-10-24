@@ -119,7 +119,7 @@ Atau melalui PowerShell:
 ```
 
 Server akan aktif pada:
-- **HTTP (Port 80)**: `http://localhost` *(Akses Utama Server CBT)*
+- **HTTP (Port 4010)**: `http://localhost:4010` *(Akses Utama Server CBT)*
 - **Prisma Studio (Port 5560)**: `http://localhost:5560` *(GUI Database)*
 
 > 💡 **Akses Komputer Klien (Siswa & Proktor):**

@@ -9,7 +9,7 @@ const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev, dir: __dirname });
 const handle = app.getRequestHandler();
 
-const PORT = parseInt(process.env.PORT || process.env.HTTP_PORT || '80', 10);
+const PORT = parseInt(process.env.PORT || process.env.HTTP_PORT || '4010', 10);
 
 function getLocalIpAddresses() {
   const interfaces = os.networkInterfaces();

@@ -10,8 +10,8 @@ color 0B
 set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0;C:\Program Files\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\nodejs;C:\Program Files (x86)\nodejs;%NVM_HOME%;%NVM_SYMLINK%;C:\xampp\mysql\bin;D:\xampp\mysql\bin;E:\xampp\mysql\bin;F:\xampp\mysql\bin;C:\laragon\bin\mysql\current\bin;D:\laragon\bin\mysql\current\bin;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\MySQL\MySQL Server 8.4\bin;C:\Program Files\MySQL\MySQL Server 9.0\bin;C:\Program Files\MariaDB\bin;%PATH%"
 set "NODE_ENV=production"
 
-:: Baca Port dari .env jika ada, default ke 80
-set "CBT_PORT=80"
+:: Baca Port dari .env jika ada, default ke 4010
+set "CBT_PORT=4010"
 if exist ".env" (
     for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
         set "KEY=%%A"
@@ -96,9 +96,9 @@ if not exist ".env" (
         echo # ==============================================================================
         echo DATABASE_URL="mysql://root:@127.0.0.1:3306/cbt_muhipo"
         echo JWT_SECRET="cbt-muhipo-super-secret-key-2026-production-ready"
-        echo PORT=80
-        echo HTTP_PORT=80
-        echo NEXT_PUBLIC_APP_URL="http://localhost"
+        echo PORT=4010
+        echo HTTP_PORT=4010
+        echo NEXT_PUBLIC_APP_URL="http://localhost:4010"
         echo NEXT_PUBLIC_APP_NAME="CBT SMA Muhammadiyah 1 Ponorogo"
         echo NEXT_PUBLIC_SCHOOL_NAME="SMA Muhammadiyah 1 Ponorogo"
         echo NEXT_PUBLIC_SCHOOL_ADDRESS="Jl. Batoro Katong No. 6 Ponorogo, Jawa Timur"

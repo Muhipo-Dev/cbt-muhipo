@@ -7,7 +7,7 @@ param(
 #   Muhipo Dev (C) 2026
 #   
 #   PORT CBT STANDALONE:
-#   - CBT Web App & API  : Port 80 (HTTP Server)
+#   - CBT Web App & API  : Port 4010 (HTTP Server)
 #   - Prisma Studio (DB) : Port Mutlak 5560
 # ==============================================================================
 
@@ -17,7 +17,7 @@ $PRISMA_LOG     = Join-Path $ROOT "prisma-studio.log"
 $APP_PID_FILE   = Join-Path $ROOT ".cbt-app.pid"
 $PRISMA_PID_FILE= Join-Path $ROOT ".prisma-studio.pid"
 
-$CBT_PORT       = 80
+$CBT_PORT       = 4010
 $STUDIO_PORT    = 5560
 
 # ─── HELPERS ────────────────────────────────────────────────
@@ -67,12 +67,20 @@ function Stop-ProcessById {
 function Stop-PortProcess {
     param([int]$Port)
     try {
-        $result = netstat -ano 2>$null | Select-String ":$Port\s" | Select-String "LISTENING"
-        foreach ($line in $result) {
-            $tokens = ($line.Line -split '\s+') | Where-Object { $_ -ne '' }
+        $pids = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+        foreach ($pidVal in $pids) {
+            if ($pidVal -gt 4) {
+                Stop-Process -Id $pidVal -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } catch {}
+    try {
+        $lines = netstat -ano 2>$null | Select-String ":$Port\s"
+        foreach ($line in $lines) {
+            $tokens = ($line.Line.Trim() -split '\s+') | Where-Object { $_ -ne '' }
             $pidVal = $tokens[-1]
-            if ($pidVal -match '^\d+$' -and [int]$pidVal -gt 0) {
-                $null = cmd.exe /c "taskkill /PID $pidVal /T /F 2>nul"
+            if ($pidVal -match '^\d+$' -and [int]$pidVal -gt 4) {
+                cmd.exe /c "taskkill /PID $pidVal /T /F 2>nul"
             }
         }
     } catch {}
@@ -80,12 +88,39 @@ function Stop-PortProcess {
 
 function Test-PortListening {
     param([int]$Port)
-    $result = netstat -ano 2>$null | Select-String ":$Port\s" | Select-String "LISTENING"
-    return ($null -ne $result -and $result.Count -gt 0)
+    try {
+        $tcp = New-Object System.Net.Sockets.TcpClient
+        $iar = $tcp.BeginConnect("127.0.0.1", $Port, $null, $null)
+        $wait = $iar.AsyncWaitHandle.WaitOne(400, $false)
+        if ($wait -and $tcp.Connected) {
+            $tcp.EndConnect($iar)
+            $tcp.Close()
+            return $true
+        }
+        $tcp.Close()
+    } catch {}
+    return $false
 }
 
+$DB_PORT        = 54322
+
 function Test-DatabaseConnection {
-    return (Test-PortListening 3306)
+    return (Test-PortListening $DB_PORT)
+}
+
+function Ensure-DatabaseRunning {
+    if (-not (Test-DatabaseConnection)) {
+        Write-Status "Memeriksa dan menyalakan Database PostgreSQL Native Windows (Port $DB_PORT)..." "Cyan"
+        $simasmuhData = "D:\simasmuh\database\data"
+        $pgCtl = "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe"
+        if ((Test-Path $simasmuhData) -and (Test-Path $pgCtl)) {
+            Start-Process -FilePath $pgCtl -ArgumentList "-D `"$simasmuhData`" -o `"-p $DB_PORT`" start" -WindowStyle Hidden
+            for ($i = 0; $i -lt 10; $i++) {
+                Start-Sleep -Milliseconds 500
+                if (Test-DatabaseConnection) { break }
+            }
+        }
+    }
 }
 
 # ─── STATUS PANEL ───────────────────────────────────────────
@@ -94,13 +129,13 @@ function Show-Status {
     $appPid    = Get-StoredPid $APP_PID_FILE
     $prismaPid = Get-StoredPid $PRISMA_PID_FILE
 
-    $appRunning    = ($null -ne $appPid -and (Test-ProcessRunning $appPid)) -or (Test-PortListening $CBT_PORT)
-    $prismaRunning = ($null -ne $prismaPid -and (Test-ProcessRunning $prismaPid)) -or (Test-PortListening $STUDIO_PORT)
+    $appRunning    = (Test-PortListening $CBT_PORT) -or ($null -ne $appPid -and (Test-ProcessRunning $appPid))
+    $prismaRunning = (Test-PortListening $STUDIO_PORT) -or ($null -ne $prismaPid -and (Test-ProcessRunning $prismaPid))
     $dbConnected   = Test-DatabaseConnection
 
     $aStatus = if ($appRunning)    { "AKTIF (HTTP)".PadRight(15) } else { "MATI/OFF".PadRight(15) }
     $pStatus = if ($prismaRunning) { "AKTIF".PadRight(15) } else { "MATI/OFF".PadRight(15) }
-    $dStatus = if ($dbConnected)   { "TERHUBUNG (:3306)".PadRight(16) } else { "TERPUTUS (:3306)".PadRight(16) }
+    $dStatus = if ($dbConnected)   { "TERHUBUNG (:$DB_PORT)".PadRight(16) } else { "TERPUTUS (:$DB_PORT)".PadRight(16) }
 
     $aColor = if ($appRunning)    { "Green" } else { "Red" }
     $pColor = if ($prismaRunning) { "Green" } else { "DarkGray" }
@@ -109,9 +144,9 @@ function Show-Status {
     Write-Host "  +--------------------+------------------------+" -ForegroundColor DarkGray
     Write-Host "  | Komponen Layanan   | Status                 |" -ForegroundColor DarkGray
     Write-Host "  +--------------------+------------------------+" -ForegroundColor DarkGray
-    Write-Host "  | Database MySQL     | " -NoNewline
+    Write-Host "  | Database PostgreSQL| " -NoNewline
     Write-Host ($dStatus + "   |") -ForegroundColor $dColor
-    Write-Host "  | CBT Web HTTP (:80)  | " -NoNewline
+    Write-Host "  | CBT Web (:4010)    | " -NoNewline
     Write-Host ($aStatus + " :$CBT_PORT     |") -ForegroundColor $aColor
     Write-Host "  | Prisma Studio (:5560)| " -NoNewline
     Write-Host ($pStatus + " :$STUDIO_PORT     |") -ForegroundColor $pColor
@@ -133,10 +168,13 @@ function Start-CBTApp {
     }
 
     Write-Status "Menjalankan CBT Web App HTTP pada port $CBT_PORT..." "Cyan"
-    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c cd /d `"$ROOT`" && set PORT=$CBT_PORT && set HTTP_PORT=$CBT_PORT && node server.js > `"$APP_LOG`" 2>&1" -PassThru -WindowStyle Hidden
+    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c set PORT=$CBT_PORT& set HTTP_PORT=$CBT_PORT& set NODE_ENV=production& node server.js > `"$APP_LOG`" 2>&1" -WorkingDirectory $ROOT -PassThru -WindowStyle Hidden
     
     $proc.Id | Out-File $APP_PID_FILE -Force -Encoding ASCII
-    Start-Sleep -Seconds 3
+    for ($i = 0; $i -lt 15; $i++) {
+        Start-Sleep -Milliseconds 500
+        if (Test-PortListening $CBT_PORT) { break }
+    }
 
     if (Test-PortListening $CBT_PORT) {
         $appUrl = if ($CBT_PORT -eq 80) { "http://localhost" } else { "http://localhost:$CBT_PORT" }
@@ -185,6 +223,7 @@ function Stop-PrismaStudio {
 function Start-AllServices {
     Write-Banner
     Write-Status "Menjalankan semua layanan CBT Standalone..." "Cyan"
+    Ensure-DatabaseRunning
     Start-CBTApp
     Start-PrismaStudio
     Write-Host ""
@@ -221,9 +260,9 @@ while ($true) {
     Write-Host "  PILIHAN MENU MANAJEMEN CBT STANDALONE:" -ForegroundColor White
     Write-Host "  [1] Jalankan Semua Layanan (CBT App + Prisma Studio)" -ForegroundColor Green
     Write-Host "  [2] Hentikan Semua Layanan" -ForegroundColor Red
-    Write-Host "  [3] Jalankan CBT Web App Saja (:80)" -ForegroundColor Cyan
+    Write-Host "  [3] Jalankan CBT Web App Saja (:4010)" -ForegroundColor Cyan
     Write-Host "  [4] Jalankan Prisma Studio GUI Saja (:5560)" -ForegroundColor Cyan
-    Write-Host "  [5] Buka Browser CBT Web App (http://localhost)" -ForegroundColor Yellow
+    Write-Host "  [5] Buka Browser CBT Web App (http://localhost:4010)" -ForegroundColor Yellow
     Write-Host "  [6] Inisialisasi Ulang Skema Database (Prisma db push & seed)" -ForegroundColor Magenta
     Write-Host "  [7] Rebuild Sistem (Prisma generate + Next.js build)" -ForegroundColor Cyan
     Write-Host "  [0] Keluar" -ForegroundColor DarkGray
@@ -235,7 +274,7 @@ while ($true) {
         "2" { Stop-AllServices; Read-Host "  Tekan Enter untuk kembali ke menu..." }
         "3" { Start-CBTApp; Read-Host "  Tekan Enter untuk kembali ke menu..." }
         "4" { Start-PrismaStudio; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "5" { Start-Process "http://localhost" }
+        "5" { Start-Process "http://localhost:4010" }
         "6" {
             Write-Status "Inisialisasi database..." "Cyan"
             cmd.exe /c "cd /d `"$ROOT`" && npx prisma db push && npx tsx prisma/seed.ts"

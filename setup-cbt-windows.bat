@@ -203,9 +203,9 @@ if not exist ".env" (
         echo # ==============================================================================
         echo DATABASE_URL="mysql://root:@127.0.0.1:3306/cbt_muhipo"
         echo JWT_SECRET="cbt-muhipo-super-secret-key-2026-production-ready"
-        echo PORT=80
-        echo HTTP_PORT=80
-        echo NEXT_PUBLIC_APP_URL="http://localhost"
+        echo PORT=4010
+        echo HTTP_PORT=4010
+        echo NEXT_PUBLIC_APP_URL="http://localhost:4010"
         echo NEXT_PUBLIC_APP_NAME="CBT SMA Muhammadiyah 1 Ponorogo"
         echo NEXT_PUBLIC_SCHOOL_NAME="SMA Muhammadiyah 1 Ponorogo"
         echo NEXT_PUBLIC_SCHOOL_ADDRESS="Jl. Batoro Katong No. 6 Ponorogo, Jawa Timur"
@@ -316,13 +316,13 @@ echo  --------------------------------------------------------------------------
 echo  * Runtime       : Node.js (!NODE_VER!) dan NPM (v!NPM_VER!)
 echo  * Database      : MySQL / MariaDB (%DB_NAME% @ %DB_HOST%:%DB_PORT%)
 echo  * Mode          : Database Eksisting (Data Aman Terpelihara)
-echo  * Port Akses    : HTTP Port 80
+echo  * Port Akses    : HTTP Port 4010
 echo  * Frontend/API  : Next.js Production Ready (Standar Concurrency Tinggi)
 echo  --------------------------------------------------------------------------
 echo.
 echo  Langkah Selanjutnya:
 echo  1. Jalankan start-cbt-server.bat untuk menyalakan server produksi.
-echo  2. Buka browser proktor / admin pada URL: http://localhost
+echo  2. Buka browser proktor / admin pada URL: http://localhost:4010
 echo ==============================================================================
 echo.
 pause
