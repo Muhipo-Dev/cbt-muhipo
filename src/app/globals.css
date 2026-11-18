@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "./desktop.css";
+@import "./ionic-mobile.css";
+@import "./mobile.css";
+@import "./tablet-touch.css";
+@import "./tablet-hybrid.css";
 
 /* 1. Offline Fonts: Bahasa Indonesia & English (Latin Script) */
 @import "@fontsource/inter/400.css";
@@ -21,20 +26,118 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
   --font-sans: "Inter", var(--font-geist-sans), "Amiri", "Noto Sans Arabic", "Noto Sans Javanese", "Segoe UI", "Tahoma", -apple-system, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
+  --font-heading: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-arabic: "Amiri", "Noto Sans Arabic", "Scheherazade New", "Traditional Arabic", "KFGQPC Uthman Taha Naskh", "Geeza Pro", "Al Bayan", "Sakkal Majalla", "Segoe UI Historic", "Arial", serif;
   --font-javanese: "Noto Sans Javanese", "Tuladha Jejeg", "Javanese Text", "Yogya", "Segoe UI Historic", "Prada", sans-serif;
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --spacing-safe-top: var(--mobile-safe-top);
+  --spacing-safe-bottom: var(--mobile-safe-bottom);
+  --spacing-safe-left: var(--mobile-safe-left);
+  --spacing-safe-right: var(--mobile-safe-right);
+  --spacing-touch-target: var(--mobile-touch-target);
+  --spacing-tablet-touch: var(--tablet-touch-target);
+  --spacing-desktop-btn: var(--desktop-btn-min-height);
 }
 
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --destructive: #ef4444;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #3b82f6;
+  --radius: 0.625rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f8fafc;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #3b82f6;
+
+  --mobile-safe-top: env(safe-area-inset-top, 0px);
+  --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mobile-safe-left: env(safe-area-inset-left, 0px);
+  --mobile-safe-right: env(safe-area-inset-right, 0px);
+  --mobile-touch-target: 44px;
 }
 
 .dark {
   --background: #090d16;
   --foreground: #f8fafc;
+  --card: #0f172a;
+  --card-foreground: #f8fafc;
+  --popover: #0f172a;
+  --popover-foreground: #f8fafc;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
+  --destructive: #f43f5e;
+  --border: #1e293b;
+  --input: #1e293b;
+  --ring: #3b82f6;
+  --sidebar: #0b0f19;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #1e293b;
+  --sidebar-ring: #3b82f6;
 }
 
 body {
@@ -42,12 +145,120 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   transition: background-color 0.2s ease, color 0.2s ease;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+/* =========================================================================
+   SIMASMUH / FRAMEWORK7 / IONIC TACTILE AND ERGONOMIC COMPONENTS
+   ========================================================================= */
+
+/* Swiss modernist & tactile panels */
+.swiss-panel,
+.simas-soft-card,
+.cbt-card {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1.125rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 3px 8px -2px rgba(15, 23, 42, 0.04);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.15s ease;
+}
+
+.dark .swiss-panel,
+.dark .simas-soft-card,
+.dark .cbt-card {
+  background-color: rgba(15, 23, 42, 0.92);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.simas-tactile-card {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.02);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.dark .simas-tactile-card {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.simas-tactile-card:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+}
+
+.simas-btn-tactile,
+.swiss-button-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  border-radius: 0.875rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.simas-btn-tactile:hover,
+.swiss-button-control:hover {
+  transform: translateY(-0.5px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.simas-btn-tactile:active,
+.swiss-button-control:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1.5px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Swiss / Framework7 Inset Well for Search Inputs & Data Filters */
+.swiss-inset-well {
+  background-color: rgba(241, 245, 249, 0.8);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+  border-radius: 0.75rem;
+}
+
+.dark .swiss-inset-well {
+  background-color: rgba(15, 23, 42, 0.6);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Banner / Dash Header styling from SIMASMUH */
+.simas-dash-header {
+  background-color: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.dark .simas-dash-header {
+  background-color: #020617;
+  border-color: #1e293b;
+}
+
+/* Tabular figures for time & exam numbers */
+.swiss-tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.02em;
 }
 
 /* =========================================================================
    OFFLINE MULTILINGUAL SUPPORT: BAHASA ARAB & AKSARA JAWA (HANACARAKA)
-   Dioptimalkan untuk semua versi Chrome (Win XP, 7, 8, 10, 11, Android, iOS)
-   Mencegah harakat & sandhangan terpotong serta menjaga arah teks LTR/RTL
    ========================================================================= */
 
 /* Blok Teks Arab Murni (Ayat Al-Qur'an, Hadits, Paragraf Arab) */
@@ -128,7 +339,6 @@ body {
   unicode-bidi: plaintext;
 }
 
-/* Isolasi BDI otomatis untuk aksara campuran */
 bdi,
 [dir="auto"] {
   unicode-bidi: isolate;
@@ -143,11 +353,11 @@ bdi,
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.4);
   border-radius: 9999px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.7);
 }
 
 /* KaTeX & Math Formula High-Contrast Styling untuk Dark & Light Mode */
@@ -191,6 +401,48 @@ bdi,
   color: #e2e8f0;
 }
 
+/* Low Spec GPU optimization: meringankan composite beban backdrop-blur */
+.backdrop-blur-md,
+.backdrop-blur-xl,
+.backdrop-blur-2xl,
+.backdrop-blur-3xl {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+/* Universal Anti-Offset & Containment Bounds */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+h1, h2, h3, h4, h5, h6, p {
+  overflow-wrap: break-word;
+}
+
+img, svg, video, canvas, audio, iframe, embed, object {
+  max-width: 100%;
+}
+
+/* Ensure images maintain object-fit and respect explicit height utilities */
+img {
+  height: auto;
+  display: block;
+}
+
+/* Hard protection for application and brand logos across all layouts */
+.cbt-app-logo,
+header img,
+.mobile-appbar img {
+  height: 100% !important;
+  width: 100% !important;
+  max-height: 100% !important;
+  max-width: 100% !important;
+  object-fit: contain !important;
+}
+
 /* Print Optimization */
 @media print {
   @page {
@@ -228,92 +480,4 @@ bdi,
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
-}
-
-/* =========================================================================
-   LOW-END HARDWARE & LAB PC ACCELERATION (ZERO-LAG ULTRA LITE ENGINE)
-   Font smoothing & ClearType sharpness for legacy Windows monitors
-   ========================================================================= */
-
-html {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-}
-
-/* Optimasi bayangan agar ringan & nyaman di mata */
-.shadow-2xl {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-}
-.dark .shadow-2xl {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
-}
-
-/* Preferensi Kenyamanan Visual & Pengurangan Gerakan / Animasi Berat */
-@media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* =========================================================================
-   COMPACT & ULTRA-RESPONSIVE SYSTEM (CHROME DESKTOP & ANDROID WEBVIEW)
-   ========================================================================= */
-
-/* Android WebView & Mobile Safe Area Inset Support */
-.safe-area-bottom {
-  padding-bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
-}
-
-.safe-area-top {
-  padding-top: max(0.5rem, env(safe-area-inset-top, 0.5rem));
-}
-
-/* Compact Container & Card Styles */
-.cbt-card {
-  background-color: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 1rem;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
-}
-
-.dark .cbt-card {
-  background-color: rgba(15, 23, 42, 0.92);
-  border-color: rgba(51, 65, 85, 0.7);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.25), 0 2px 4px -2px rgba(0, 0, 0, 0.25);
-}
-
-.cbt-card-compact {
-  padding: 0.875rem 1rem;
-}
-
-@media (min-width: 640px) {
-  .cbt-card-compact {
-    padding: 1rem 1.25rem;
-  }
-}
-
-/* High Readability Text Enhancements */
-.text-high-contrast {
-  color: #0f172a;
-}
-.dark .text-high-contrast {
-  color: #f8fafc;
-}
-
-.text-muted-contrast {
-  color: #475569;
-}
-.dark .text-muted-contrast {
-  color: #94a3b8;
-}
-
-/* Better touch targets for Android WebView without excessive padding */
-.cbt-touch-btn {
-  min-height: 38px;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
 }

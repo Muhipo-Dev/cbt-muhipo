@@ -42,55 +42,56 @@ export function AppNavbar({
 
   return (
     <header
-      className={`print:hidden h-13 sm:h-15 lg:h-16 flex items-center justify-between px-3 sm:px-5 lg:px-7 sticky top-0 z-40 shadow-xs transition-colors duration-200 bg-white/95 dark:bg-slate-950/95 border-b border-slate-200/90 dark:border-slate-800 text-slate-900 dark:text-white backdrop-blur-xl shrink-0 w-full overflow-x-clip ${className}`}
+      className={`print:hidden mobile-appbar sticky top-0 z-40 w-full px-3 sm:px-5 lg:px-7 shrink-0 transition-all duration-200 ${className}`}
     >
-      {/* SISI KIRI: Logo & Nama Aplikasi CBT */}
-      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 min-w-0">
-        {onToggleSidebar && (
-          <button
-            type="button"
-            onClick={onToggleSidebar}
-            className="lg:hidden p-1.5 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10 cursor-pointer shrink-0 transition"
-            title="Buka Menu"
-          >
-            <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
-        )}
+      <div className="mobile-appbar-inner w-full flex items-center justify-between gap-2 sm:gap-4 min-h-[52px] h-13 sm:h-15 lg:h-16 px-3 sm:px-4 py-1.5 sm:py-0 rounded-2xl bg-white/95 dark:bg-slate-950/95 border border-slate-200/90 dark:border-slate-800 shadow-xs text-slate-900 dark:text-white backdrop-blur-xl transition-all">
+        {/* SISI KIRI: Logo & Nama Aplikasi CBT */}
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 min-w-0">
+          {onToggleSidebar && (
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              className="lg:hidden p-1.5 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10 cursor-pointer shrink-0 transition"
+              title="Buka Menu"
+            >
+              <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+          )}
 
-        <Link href={logoHref} className="flex items-center gap-2 group min-w-0">
-          <div className="p-1 rounded-xl border shadow-2xs transition-transform group-hover:scale-105 shrink-0 bg-blue-50 dark:bg-white/10 border-blue-200/80 dark:border-white/15 backdrop-blur-md flex items-center justify-center overflow-hidden">
-            <img
-              src={activeLogo}
-              alt="Logo CBT"
-              className="h-6 sm:h-7 lg:h-8 w-auto object-contain rounded max-w-[36px] sm:max-w-[42px]"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = '/pic_logo.png';
-              }}
-            />
-          </div>
-          <div className="flex flex-col justify-center min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-xs sm:text-sm lg:text-base tracking-tight leading-none text-slate-900 dark:text-white truncate">
-                {displayTitle}
-              </span>
-              {displayTitle !== 'CBT' && (
-                <span className="text-[10px] sm:text-xs font-semibold text-blue-600 dark:text-blue-400 font-sans tracking-normal hidden xs:inline">
-                  (CBT)
+          <Link href={logoHref} className="flex items-center gap-2 group min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 p-1 sm:p-1.5 rounded-xl border shadow-2xs transition-transform group-hover:scale-105 shrink-0 bg-blue-50 dark:bg-white/10 border-blue-200/80 dark:border-white/15 backdrop-blur-md flex items-center justify-center overflow-hidden">
+              <img
+                src={activeLogo}
+                alt="Logo CBT"
+                className="cbt-app-logo w-full h-full max-h-7 sm:max-h-8 max-w-[32px] sm:max-w-[36px] object-contain rounded"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/pic_logo.png';
+                }}
+              />
+            </div>
+            <div className="flex flex-col justify-center min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold text-xs sm:text-sm lg:text-base tracking-tight leading-none text-slate-900 dark:text-white truncate">
+                  {displayTitle}
+                </span>
+                {displayTitle !== 'CBT' && (
+                  <span className="text-[10px] sm:text-xs font-semibold text-blue-600 dark:text-blue-400 font-sans tracking-normal hidden xs:inline">
+                    (CBT)
+                  </span>
+                )}
+              </div>
+              {subtitle && (
+                <span
+                  className={`text-[9px] sm:text-[10px] lg:text-[11px] font-normal leading-tight text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-[150px] sm:max-w-[220px] lg:max-w-none ${
+                    hideSubtitleOnMobile ? 'hidden md:inline' : 'inline'
+                  }`}
+                >
+                  {subtitle}
                 </span>
               )}
             </div>
-            {subtitle && (
-              <span
-                className={`text-[9px] sm:text-[10px] lg:text-[11px] font-normal leading-tight text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-[150px] sm:max-w-[220px] lg:max-w-none ${
-                  hideSubtitleOnMobile ? 'hidden md:inline' : 'inline'
-                }`}
-              >
-                {subtitle}
-              </span>
-            )}
-          </div>
-        </Link>
-      </div>
+          </Link>
+        </div>
 
       {/* SISI TENGAH */}
       {children && (
@@ -133,6 +134,7 @@ export function AppNavbar({
             <span className="hidden sm:inline text-xs">Keluar</span>
           </button>
         )}
+      </div>
       </div>
     </header>
   )

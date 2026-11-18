@@ -186,41 +186,43 @@ export default function SingleSignInLoginPage() {
 
           {/* Form Inputs */}
           <form onSubmit={handleLogin} className="space-y-3 sm:space-y-3.5 text-xs">
-            <div className="space-y-1">
-              <label className="block text-slate-700 dark:text-slate-300 font-semibold text-xs">
-                {activePortal === 'SISWA' ? 'Nomor Peserta' : 'Username / NIP'}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                <div className="w-5 h-5 rounded-md bg-blue-50 dark:bg-blue-500/20 flex items-center justify-center border border-blue-200 dark:border-blue-400/30 shrink-0">
+                  <User className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <span>{activePortal === 'SISWA' ? 'Nomor Peserta' : 'Username / NIP'}</span>
               </label>
-              <div className="relative">
-                <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder={activePortal === 'SISWA' ? 'Input nomor peserta' : 'Contoh: admin'}
-                  className="w-full pl-10 pr-4 py-2 sm:py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:border-blue-500 transition"
-                />
-              </div>
+              <input
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder={activePortal === 'SISWA' ? 'Masukkan nomor peserta' : 'Masukkan username atau NIP'}
+                className="w-full h-11 px-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white text-sm font-medium focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500/20 transition shadow-2xs placeholder:text-slate-400"
+              />
             </div>
 
-            <div className="space-y-1">
-              <label className="block text-slate-700 dark:text-slate-300 font-semibold text-xs">
-                Kata Sandi
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                <div className="w-5 h-5 rounded-md bg-cyan-50 dark:bg-cyan-500/20 flex items-center justify-center border border-cyan-200 dark:border-cyan-400/30 shrink-0">
+                  <KeyRound className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                </div>
+                <span>Kata Sandi</span>
               </label>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <div className="relative flex items-center">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={activePortal === 'SISWA' ? 'Masukkan Kata Sandi Peserta' : 'Masukkan kata sandi...'}
-                  className="w-full pl-10 pr-10 py-2 sm:py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:border-blue-500 transition"
+                  placeholder={activePortal === 'SISWA' ? 'Masukkan kata sandi peserta' : 'Masukkan kata sandi'}
+                  className="w-full h-11 px-3.5 pr-11 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white text-sm font-medium focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500/20 transition shadow-2xs placeholder:text-slate-400"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-lg transition cursor-pointer z-10"
                   title={showPassword ? 'Sembunyikan Kata Sandi' : 'Lihat Kata Sandi'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

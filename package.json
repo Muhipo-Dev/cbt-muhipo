@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0 -p 4010",
+    "dev": "next dev -H 0.0.0.0 -p 4020",
     "build": "next build",
     "start": "node server.js",
-    "start:next": "next start -H 0.0.0.0 -p 4010",
+    "start:next": "next start -H 0.0.0.0 -p 4020",
     "lint": "eslint",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio --port 5560"
+    "db:studio": "prisma studio --port 5560 --browser none"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

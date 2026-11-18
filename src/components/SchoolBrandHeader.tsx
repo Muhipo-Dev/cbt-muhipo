@@ -24,18 +24,18 @@ export const SchoolBrandHeader: React.FC<SchoolBrandHeaderProps> = ({
         <img
           src={activeLogo}
           alt="Logo CBT"
-          className="w-full h-full object-contain"
+          className="cbt-app-logo w-full h-full object-contain"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).src = '/pic_logo.png';
           }}
         />
       </div>
 
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5">
-          <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white leading-none">
-            <span>CBT</span>{' '}
-            <span className="text-blue-600 dark:text-blue-400 font-bold text-xs sm:text-sm font-sans tracking-normal">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <h1 className="text-sm sm:text-base md:text-lg font-black tracking-tight text-slate-900 dark:text-white leading-none flex items-center gap-1.5">
+            <span>{appTitle || 'CBT'}</span>
+            <span className="text-blue-600 dark:text-blue-400 font-bold text-[11px] sm:text-xs font-sans tracking-normal hidden xs:inline">
               (Computer based test)
             </span>
           </h1>
@@ -46,7 +46,7 @@ export const SchoolBrandHeader: React.FC<SchoolBrandHeaderProps> = ({
           )}
         </div>
         {subtitle && (
-          <p className="text-xs font-normal text-slate-500 dark:text-slate-400 truncate mt-1">
+          <p className="text-[10px] sm:text-xs font-normal text-slate-500 dark:text-slate-400 truncate mt-0.5 max-w-[200px] xs:max-w-[260px] sm:max-w-none">
             {subtitle}
           </p>
         )}
