@@ -3,10 +3,10 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 :: ============================================================
 ::   CBT Launcher - Muhipo Dev (C) 2026
-::   Portal CBT Ujian Berbasis Komputer Modern (Muhipo Dev)
+::   Portal CBT v2 SMA Muhipo (Versi 2)
 ::   Smart Environment Analyzer & Dual-Engine Launcher (PowerShell / Native CMD)
 :: ============================================================
-title CBT MUHIPO - Portal Ujian SMA Muhammadiyah 1 Ponorogo
+title CBT v2 SMA Muhipo - Portal Ujian SMA Muhammadiyah 1 Ponorogo
 chcp 65001 >nul 2>&1
 
 :: Pindah ke direktori script berada
@@ -55,8 +55,8 @@ if defined PS_EXEC (
 cls
 echo.
 echo  +==================================================+
-echo  |           CBT MUHIPO - Muhipo Dev 2026           |
-echo  |    Sistem CBT SMA Muhammadiyah 1 Ponorogo        |
+echo  |         CBT v2 SMA Muhipo - Muhipo Dev 2026      |
+echo  |    Sistem CBT SMA Muhammadiyah 1 Ponorogo (v2)   |
 echo  |    [Mode: Native Terminal Windows CMD Engine]    |
 echo  +==================================================+
 echo.

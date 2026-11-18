@@ -32,7 +32,7 @@ export default function GlobalAppError({
   return (
     <ErrorPageContainer
       code={500}
-      customDescription={error?.message || 'Terjadi kesalahan sistem pada aplikasi CBT MUHIPO.'}
+      customDescription={error?.message || 'Terjadi kesalahan sistem pada aplikasi CBT v2 SMA Muhipo.'}
       reset={reset}
     />
   )

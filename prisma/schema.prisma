@@ -296,7 +296,7 @@ model LogAktivitasUjian {
 model PengaturanSistem {
   id              String         @id @default("default-settings")
   schoolName      String         @default("SMA Muhammadiyah 1 Ponorogo")
-  appTitle        String         @default("CBT MUHIPO")
+  appTitle        String         @default("CBT v2 SMA Muhipo")
   academicYear    String         @default("2026/2027")
   semester        String         @default("Ganjil")
   timezone        String         @default("Asia/Jakarta")

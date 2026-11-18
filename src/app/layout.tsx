@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CBT MUHIPO — SMA Muhammadiyah 1 Ponorogo",
-  description: "Sistem Ujian Berbasis Komputer Modern SMA Muhammadiyah 1 Ponorogo",
+  title: "CBT v2 SMA Muhipo — SMA Muhammadiyah 1 Ponorogo",
+  description: "Sistem Ujian Berbasis Komputer Modern SMA Muhammadiyah 1 Ponorogo (Versi 2)",
   icons: {
     icon: "/pic_logo.png",
   },

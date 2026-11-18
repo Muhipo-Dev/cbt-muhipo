@@ -201,7 +201,7 @@ export default function ErrorPageContainer({
           </div>
           <div className="flex flex-col justify-center">
             <span className="font-black text-base sm:text-lg md:text-xl tracking-tight leading-none text-blue-600 dark:text-blue-400">
-              CBT MUHIPO
+              CBT v2 SMA Muhipo
             </span>
             <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-normal leading-tight mt-0.5">
               Sistem Ujian SMA Muhammadiyah 1 Ponorogo
@@ -291,7 +291,7 @@ export default function ErrorPageContainer({
       <footer className="w-full border-t border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md py-3 sm:py-4 px-4 sm:px-8 flex items-center justify-center text-xs text-slate-600 dark:text-slate-400 z-20">
         <div className="flex items-center justify-center gap-2 font-semibold text-[11px] sm:text-xs text-center">
           <span className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>CBT MUHIPO &copy; 2026 — SMA Muhammadiyah 1 Ponorogo</span>
+          <span>CBT v2 SMA Muhipo &copy; 2026 — SMA Muhammadiyah 1 Ponorogo</span>
         </div>
       </footer>
     </div>

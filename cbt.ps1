@@ -3,7 +3,7 @@
 )
 
 # ==============================================================================
-#   CBT MUHIPO - Script Manajemen & Server CBT Standalone
+#   CBT v2 SMA Muhipo - Script Manajemen & Server CBT Standalone
 #   Muhipo Dev (C) 2026
 #   
 #   PORT CBT STANDALONE:
@@ -28,8 +28,8 @@ function Write-Banner {
     try { Clear-Host } catch {}
     Write-Host ""
     Write-Host "  +==================================================+" -ForegroundColor Cyan
-    Write-Host "  |       CBT MUHIPO STANDALONE - Muhipo Dev         |" -ForegroundColor Cyan
-    Write-Host "  |    Sistem CBT SMA Muhammadiyah 1 Ponorogo        |" -ForegroundColor Cyan
+    Write-Host "  |       CBT v2 SMA Muhipo - Muhipo Dev             |" -ForegroundColor Cyan
+    Write-Host "  |    Sistem CBT SMA Muhammadiyah 1 Ponorogo (v2)   |" -ForegroundColor Cyan
     Write-Host "  |  Port: :$CBT_PORT (Web), :$STUDIO_PORT (Studio), :$DB_PORT (DB) |" -ForegroundColor DarkCyan
     Write-Host "  +==================================================+" -ForegroundColor Cyan
     Write-Host ""

@@ -24,7 +24,7 @@ export default function GlobalError({
             Terjadi Kesalahan Sistem CBT
           </h1>
           <p style={{ color: '#94a3b8', fontSize: '14px', lineHeight: '1.6', margin: '0 0 24px 0' }}>
-            {error?.message || 'Terjadi gangguan internal pada server CBT MUHIPO. Silakan muat ulang halaman atau kembali ke portal login.'}
+            {error?.message || 'Terjadi gangguan internal pada server CBT v2 SMA Muhipo. Silakan muat ulang halaman atau kembali ke portal login.'}
           </p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
             <button

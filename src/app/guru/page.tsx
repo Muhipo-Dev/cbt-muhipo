@@ -258,7 +258,7 @@ export default function GuruDashboardPage() {
         if (pJson.success && pJson.data) {
           setSettingsForm({
             schoolName: pJson.data.schoolName || 'SMA Muhammadiyah 1 Ponorogo',
-            appTitle: pJson.data.appTitle || 'CBT MUHIPO',
+            appTitle: pJson.data.appTitle || 'CBT v2 SMA Muhipo',
             academicYear: pJson.data.academicYear || '2026/2027',
             semester: pJson.data.semester || 'Ganjil',
             logoUrl: pJson.data.logoUrl || '/pic_logo.png',

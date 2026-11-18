@@ -46,7 +46,7 @@ app.prepare().then(() => {
     const localIps = getLocalIpAddresses();
     const portSuffix = PORT === 80 ? '' : `:${PORT}`;
     console.log('\n================================================================');
-    console.log('       CBT MUHIPO HTTP SERVER BERHASIL AKTIF');
+    console.log('       CBT v2 SMA Muhipo HTTP SERVER BERHASIL AKTIF');
     console.log('       SMA Muhammadiyah 1 Ponorogo - Muhipo Dev (C) 2026');
     console.log('================================================================');
     console.log(`\n  [HTTP] Server Utama: http://localhost${portSuffix}`);

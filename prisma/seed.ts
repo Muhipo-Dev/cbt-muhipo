@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Memeriksa ketersediaan data pada basis data CBT MUHIPO...');
+  console.log('🌱 Memeriksa ketersediaan data pada basis data CBT v2 SMA Muhipo...');
 
   // 1. Cek apakah tabel User sudah memiliki data
   const userCount = await prisma.user.count();
@@ -37,7 +37,7 @@ async function main() {
       data: {
         id: 'default-settings',
         schoolName: 'SMA Muhammadiyah 1 Ponorogo',
-        appTitle: 'CBT MUHIPO',
+        appTitle: 'CBT v2 SMA Muhipo',
         academicYear: '2026/2027',
         semester: 'Ganjil',
         timezone: 'Asia/Jakarta',

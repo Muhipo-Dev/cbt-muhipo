@@ -183,7 +183,7 @@ export default function ComprehensiveAdminDashboard() {
       if (settJson.success && settJson.data) {
         setSettingsForm({
           schoolName: settJson.data.schoolName || 'SMA Muhammadiyah 1 Ponorogo',
-          appTitle: settJson.data.appTitle || 'CBT MUHIPO',
+          appTitle: settJson.data.appTitle || 'CBT v2 SMA Muhipo',
           academicYear: settJson.data.academicYear || '2026/2027',
           semester: settJson.data.semester || 'Ganjil',
           timezone: settJson.data.timezone || 'Asia/Jakarta',

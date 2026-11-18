@@ -32,7 +32,7 @@ export function AppSidebar({
   items,
   activeId,
   onSelect,
-  title = 'CBT MUHIPO',
+  title = 'CBT v2 SMA Muhipo',
 }: AppSidebarProps) {
   const clock = useRealtimeServerClock(60000)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
