@@ -14,7 +14,13 @@ cd /d "%~dp0"
 set "ROOT_DIR=%~dp0"
 
 :: Inisialisasi PATH komprehensif untuk server Windows (Node.js, NVM, Program Files, PostgreSQL)
-set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0;C:\Program Files\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\nodejs;C:\Program Files (x86)\nodejs;C:\Program Files\PostgreSQL\18\bin;%NVM_HOME%;%NVM_SYMLINK%;%PATH%"
+:: Inisialisasi Port DB Default (5432 atau dari .env)
+set "DB_PORT=5432"
+if exist ".env" (
+    for /f "usebackq tokens=*" %%L in (`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$c = Get-Content '.env' -Raw; if ($c -match 'DATABASE_URL=\x22?postgresql:\/\/[^:]+:?[^@]*@[^:\/]+:?(\d*)\/') { if ($Matches[1]) { Write-Output $Matches[1] } else { Write-Output '5432' } }" 2^>nul`) do (
+        if not "%%L"=="" set "DB_PORT=%%L"
+    )
+)
 
 :: ============================================================
 ::   TAHAP 1: SISTEM DETEKSI POWERSHELL & LAUNCHER PS1
@@ -63,7 +69,7 @@ echo.
 echo  Status Layanan Port:
 call :CHECK_PORT_STATUS 4020  "CBT Web App      "
 call :CHECK_PORT_STATUS 5560  "Prisma Studio    "
-call :CHECK_PORT_STATUS 54322 "PostgreSQL (DB)  "
+call :CHECK_PORT_STATUS %DB_PORT% "PostgreSQL (DB)  "
 echo.
 echo  +=========================================+
 echo  |               MENU UTAMA                |
@@ -73,7 +79,7 @@ echo  |  [2] Hentikan Semua Layanan             |
 echo  |  [3] Jalankan CBT Web App Saja (:4020)  |
 echo  |  [4] Jalankan Prisma Studio GUI (:5560) |
 echo  |  [5] Restart CBT Web App (:4020)        |
-echo  |  [6] Restart Database PostgreSQL (:54322|
+echo  |  [6] Restart Database PostgreSQL        |
 echo  |  [7] Restart Semua Layanan (Full)       |
 echo  |  [8] Rebuild ^& Restart CBT (Compile)   |
 echo  |  [9] Inisialisasi Database (Push+Seed)  |
@@ -233,11 +239,19 @@ goto CMD_MAIN_MENU
 :: ------------------------------------------------------------
 :SUB_ENSURE_DB
 set "DB_PID="
-for /f "tokens=5" %%p in ('netstat -ano -p tcp 2^>nul ^| findstr /R /C:":54322 " ^| findstr "LISTENING"') do set "DB_PID=%%p"
+for /f "tokens=5" %%p in ('netstat -ano -p tcp 2^>nul ^| findstr /R /C:":%DB_PORT% " ^| findstr "LISTENING"') do set "DB_PID=%%p"
+if not defined DB_PID (
+    :: Coba start service Windows
+    sc start postgresql-x64-18 >nul 2>&1
+    sc start postgresql-x64-17 >nul 2>&1
+    sc start postgresql-x64-16 >nul 2>&1
+    timeout /t 2 >nul
+    for /f "tokens=5" %%p in ('netstat -ano -p tcp 2^>nul ^| findstr /R /C:":%DB_PORT% " ^| findstr "LISTENING"') do set "DB_PID=%%p"
+)
 if not defined DB_PID (
     if exist "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe" (
         if exist "D:\simasmuh\database\data" (
-            start /b "" "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe" -D "D:\simasmuh\database\data" -o "-p 54322" start >nul 2>&1
+            start /b "" "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe" -D "D:\simasmuh\database\data" -o "-p %DB_PORT%" start >nul 2>&1
             timeout /t 2 >nul
         )
     )
@@ -245,18 +259,20 @@ if not defined DB_PID (
 goto :eof
 
 :SUB_RESTART_DB
+sc stop postgresql-x64-18 >nul 2>&1
+sc stop postgresql-x64-17 >nul 2>&1
 if exist "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe" (
     if exist "D:\simasmuh\database\data" (
         "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe" -D "D:\simasmuh\database\data" stop -m fast >nul 2>&1
         timeout /t 1 >nul
     )
 )
-for /f "tokens=5" %%p in ('netstat -ano -p tcp 2^>nul ^| findstr /R /C:":54322 " ^| findstr "LISTENING"') do (
+for /f "tokens=5" %%p in ('netstat -ano -p tcp 2^>nul ^| findstr /R /C:":%DB_PORT% " ^| findstr "LISTENING"') do (
     taskkill /PID %%p /T /F >nul 2>&1
 )
 timeout /t 1 >nul
 call :SUB_ENSURE_DB
-echo [OK] Database PostgreSQL berhasil direstart pada port 54322.
+echo [OK] Database PostgreSQL berhasil direstart pada port %DB_PORT%.
 goto :eof
 
 :SUB_START_APP

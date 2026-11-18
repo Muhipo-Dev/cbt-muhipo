@@ -20,7 +20,15 @@ $PRISMA_PID_FILE= Join-Path $ROOT ".prisma-studio.pid"
 
 $CBT_PORT       = 4020
 $STUDIO_PORT    = 5560
-$DB_PORT        = 54322
+$DB_PORT        = 5432
+
+# Parse DB Port dari .env jika ada
+if (Test-Path (Join-Path $ROOT ".env")) {
+    $envContent = Get-Content (Join-Path $ROOT ".env") -Raw
+    if ($envContent -match 'DATABASE_URL="postgresql:\/\/[^:]+:?[^@]*@[^:\/]+:?(\d*)\/') {
+        if ($Matches[1]) { $DB_PORT = [int]$Matches[1] }
+    }
+}
 
 # ─── HELPERS ────────────────────────────────────────────────
 
@@ -110,7 +118,21 @@ function Test-DatabaseConnection {
 
 function Ensure-DatabaseRunning {
     if (-not (Test-DatabaseConnection)) {
-        Write-Status "Memeriksa dan menyalakan Database PostgreSQL Native Windows (Port $DB_PORT)..." "Cyan"
+        Write-Status "Memeriksa dan menyalakan Database PostgreSQL (Port $DB_PORT)..." "Cyan"
+        
+        # 1. Coba nyalakan service PostgreSQL bawaan Windows Server
+        $pgService = Get-Service -Name "*postgres*" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($pgService -and $pgService.Status -ne "Running") {
+            try {
+                Start-Service -Name $pgService.Name -ErrorAction SilentlyContinue
+                for ($i = 0; $i -lt 10; $i++) {
+                    Start-Sleep -Milliseconds 500
+                    if (Test-DatabaseConnection) { return }
+                }
+            } catch {}
+        }
+
+        # 2. Coba nyalakan standalone jika ada data simasmuh
         $simasmuhData = "D:\simasmuh\database\data"
         $pgCtl = "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe"
         if ((Test-Path $simasmuhData) -and (Test-Path $pgCtl)) {
@@ -125,26 +147,31 @@ function Ensure-DatabaseRunning {
 
 function Restart-Database {
     Write-Status "Merestart Layanan Database PostgreSQL (Port $DB_PORT)..." "Yellow"
+
+    $pgService = Get-Service -Name "*postgres*" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($pgService) {
+        try {
+            Restart-Service -Name $pgService.Name -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+        } catch {}
+    }
+
     $simasmuhData = "D:\simasmuh\database\data"
     $pgCtl = "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe"
-
     if ((Test-Path $simasmuhData) -and (Test-Path $pgCtl)) {
         Write-Status "Menghentikan PostgreSQL via pg_ctl..." "Cyan"
         Start-Process -FilePath $pgCtl -ArgumentList "-D `"$simasmuhData`" stop -m fast" -WindowStyle Hidden -Wait
         Start-Sleep -Seconds 1
     }
 
-    # Pastikan port 54322 bersih jika masih ada proses tertinggal
     Stop-PortProcess $DB_PORT
     Start-Sleep -Milliseconds 500
-
-    # Nyalakan kembali PostgreSQL
     Ensure-DatabaseRunning
 
     if (Test-DatabaseConnection) {
-        Write-Ok "Database PostgreSQL berhasil direstart dan aktif di port $DB_PORT."
+        Write-Ok "Database PostgreSQL berhasil aktif di port $DB_PORT."
     } else {
-        Write-Err "Gagal menyalakan kembali Database PostgreSQL di port $DB_PORT. Periksa log PostgreSQL."
+        Write-Err "Gagal menyalakan kembali Database PostgreSQL di port $DB_PORT."
     }
 }
 
@@ -345,7 +372,7 @@ while ($true) {
     Write-Host "  [3] Jalankan CBT Web App Saja (:4020)" -ForegroundColor Cyan
     Write-Host "  [4] Jalankan Prisma Studio GUI Saja (:5560)" -ForegroundColor Cyan
     Write-Host "  [5] Restart CBT Web App (:4020)" -ForegroundColor Yellow
-    Write-Host "  [6] Restart Database PostgreSQL (:54322)" -ForegroundColor Yellow
+    Write-Host "  [6] Restart Database PostgreSQL (:$DB_PORT)" -ForegroundColor Yellow
     Write-Host "  [7] Restart Semua Layanan (Aplikasi + DB + Studio)" -ForegroundColor Yellow
     Write-Host "  [8] Rebuild & Restart CBT (Compile Ulang + Nyalakan)" -ForegroundColor Cyan
     Write-Host "  [9] Inisialisasi Ulang Skema Database (Prisma db push & seed)" -ForegroundColor Magenta
