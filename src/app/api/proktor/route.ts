@@ -12,6 +12,117 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const ujianId = searchParams.get('ujianId');
     const filterHari = searchParams.get('filterHari');
+    const inspectPesertaUjianId = searchParams.get('inspectPesertaUjianId');
+
+    // FITUR OVERRIDE SPECTATOR: Pengawas / Proktor dapat mengintip jawaban realtime & lembar ujian siswa
+    if (inspectPesertaUjianId) {
+      const targetPeserta = await prisma.pesertaUjian.findUnique({
+        where: { id: inspectPesertaUjianId },
+        include: {
+          siswa: { include: { kelas: true } },
+          ujian: {
+            include: {
+              mataPelajaran: {
+                include: {
+                  soalList: {
+                    include: { opsiJawaban: true },
+                    orderBy: { nomorUrut: 'asc' },
+                  },
+                },
+              },
+            },
+          },
+          jawabanPeserta: {
+            include: {
+              soal: {
+                include: { opsiJawaban: true },
+              },
+            },
+          },
+          logs: {
+            orderBy: { createdAt: 'desc' },
+            take: 30,
+          },
+        },
+      });
+
+      if (!targetPeserta) {
+        return NextResponse.json({ success: false, message: 'Peserta ujian tidak ditemukan' }, { status: 404 });
+      }
+
+      // Susun data terurut sesuai urutanSoalIds siswa
+      let orderedSoals = targetPeserta.ujian.mataPelajaran.soalList;
+      if (targetPeserta.urutanSoalIds) {
+        try {
+          const orderIds = JSON.parse(targetPeserta.urutanSoalIds);
+          if (Array.isArray(orderIds) && orderIds.length > 0) {
+            const soalMap = new Map(orderedSoals.map((s) => [s.id, s]));
+            const sorted: typeof orderedSoals = [];
+            orderIds.forEach((sid) => {
+              const item = soalMap.get(sid);
+              if (item) sorted.push(item);
+            });
+            if (sorted.length > 0) orderedSoals = sorted;
+          }
+        } catch (e) {}
+      }
+
+      const jawabanMap = new Map(targetPeserta.jawabanPeserta.map((j) => [j.soalId, j]));
+
+      const spectatorSoalData = orderedSoals.map((s, idx) => {
+        const jwb = jawabanMap.get(s.id);
+        return {
+          nomorUrut: idx + 1,
+          soalId: s.id,
+          pertanyaan: s.pertanyaan,
+          tipeSoal: s.tipeSoal,
+          mediaGambar: s.mediaGambar,
+          mediaAudio: s.mediaAudio,
+          bobot: s.bobot,
+          kunciJawabanTeks: s.kunciJawabanTeks,
+          matchingData: s.matchingData,
+          opsiJawaban: s.opsiJawaban.map((o) => ({
+            id: o.id,
+            label: o.label,
+            konten: o.konten,
+            gambar: o.gambar,
+            isBenar: o.isBenar,
+          })),
+          jawabanSiswa: jwb?.jawabanDipilih || null,
+          raguRagu: Boolean(jwb?.raguRagu),
+          isBenar: jwb?.isBenar ?? null,
+          skor: jwb?.skor ?? 0,
+        };
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          peserta: {
+            id: targetPeserta.id,
+            name: targetPeserta.siswa.name,
+            username: targetPeserta.siswa.username,
+            nomorPeserta: targetPeserta.siswa.nomorPeserta,
+            kelas: targetPeserta.siswa.kelas?.nama || '-',
+            status: targetPeserta.status,
+            sisaDetik: targetPeserta.sisaDetik,
+            waktuMulai: targetPeserta.waktuMulai,
+            waktuSelesai: targetPeserta.waktuSelesai,
+            ipAddress: targetPeserta.ipAddress,
+            totalSoal: orderedSoals.length,
+            totalDijawab: targetPeserta.jawabanPeserta.filter((j) => j.jawabanDipilih).length,
+          },
+          ujian: {
+            id: targetPeserta.ujian.id,
+            judul: targetPeserta.ujian.judul,
+            mapel: targetPeserta.ujian.mataPelajaran.nama,
+            durasiMenit: targetPeserta.ujian.durasiMenit,
+          },
+          soalList: spectatorSoalData,
+          logs: targetPeserta.logs,
+        },
+      });
+    }
 
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
@@ -189,7 +300,61 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Status peserta berhasil direset ke RESET_LOGIN' });
     }
 
-    if (action === 'FORCE_FINISH') {
+    if (action === 'RESET_ALL_LOGINS') {
+      const { ujianId } = body;
+      if (!ujianId) {
+        return NextResponse.json({ success: false, message: 'ujianId diperlukan' }, { status: 400 });
+      }
+      await prisma.pesertaUjian.updateMany({
+        where: { ujianId, status: { not: 'SELESAI' } },
+        data: { status: 'RESET_LOGIN' },
+      });
+      return NextResponse.json({ success: true, message: 'Seluruh siswa yang belum selesai berhasil direset status loginnya.' });
+    }
+
+    if (action === 'LOCK_EXAM') {
+      const { pesertaUjianId } = body;
+      if (!pesertaUjianId) {
+        return NextResponse.json({ success: false, message: 'pesertaUjianId diperlukan' }, { status: 400 });
+      }
+      const pu = await prisma.pesertaUjian.update({
+        where: { id: pesertaUjianId },
+        data: { status: 'TERKUNCI' },
+        include: { siswa: true },
+      });
+      await prisma.logAktivitasUjian.create({
+        data: {
+          userId: user.userId,
+          pesertaUjianId,
+          aktivitas: 'EXAM_LOCKED_BY_PROKTOR',
+          detail: `Proktor (${user.name}) mengunci lembar ujian siswa ${pu.siswa.name}.`,
+        },
+      });
+      return NextResponse.json({ success: true, message: `Ujian ${pu.siswa.name} berhasil dikunci.` });
+    }
+
+    if (action === 'UNLOCK_EXAM') {
+      const { pesertaUjianId } = body;
+      if (!pesertaUjianId) {
+        return NextResponse.json({ success: false, message: 'pesertaUjianId diperlukan' }, { status: 400 });
+      }
+      const pu = await prisma.pesertaUjian.update({
+        where: { id: pesertaUjianId },
+        data: { status: 'SEDANG_MENGERJAKAN' },
+        include: { siswa: true },
+      });
+      await prisma.logAktivitasUjian.create({
+        data: {
+          userId: user.userId,
+          pesertaUjianId,
+          aktivitas: 'EXAM_UNLOCKED_BY_PROKTOR',
+          detail: `Proktor (${user.name}) membuka kunci lembar ujian siswa ${pu.siswa.name}.`,
+        },
+      });
+      return NextResponse.json({ success: true, message: `Kunci ujian ${pu.siswa.name} berhasil dibuka.` });
+    }
+
+    if (action === 'FORCE_FINISH' || action === 'FINISH_FORCE') {
       const { pesertaUjianId } = body;
       await prisma.pesertaUjian.update({
         where: { id: pesertaUjianId },

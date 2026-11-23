@@ -29,7 +29,7 @@ export function PesertaImportView({
         { header: 'Username', key: 'username', width: 24 },
         { header: 'Password', key: 'password', width: 20 },
         { header: 'Nama Lengkap', key: 'nama', width: 32 },
-        { header: 'Kelas', key: 'kelas', width: 16 },
+        { header: 'Kelas', key: 'kelas', width: 18 },
         { header: 'Group', key: 'group', width: 26 },
       ]
 
@@ -47,7 +47,7 @@ export function PesertaImportView({
         username: 'username',
         password: 'password',
         nama: 'nama lengkap siswa',
-        kelas: 'X',
+        kelas: 'X (atau X-MIPA 1)',
         group: 'group yang sudah dibuat',
       })
 
@@ -56,7 +56,7 @@ export function PesertaImportView({
         username: '20261001',
         password: 'password123',
         nama: 'Ahmad Faiz Al-Farisi',
-        kelas: 'X',
+        kelas: 'X-MIPA 1',
         group: 'X-MIPA 1',
       })
 
@@ -65,7 +65,7 @@ export function PesertaImportView({
         username: '20261002',
         password: '123456',
         nama: 'Nur Aisyah Rahmawati',
-        kelas: 'XI',
+        kelas: 'XI-MIPA 2',
         group: 'XI-MIPA 2',
       })
 
@@ -74,7 +74,7 @@ export function PesertaImportView({
         username: '20261003',
         password: '123456',
         nama: 'Muhammad Rizki Pratama',
-        kelas: 'XII',
+        kelas: 'XII-IPS 1',
         group: 'XII-IPS 1',
       })
 
@@ -141,8 +141,8 @@ export function PesertaImportView({
             password,
             name: nama,
             nomorPeserta: username,
-            kelas,
-            group,
+            kelas: kelas || group,
+            group: group || kelas,
             ruang: 'Ruang 1',
             sesi: 1,
             gender: 'L',

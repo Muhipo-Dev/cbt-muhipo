@@ -43,7 +43,10 @@ export function PesertaDaftarView({
     nomorPeserta: '',
     kelasId: kelasList[0]?.id || '',
     jenisKelamin: 'L',
+    ruangUjian: 'Ruang 1',
+    sesiUjian: 1,
   })
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [resetPasswordModal, setResetPasswordModal] = useState<any>(null)
   const [newPasswordInput, setNewPasswordInput] = useState('')
   const [showResetPassword, setShowResetPassword] = useState(false)
@@ -59,6 +62,8 @@ export function PesertaDaftarView({
       nomorPeserta: '',
       kelasId: kelasList[0]?.id || '',
       jenisKelamin: 'L',
+      ruangUjian: 'Ruang 1',
+      sesiUjian: 1,
     })
     setShowModal(true)
   }
@@ -72,6 +77,8 @@ export function PesertaDaftarView({
       nomorPeserta: item.nomorPeserta || item.username || '',
       kelasId: item.kelasId || (item.kelas?.id || ''),
       jenisKelamin: item.jenisKelamin || 'L',
+      ruangUjian: item.ruangUjian || 'Ruang 1',
+      sesiUjian: item.sesiUjian ? Number(item.sesiUjian) : 1,
     })
     setShowModal(true)
   }
@@ -127,12 +134,77 @@ export function PesertaDaftarView({
           const json = await res.json()
           if (json.success) {
             showNotification('Berhasil', 'Peserta berhasil dihapus', 'success')
+            setSelectedIds((prev) => prev.filter((id) => id !== item.id))
             onRefresh()
           } else {
             showNotification('Gagal', json.message || 'Gagal menghapus peserta', 'error')
           }
         } catch (err: any) {
           showNotification('Error', 'Gagal menghapus: ' + err.message, 'error')
+        }
+      }
+    )
+  }
+
+  // Hapus Serentak Peserta Terpilih
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) {
+      showNotification('Peringatan', 'Pilih minimal 1 peserta untuk dihapus serentak.', 'warning')
+      return
+    }
+
+    showConfirm(
+      'Hapus Serentak Peserta?',
+      `Apakah Anda yakin ingin menghapus ${selectedIds.length} peserta terpilih secara serentak? Tindakan ini tidak dapat dibatalkan.`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'BULK_DELETE_SISWA', ids: selectedIds }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Berhasil', json.message || 'Peserta terpilih berhasil dihapus serentak.', 'success')
+            setSelectedIds([])
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal menghapus peserta serentak', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal hapus serentak: ' + err.message, 'error')
+        }
+      }
+    )
+  }
+
+  // Kosongkan Seluruh Data Siswa
+  const handleDeleteAll = () => {
+    if (!siswaList || siswaList.length === 0) {
+      showNotification('Informasi', 'Data peserta siswa sudah kosong.', 'info')
+      return
+    }
+
+    showConfirm(
+      'KOSONGKAN SEMUA DATA SISWA?',
+      `PERINGATAN: Anda akan menghapus SELURUH data peserta (${siswaList.length} siswa) dari sistem CBT. Tindakan ini permanen! Lanjutkan?`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'DELETE_ALL_SISWA' }),
+          })
+          const json = await res.json()
+          if (json.success) {
+            showNotification('Sukses Dikosongkan', json.message || 'Seluruh data peserta siswa berhasil dikosongkan.', 'success')
+            setSelectedIds([])
+            onRefresh()
+          } else {
+            showNotification('Gagal', json.message || 'Gagal mengosongkan data peserta', 'error')
+          }
+        } catch (err: any) {
+          showNotification('Error', 'Gagal mengosongkan data: ' + err.message, 'error')
         }
       }
     )
@@ -226,7 +298,31 @@ export function PesertaDaftarView({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center flex-wrap gap-2">
+          {selectedIds.length > 0 && (
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-rose-600/30 transition cursor-pointer animate-in fade-in"
+              title="Hapus Serentak Peserta Terpilih"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Hapus Serentak ({selectedIds.length})</span>
+            </button>
+          )}
+
+          {siswaList.length > 0 && (
+            <button
+              type="button"
+              onClick={handleDeleteAll}
+              className="px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-500/30 text-rose-300 font-bold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+              title="Kosongkan Seluruh Data Siswa di CBT"
+            >
+              <Trash2 className="w-4 h-4 text-rose-400" />
+              <span>Kosongkan Data</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleExportExcel}
@@ -282,9 +378,24 @@ export function PesertaDaftarView({
           <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
             <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-white/10 font-bold uppercase tracking-wider text-[11px]">
               <tr>
+                <th className="py-3.5 px-4 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filteredSiswa.length > 0 && selectedIds.length === filteredSiswa.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(filteredSiswa.map((s) => s.id))
+                      } else {
+                        setSelectedIds([])
+                      }
+                    }}
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                </th>
                 <th className="py-3.5 px-4">Username / ID</th>
                 <th className="py-3.5 px-4">Nama Lengkap Siswa</th>
                 <th className="py-3.5 px-4">Group / Kelas</th>
+                <th className="py-3.5 px-4">Ruang / Sesi</th>
                 <th className="py-3.5 px-4">No Peserta</th>
                 <th className="py-3.5 px-4 text-right">Aksi</th>
               </tr>
@@ -292,13 +403,27 @@ export function PesertaDaftarView({
             <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
               {filteredSiswa.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-12 text-slate-400">
+                  <td colSpan={7} className="text-center py-12 text-slate-400">
                     Tidak ada data peserta yang sesuai dengan pencarian / filter.
                   </td>
                 </tr>
               ) : (
                 filteredSiswa.map((s) => (
                   <tr key={s.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                    <td className="py-3.5 px-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(s.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds((prev) => [...prev, s.id])
+                          } else {
+                            setSelectedIds((prev) => prev.filter((id) => id !== s.id))
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </td>
                     <td className="py-3.5 px-4">
                       <div className="font-mono font-bold text-blue-600 dark:text-blue-400">
                         {s.username}
@@ -312,6 +437,10 @@ export function PesertaDaftarView({
                       <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-[11px]">
                         {s.kelas?.nama || 'Tanpa Group'}
                       </span>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">{s.ruangUjian || 'Ruang 1'}</div>
+                      <div className="text-[10.5px] text-cyan-600 dark:text-cyan-400 font-bold">Sesi {s.sesiUjian || 1}</div>
                     </td>
                     <td className="py-3.5 px-4 font-mono text-slate-500">{s.nomorPeserta || '-'}</td>
                     <td className="py-3.5 px-4 text-right">
@@ -510,6 +639,37 @@ export function PesertaDaftarView({
                   >
                     <option value="L">Laki-laki (L)</option>
                     <option value="P">Perempuan (P)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Ruang Ujian
+                  </label>
+                  <input
+                    type="text"
+                    value={form.ruangUjian}
+                    onChange={(e) => setForm({ ...form, ruangUjian: e.target.value })}
+                    placeholder="Contoh: Ruang 1 / Lab CBT"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Sesi Ujian
+                  </label>
+                  <select
+                    value={form.sesiUjian}
+                    onChange={(e) => setForm({ ...form, sesiUjian: Number(e.target.value) || 1 })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value={1}>Sesi 1 (Pagi)</option>
+                    <option value={2}>Sesi 2 (Siang)</option>
+                    <option value={3}>Sesi 3 (Sore)</option>
+                    <option value={4}>Sesi 4 (Khusus/Susulan)</option>
                   </select>
                 </div>
               </div>

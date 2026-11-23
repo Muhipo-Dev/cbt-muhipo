@@ -430,6 +430,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Peserta berhasil dihapus' });
     }
 
+    if (action === 'BULK_DELETE_SISWA') {
+      const { ids } = body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return NextResponse.json({ success: false, message: 'Daftar ID siswa tidak boleh kosong.' }, { status: 400 });
+      }
+      const res = await prisma.user.deleteMany({
+        where: {
+          id: { in: ids },
+          role: 'SISWA',
+        },
+      });
+      return NextResponse.json({
+        success: true,
+        message: `${res.count} data peserta (siswa) berhasil dihapus serentak.`,
+      });
+    }
+
+    if (action === 'DELETE_ALL_SISWA') {
+      const res = await prisma.user.deleteMany({
+        where: {
+          role: 'SISWA',
+        },
+      });
+      return NextResponse.json({
+        success: true,
+        message: `Seluruh data peserta (${res.count} siswa) berhasil dikosongkan.`,
+      });
+    }
+
     // --- 1.1 CRUD PENGGUNA STAFF & HAK AKSES (SUPERADMIN, ADMIN, GURU, PROKTOR) ---
     if (action === 'CREATE_USER') {
       const {
@@ -600,27 +629,29 @@ export async function POST(request: NextRequest) {
         const name = String(row.name || row.Nama || row['Nama Lengkap'] || row['Nama Peserta'] || row['Nama Siswa'] || 'Peserta').trim();
         const nomorPeserta = String(row.nomorPeserta || row['No Peserta'] || row['Nomor Peserta'] || username).trim();
         
-        // Format Kolom: Kelas (Tingkat: X, XI, XII atau 10, 11, 12) & Group (Nama Rombel / Group)
-        const kelasTingkatStr = String(row.kelas || row.Kelas || 'X').trim();
-        const groupStr = String(row.group || row.Group || row.grup || row.Grup || kelasTingkatStr || 'Umum').trim();
+        // Format Kolom: Kelas (Tingkat: X, XI, XII atau 10, 11, 12, atau nama kelas lengkap X-MIPA 1) & Group (Nama Rombel / Group)
+        const rawKelas = String(row.kelas || row.Kelas || '').trim();
+        const rawGroup = String(row.group || row.Group || row.grup || row.Grup || '').trim();
+        const kelasTingkatStr = rawKelas || rawGroup || 'X';
+        const groupStr = rawGroup || rawKelas || 'Umum';
         
         let tingkatNum = 10;
         const upperKelas = kelasTingkatStr.toUpperCase();
-        if (upperKelas === 'X' || upperKelas === '10' || upperKelas.startsWith('10')) {
+        if (upperKelas === 'X' || upperKelas === '10' || upperKelas.startsWith('10') || upperKelas.startsWith('X-') || upperKelas.startsWith('X ')) {
           tingkatNum = 10;
-        } else if (upperKelas === 'XI' || upperKelas === '11' || upperKelas.startsWith('11')) {
+        } else if (upperKelas === 'XI' || upperKelas === '11' || upperKelas.startsWith('11') || upperKelas.startsWith('XI-') || upperKelas.startsWith('XI ')) {
           tingkatNum = 11;
-        } else if (upperKelas === 'XII' || upperKelas === '12' || upperKelas.startsWith('12')) {
+        } else if (upperKelas === 'XII' || upperKelas === '12' || upperKelas.startsWith('12') || upperKelas.startsWith('XII-') || upperKelas.startsWith('XII ')) {
           tingkatNum = 12;
         } else {
-          const m = groupStr.match(/\d+/);
+          const m = (rawKelas + ' ' + rawGroup).match(/\d+/);
           if (m && [10, 11, 12].includes(parseInt(m[0]))) {
             tingkatNum = parseInt(m[0]);
           }
         }
 
-        const kelasNama = groupStr || `Kelas ${kelasTingkatStr}`;
-        const ruangUjian = row.ruang || row['Ruang Ujian'] || row.Ruang ? String(row.ruang || row['Ruang Ujian'] || row.Ruang).trim() : null;
+        const kelasNama = groupStr || (rawKelas ? `Kelas ${rawKelas}` : 'Umum');
+        const ruangUjian = row.ruang || row['Ruang Ujian'] || row.Ruang ? String(row.ruang || row['Ruang Ujian'] || row.Ruang).trim() : 'Ruang 1';
         const sesiUjian = Number(row.sesi || row['Sesi Ujian'] || row.Sesi || 1) || 1;
         const jenisKelamin = String(row.gender || row['Jenis Kelamin'] || row.jk || 'L').toUpperCase().startsWith('P') ? 'P' : 'L';
 
