@@ -49,12 +49,17 @@ export function detectDeviceSecurityInfo(): DeviceSecurityInfo {
   const isBrave = Boolean((navigator as any).brave && typeof (navigator as any).brave.isBrave === 'function');
 
   const hasDisplayMedia = Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function');
-  const hasFullscreen = Boolean(
-    document.fullscreenEnabled ||
-    (document as any).webkitFullscreenEnabled ||
-    (document as any).mozFullScreenEnabled ||
-    (document as any).msFullscreenEnabled
+  
+  // Deteksi Fullscreen API: Catatan khusus iPhone Safari tidak mendukung requestFullscreen pada documentElement (hanya iPadOS & Mac)
+  const doc: any = typeof document !== 'undefined' ? document : {};
+  const hasNativeFullscreen = Boolean(
+    doc.fullscreenEnabled ||
+    doc.webkitFullscreenEnabled ||
+    doc.mozFullScreenEnabled ||
+    doc.msFullscreenEnabled
   );
+  // iPhone Safari secara sengaja menonaktifkan Fullscreen API untuk DOM element, tetapi tetap mendukung viewport lock
+  const hasFullscreen = Boolean(hasNativeFullscreen && !isIOS);
 
   let deviceName = 'Desktop PC / Laptop';
   if (isIOS) {
@@ -289,6 +294,7 @@ export function isCurrentlyFullscreen(): boolean {
   return Boolean(
     doc.fullscreenElement ||
     doc.webkitFullscreenElement ||
+    doc.webkitCurrentFullScreenElement ||
     doc.mozFullScreenElement ||
     doc.msFullscreenElement
   );
@@ -303,21 +309,43 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
   const handleKeyDown = (e: KeyboardEvent) => {
     const isCmd = e.metaKey; // Command di macOS Safari/Chrome
     const isCtrl = e.ctrlKey;
+    const isAlt = e.altKey;
 
-    // 1. F12 (Inspect Element), F11 (Fullscreen override), F5 (Reload)
+    // 1. F12 (Inspect Element), F11 (Fullscreen override), F5 (Reload), Escape
     if (
       e.key === 'F12' ||
       e.key === 'F11' ||
       e.key === 'F5' ||
+      e.key === 'Escape' ||
+      e.code === 'Escape' ||
       ((isCtrl || isCmd) && e.key.toLowerCase() === 'r')
     ) {
       e.preventDefault();
       e.stopPropagation();
-      onViolation?.(`Tombol ${e.key} dicegah`);
+      onViolation?.(`Tombol ${e.key} dicegah (Layar Penuh Terkunci)`);
       return false;
     }
 
-    // 2. DevTools Shortcuts (Chrome/Firefox/Safari: Cmd+Option+I / Cmd+Option+C / Cmd+Option+J / Ctrl+Shift+I)
+    // 2. Tab Navigation & Close Tab Shortcuts (Ctrl+W, Ctrl+T, Ctrl+N, Ctrl+Q, Cmd+W, Cmd+Q, Cmd+T, Cmd+N)
+    if (
+      (isCtrl || isCmd) &&
+      ['w', 'W', 't', 'T', 'n', 'N', 'q', 'Q', 'h', 'H'].includes(e.key)
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      onViolation?.(`Pencegahan keluar tab (${isCmd ? 'Cmd' : 'Ctrl'}+${e.key.toUpperCase()})`);
+      return false;
+    }
+
+    // 3. Alt+Tab / Alt+F4 / Alt+Left / Alt+Right (Navigasi kembali / tutup window)
+    if (isAlt && ['ArrowLeft', 'ArrowRight', 'F4', 'Home'].includes(e.key)) {
+      e.preventDefault();
+      e.stopPropagation();
+      onViolation?.(`Kombinasi Alt+${e.key} dicegah`);
+      return false;
+    }
+
+    // 4. DevTools Shortcuts (Chrome/Firefox/Safari: Cmd+Option+I / Cmd+Option+C / Cmd+Option+J / Ctrl+Shift+I)
     if (
       ((isCtrl || isCmd) && e.shiftKey && ['I', 'J', 'C', 'i', 'j', 'c'].includes(e.key)) ||
       (isCmd && e.altKey && ['i', 'j', 'c', 'I', 'J', 'C'].includes(e.key))
@@ -328,9 +356,9 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
       return false;
     }
 
-    // 3. View Source / Print (Cmd+Option+U di Safari, Ctrl+U, Cmd+P, Ctrl+P)
+    // 5. View Source / Print / Save (Cmd+Option+U, Ctrl+U, Cmd+P, Ctrl+P, Ctrl+S, Cmd+S)
     if (
-      ((isCtrl || isCmd) && ['u', 'U', 'p', 'P'].includes(e.key)) ||
+      ((isCtrl || isCmd) && ['u', 'U', 'p', 'P', 's', 'S'].includes(e.key)) ||
       (isCmd && e.altKey && ['u', 'U'].includes(e.key))
     ) {
       e.preventDefault();
@@ -339,7 +367,7 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
       return false;
     }
 
-    // 4. Clipboard Protection (kecuali di input/textarea jawaban esai)
+    // 6. Clipboard Protection (kecuali di input/textarea jawaban esai/isian)
     if ((isCtrl || isCmd) && ['c', 'v', 'a', 'x', 'C', 'V', 'A', 'X'].includes(e.key)) {
       const target = e.target as HTMLElement;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
@@ -350,7 +378,7 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
       return false;
     }
 
-    // 5. Cmd+Tab / Windows Key
+    // 7. Cmd+Tab / Windows Key
     if (e.key === 'Meta' || e.key === 'OS') {
       onViolation?.('Tombol Menu Sistem ditekan');
     }
@@ -360,5 +388,27 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
 
   return () => {
     window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  };
+}
+
+/**
+ * Mengunci History Browser (History Trap) agar tombol Back / Gesture Swipe Back dicegah total
+ */
+export function setupBrowserNavigationLock(onBackAttempt?: () => void) {
+  if (typeof window === 'undefined') return () => {};
+
+  // Dorong entri history awal
+  window.history.pushState({ cbtLocked: true }, '', window.location.href);
+
+  const handlePopState = (e: PopStateEvent) => {
+    // Paksa dorong kembali history state agar tetap berada di halaman ujian
+    window.history.pushState({ cbtLocked: true }, '', window.location.href);
+    onBackAttempt?.();
+  };
+
+  window.addEventListener('popstate', handlePopState);
+
+  return () => {
+    window.removeEventListener('popstate', handlePopState);
   };
 }

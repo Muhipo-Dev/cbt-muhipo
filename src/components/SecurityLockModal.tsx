@@ -38,12 +38,9 @@ export function SecurityLockModal({
     setActivating(true);
     setErrorMsg(null);
     try {
-      const success = await onActivateSecurity();
-      if (!success) {
-        setErrorMsg('Gagal mengaktifkan mode keamanan. Pastikan mengizinkan Fullscreen / Mode Ujian.');
-      }
+      await onActivateSecurity();
     } catch (e: any) {
-      setErrorMsg(e.message || 'Terjadi kendala saat mengaktifkan pengawasan.');
+      console.warn('Modal security start warning:', e);
     } finally {
       setActivating(false);
     }

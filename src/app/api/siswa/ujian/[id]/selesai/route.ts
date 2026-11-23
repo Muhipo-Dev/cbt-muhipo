@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { StatusPeserta, TipeSoal } from '@/lib/enums';
+import {
+  matchIsianSingkat,
+  matchPGKompleks,
+  matchMenjodohkan,
+} from '@/lib/cbt-scoring';
 
 export async function POST(
   request: NextRequest,
@@ -124,26 +129,20 @@ export async function POST(
           chosenIds = [];
         }
 
-        const correctOpsiIds = soal.opsiJawaban.filter((o) => o.isBenar).map((o) => o.id);
-        const isIdentical =
-          chosenIds.length === correctOpsiIds.length &&
-          chosenIds.every((id) => correctOpsiIds.includes(id));
-
-        const skor = isIdentical ? bobot : 0;
-        if (isIdentical) totalNilaiPG += bobot;
+        const matchResult = matchPGKompleks(chosenIds, soal.opsiJawaban, bobot);
+        totalNilaiPG += matchResult.skor;
 
         if (jawaban) {
           await prisma.jawabanPeserta.update({
             where: { id: jawaban.id },
-            data: { isBenar: isIdentical, skor },
+            data: { isBenar: matchResult.isBenar, skor: matchResult.skor },
           });
         }
       } else if (soal.tipeSoal === TipeSoal.ISIAN) {
-        const kunci = (soal.kunciJawabanTeks || '').trim().toLowerCase();
-        const jawab = (jawaban?.jawabanDipilih || '').trim().toLowerCase();
-        const isBenar = kunci.length > 0 && kunci === jawab;
+        maxNilaiObjektif += bobot;
+        const isBenar = matchIsianSingkat(jawaban?.jawabanDipilih || '', soal.kunciJawabanTeks || '');
         const skor = isBenar ? bobot : 0;
-        if (isBenar) totalNilaiEsai += bobot;
+        if (isBenar) totalNilaiPG += bobot;
 
         if (jawaban) {
           await prisma.jawabanPeserta.update({
@@ -153,50 +152,13 @@ export async function POST(
         }
       } else if (soal.tipeSoal === TipeSoal.MENJODOHKAN) {
         maxNilaiObjektif += bobot;
-        let pairsCorrect = 0;
-        let totalPairs = 0;
-
-        try {
-          const keyPairs: { left: string; right: string }[] = JSON.parse(soal.matchingData || '[]');
-          totalPairs = keyPairs.length;
-
-          let userAnswers: Record<string, string> = {};
-          if (jawaban?.jawabanDipilih) {
-            const parsed = JSON.parse(jawaban.jawabanDipilih);
-            if (Array.isArray(parsed)) {
-              parsed.forEach((p: any) => {
-                if (p.left && p.right) userAnswers[p.left.trim().toLowerCase()] = p.right.trim().toLowerCase();
-              });
-            } else if (typeof parsed === 'object' && parsed !== null) {
-              Object.entries(parsed).forEach(([k, v]) => {
-                userAnswers[k.trim().toLowerCase()] = String(v).trim().toLowerCase();
-              });
-            }
-          }
-
-          if (totalPairs > 0) {
-            for (const kp of keyPairs) {
-              const expectedLeft = kp.left.trim().toLowerCase();
-              const expectedRight = kp.right.trim().toLowerCase();
-              if (userAnswers[expectedLeft] && userAnswers[expectedLeft] === expectedRight) {
-                pairsCorrect++;
-              }
-            }
-          }
-        } catch (e) {
-          pairsCorrect = 0;
-        }
-
-        const proportion = totalPairs > 0 ? pairsCorrect / totalPairs : 0;
-        const skor = Number((proportion * bobot).toFixed(2));
-        const isAllBenar = totalPairs > 0 && pairsCorrect === totalPairs;
-
-        totalNilaiPG += skor;
+        const matchResult = matchMenjodohkan(jawaban?.jawabanDipilih || undefined, soal.matchingData || undefined, bobot);
+        totalNilaiPG += matchResult.skor;
 
         if (jawaban) {
           await prisma.jawabanPeserta.update({
             where: { id: jawaban.id },
-            data: { isBenar: isAllBenar, skor },
+            data: { isBenar: matchResult.isBenar, skor: matchResult.skor },
           });
         }
       } else if (soal.tipeSoal === TipeSoal.ESAI) {

@@ -27,6 +27,7 @@ import confetti from 'canvas-confetti';
 import {
   cbtSecurityAudio,
   setupExamKeyboardLockdown,
+  setupBrowserNavigationLock,
   requestUniversalFullscreen,
   exitUniversalFullscreen,
   isCurrentlyFullscreen,
@@ -291,17 +292,26 @@ export default function LembarUjianPage({
   // Aktivasi Protokol Keamanan Ringan (Fullscreen + Audio Alarms Tanpa Screen Capture)
   const handleActivateSecurity = async (): Promise<boolean> => {
     try {
-      // 0. Unlock Web Audio & Speech synthesis
+      // 0. Unlock Web Audio & Speech synthesis untuk Safari macOS & iOS
       cbtSecurityAudio.unlockAudio();
 
-      // 1. Masuk ke mode fullscreen universal
-      await requestUniversalFullscreen();
-      const fullscreenActive = isCurrentlyFullscreen();
-      setIsFullscreen(fullscreenActive);
-
       const devInfo = detectDeviceSecurityInfo();
-      if (devInfo.hasFullscreen && !fullscreenActive && !devInfo.isMobile && !devInfo.isTablet) {
-        throw new Error('Anda wajib mengizinkan Mode Layar Penuh (Fullscreen) untuk dapat memulai ujian.');
+
+      // 1. Eksekusi Fullscreen:
+      // Di Mac (Safari/Chrome), iPad, dan Windows/Android -> minta Fullscreen
+      // Di iPhone Safari (di mana Apple sengaja membatasi requestFullscreen pada HTML body) -> lewati tanpa melempar error
+      if (devInfo.hasFullscreen) {
+        try {
+          await requestUniversalFullscreen();
+          const fullscreenActive = isCurrentlyFullscreen();
+          setIsFullscreen(fullscreenActive);
+        } catch (fsErr) {
+          console.warn('Fullscreen request non-fatal:', fsErr);
+          setIsFullscreen(true);
+        }
+      } else {
+        // iPhone / iOS Safari: Diizinkan langsung berjalan lancar dalam mode viewport mobile
+        setIsFullscreen(true);
       }
 
       // 2. Buka lembar ujian dan aktifkan grace period 5 detik bebas pelanggaran
@@ -323,8 +333,11 @@ export default function LembarUjianPage({
 
       return true;
     } catch (e: any) {
-      console.error('Gagal aktivasi keamanan:', e);
-      throw e;
+      console.warn('Aktivasi keamanan non-blocking:', e);
+      // Tetap izinkan siswa masuk agar tidak terblokir
+      setIsSecurityUnlocked(true);
+      setIsFullscreen(true);
+      return true;
     }
   };
 
@@ -352,95 +365,163 @@ export default function LembarUjianPage({
     };
   }, [sisaDetik, loading]);
 
-  // 3. Anti-Cheat Engine Lintas Platform (Tab switch, Window blur, Keyboard Lockdown, Audio alarms)
+  // 3. Anti-Cheat Engine Lintas Platform & Pengawasan Area Terkoordinasi (Anti-Collision State Machine)
   useEffect(() => {
     if (!isSecurityUnlocked) return;
 
-    // Keyboard lockdown (Command di macOS & Ctrl di Windows/Linux)
-    const cleanupKeyboard = setupExamKeyboardLockdown((reason) => {
+    // Mutex & Debounce Ref untuk mencegah tabrakan event serentak
+    let isHandlingViolation = false;
+    let pendingViolationTimer: NodeJS.Timeout | null = null;
+
+    // Dispatcher Terpadu Pengawasan Area (Mencegah multi-firing antara visibilitychange, blur, pagehide, dan fullscreenchange)
+    const dispatchAreaViolation = (
+      primaryType: 'TAB_SWITCH_ALERT' | 'APP_SWITCH_ALERT' | 'FULLSCREEN_EXIT' | 'KEYBOARD_SHORTCUT_VIOLATION' | 'MOUSE_LEAVE_ALERT',
+      detailMsg: string,
+      voiceWarning: string
+    ) => {
+      if (isSubmittedRef.current) return;
       if (securityUnlockedAtRef.current && Date.now() - securityUnlockedAtRef.current < 5000) {
         return;
       }
-      triggerCheatLog('KEYBOARD_SHORTCUT_VIOLATION', reason);
-      cbtSecurityAudio.playWarningBuzzer();
-      setCheatWarning(`Peringatan: ${reason}!`);
+
+      // Jika sedang menangani event dalam jeda 800ms, jangan dobelkan peringatan
+      if (isHandlingViolation) return;
+      isHandlingViolation = true;
+
+      // Jalankan trigger log dan suara terkoordinasi sekali saja
+      triggerCheatLog(primaryType, detailMsg);
+      cbtSecurityAudio.triggerFullWarning(voiceWarning);
+      setCheatWarning(`Peringatan: ${detailMsg}`);
+
+      // Buka kembali mutex setelah 1.2 detik
+      if (pendingViolationTimer) clearTimeout(pendingViolationTimer);
+      pendingViolationTimer = setTimeout(() => {
+        isHandlingViolation = false;
+      }, 1200);
+    };
+
+    // Browser History Trap (Cegah Tombol Back / Gesture Back HP)
+    const cleanupHistoryLock = setupBrowserNavigationLock(() => {
+      if (isSubmittedRef.current) return;
+      dispatchAreaViolation(
+        'KEYBOARD_SHORTCUT_VIOLATION',
+        'Tombol kembali / navigasi dicegah! Harap tetap di lembar ujian.',
+        'Dilarang menekan tombol kembali selama ujian!'
+      );
     });
 
-    const handleVisibilityChange = () => {
+    // Mencegah Siswa Menutup Tab atau Refresh (BeforeUnload Trap)
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isSubmittedRef.current) return;
-      // Jangan hitung pelanggaran selama masa penyesuaian 5 detik pertama
-      if (securityUnlockedAtRef.current && Date.now() - securityUnlockedAtRef.current < 5000) {
-        return;
-      }
+      const warningText = 'Peringatan: Ujian sedang berlangsung! Jika Anda keluar atau memuat ulang, progres ujian dan status Anda akan dicatat pelanggaran.';
+      e.preventDefault();
+      e.returnValue = warningText;
+      return warningText;
+    };
+
+    // Keyboard lockdown (Command di macOS, Ctrl di Windows/Linux, Alt, DevTools, Close tab)
+    const cleanupKeyboard = setupExamKeyboardLockdown((reason) => {
+      dispatchAreaViolation(
+        'KEYBOARD_SHORTCUT_VIOLATION',
+        reason,
+        'Peringatan! Tombol kombinasi keyboard dilarang selama ujian!'
+      );
+    });
+
+    // 1. Visibility Change Listener (Tab Switch)
+    const handleVisibilityChange = () => {
       if (document.hidden) {
-        triggerCheatLog('TAB_SWITCH_ALERT', 'Siswa berpindah tab / aplikasi browser');
-        cbtSecurityAudio.triggerFullWarning(
+        dispatchAreaViolation(
+          'TAB_SWITCH_ALERT',
+          'Siswa berpindah tab browser atau meminimalkan browser',
           'Peringatan! Anda terdeteksi meninggalkan halaman ujian!'
         );
-        setCheatWarning(
-          'Peringatan: Anda terdeteksi meninggalkan halaman ujian! Aktivitas ini dicatat oleh pengawas.'
-        );
       }
     };
 
+    // 2. Window Blur Listener (App Switch / Alt+Tab) - Tidak dieksekusi jika tab sudah hidden
     const handleWindowBlur = () => {
-      if (isSubmittedRef.current) return;
-      if (securityUnlockedAtRef.current && Date.now() - securityUnlockedAtRef.current < 5000) {
-        return;
-      }
-      const activityType = document.hidden ? 'TAB_SWITCH_ALERT' : 'APP_SWITCH_ALERT';
-      const detailMsg = document.hidden
-        ? 'Siswa berpindah tab browser'
-        : 'Siswa berpindah aplikasi / membuka program lain (Jendela Tidak Fokus / Alt+Tab)';
+      // Jika dokumen sudah hidden, event sudah ditangani oleh visibilitychange
+      if (document.hidden) return;
 
-      triggerCheatLog(activityType, detailMsg);
-      cbtSecurityAudio.triggerFullWarning(
-        'Peringatan! Dilarang membuka aplikasi lain atau berpindah jendela selama ujian!'
-      );
-      setCheatWarning(
-        'Peringatan: Anda terdeteksi membuka aplikasi lain! Aktivitas ini dicatat oleh pengawas.'
+      dispatchAreaViolation(
+        'APP_SWITCH_ALERT',
+        'Siswa berpindah aplikasi lain (Jendela Tidak Fokus)',
+        'Peringatan! Dilarang membuka aplikasi lain selama ujian!'
       );
     };
 
+    // 3. Page Hide Listener
     const handlePageHide = () => {
+      dispatchAreaViolation(
+        'TAB_SWITCH_ALERT',
+        'Siswa menutup atau menyembunyikan halaman ujian',
+        'Peringatan! Dilarang menutup halaman ujian!'
+      );
+    };
+
+    // 4. Deteksi Kursor Mouse Keluar Viewport (Hanya peringatan buzzer lokal tanpa mencatat ke server)
+    const handleMouseLeave = (e: MouseEvent) => {
       if (isSubmittedRef.current) return;
       if (securityUnlockedAtRef.current && Date.now() - securityUnlockedAtRef.current < 5000) {
         return;
       }
-      triggerCheatLog('TAB_SWITCH_ALERT', 'Siswa menutup atau menyembunyikan halaman ujian');
+      if (e.clientY <= 0) {
+        cbtSecurityAudio.playWarningBuzzer();
+        setCheatWarning('Peringatan: Kursor terdeteksi meninggalkan area ujian!');
+      }
     };
 
+    // 5. Fullscreen Change Listener
     const handleFullscreenChange = () => {
       const inFullscreen = isCurrentlyFullscreen();
       setIsFullscreen(inFullscreen);
       if (isSubmittedRef.current) return;
-      if (securityUnlockedAtRef.current && Date.now() - securityUnlockedAtRef.current < 5000) {
-        return;
-      }
+
       const devInfo = detectDeviceSecurityInfo();
       if (!inFullscreen && devInfo.hasFullscreen) {
-        triggerCheatLog('FULLSCREEN_EXIT', 'Siswa keluar dari mode layar penuh (Lock Browser)');
-        cbtSecurityAudio.triggerFullWarning(
-          'Peringatan! Anda keluar dari mode layar penuh. Klik Fullscreen untuk melanjutkan!'
+        dispatchAreaViolation(
+          'FULLSCREEN_EXIT',
+          'Siswa keluar dari mode layar penuh',
+          'Peringatan! Layar terkunci! Harap segera kembali ke mode layar penuh!'
         );
-        setCheatWarning('Peringatan: Harap tetap berada di mode layar penuh selama ujian!');
+
+        // Otomatis kembalikan ke layar penuh jika diizinkan browser
+        requestUniversalFullscreen().then((success) => {
+          if (success) setIsFullscreen(true);
+        }).catch(() => {});
       }
     };
 
-    // Mencegah Klik Kanan / Long-press Context Menu di Mobile & Desktop
+    // 6. Click-to-reenter Fullscreen
+    const handleDocumentClickToFullscreen = () => {
+      if (isSubmittedRef.current) return;
+      if (!isCurrentlyFullscreen()) {
+        const devInfo = detectDeviceSecurityInfo();
+        if (devInfo.hasFullscreen && !devInfo.isMobile && !devInfo.isTablet) {
+          requestUniversalFullscreen().then((success) => {
+            if (success) setIsFullscreen(true);
+          }).catch(() => {});
+        }
+      }
+    };
+
+    // 7. Context Menu & Copy Prevention
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       cbtSecurityAudio.playWarningBuzzer();
     };
 
-    // Mencegah Copy Soal
     const handleCopy = (e: ClipboardEvent) => {
       e.preventDefault();
     };
 
+    window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('pagehide', handlePageHide);
+    document.addEventListener('click', handleDocumentClickToFullscreen, { capture: true });
+    document.addEventListener('mouseleave', handleMouseLeave);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
@@ -449,10 +530,15 @@ export default function LembarUjianPage({
     window.addEventListener('copy', handleCopy);
 
     return () => {
+      if (pendingViolationTimer) clearTimeout(pendingViolationTimer);
+      cleanupHistoryLock();
       cleanupKeyboard();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('pagehide', handlePageHide);
+      document.removeEventListener('click', handleDocumentClickToFullscreen, { capture: true });
+      document.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
@@ -693,7 +779,8 @@ export default function LembarUjianPage({
         return;
       }
 
-      // Keluar dari layar penuh secara otomatis
+      // Keluar dari layar penuh secara otomatis dan lepaskan seluruh kunci keamanan
+      setIsSecurityUnlocked(false);
       await exitUniversalFullscreen();
       setIsFullscreen(false);
 
@@ -778,6 +865,51 @@ export default function LembarUjianPage({
           onActivateSecurity={handleActivateSecurity}
           requireScreenShare={true}
         />
+      )}
+
+      {/* Force Fullscreen Lockdown Overlay: Mencegah interaksi & mengunci layar jika keluar dari Fullscreen selama ujian aktif (hanya pada perangkat yang mendukung Fullscreen API) */}
+      {isSecurityUnlocked && !isFullscreen && ujianInfo?.lockBrowser && cooldownRemaining === 0 && !isSubmittedRef.current && (typeof window !== 'undefined' && detectDeviceSecurityInfo().hasFullscreen) && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl shadow-rose-900/40 space-y-5 animate-in zoom-in duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-rose-600 flex items-center justify-center mx-auto shadow-md">
+              <ShieldAlert className="w-10 h-10 animate-bounce" />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-rose-600 bg-rose-100 dark:bg-rose-950/80 px-3 py-1 rounded-full border border-rose-200 dark:border-rose-800 inline-block">
+                Layar Ujian Terkunci
+              </span>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-2">
+                Kembali ke Mode Layar Penuh!
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
+                Anda terdeteksi keluar dari mode layar penuh atau beralih jendela. Lembar soal terkunci demi menjaga integritas ujian.
+              </p>
+            </div>
+
+            <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-left text-xs text-rose-800 dark:text-rose-300">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                Peringatan Sistem:
+              </p>
+              <p className="mt-1 text-[11px] text-rose-700 dark:text-rose-400">
+                Setiap upaya meninggalkan layar ujian otomatis dicatat dan dapat mengakibatkan ujian terkunci permanen oleh proktor.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={async () => {
+                cbtSecurityAudio.unlockAudio();
+                await requestUniversalFullscreen();
+                setIsFullscreen(isCurrentlyFullscreen());
+              }}
+              className="w-full py-3.5 px-6 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-sm shadow-lg shadow-rose-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Maximize2 className="w-4 h-4" />
+              <span>Buka Kunci & Masuk Layar Penuh</span>
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Sticky Header CBT Compact (Light & Dark Modern Style) */}

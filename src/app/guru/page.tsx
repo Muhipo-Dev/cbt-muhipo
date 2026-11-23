@@ -590,13 +590,13 @@ export default function GuruDashboardPage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
         const ws = wb.Sheets[wb.SheetNames[0]];
 
-        // Deteksi baris header secara dinamis (mencari baris yang mengandung 'Tipe' / 'Isi Soal')
+        // Deteksi baris header secara dinamis (mencari baris yang mengandung 'Tipe' / 'Isi Soal' / 'Soal' / 'No')
         let headerRowIndex = 0;
         const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:E50');
         for (let r = range.s.r; r <= Math.min(range.e.r, 20); r++) {
@@ -604,7 +604,15 @@ export default function GuruDashboardPage() {
           for (let c = range.s.c; c <= range.e.c; c++) {
             const cell = ws[XLSX.utils.encode_cell({ r, c })];
             const val = cell ? String(cell.v).toLowerCase().trim() : '';
-            if (val === 'tipe' || val === 'isi soal / jawaban' || val === 'keterangan' || val === 'pertanyaan') {
+            if (
+              val === 'tipe' ||
+              val === 'isi soal / jawaban' ||
+              val === 'keterangan' ||
+              val === 'pertanyaan' ||
+              val === 'soal' ||
+              val === 'jenis soal' ||
+              val === 'no'
+            ) {
               foundHeader = true;
               break;
             }
@@ -622,26 +630,48 @@ export default function GuruDashboardPage() {
           return;
         }
 
+        // 1. Prioritaskan Parser AI Python (Mendukung ZyaCBT & CBT Muhipo secara cerdas)
+        try {
+          const aiResponse = await fetch('/api/guru/soal/parse-excel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rawRows }),
+          });
+          const aiJson = await aiResponse.json();
+
+          if (aiJson.success && Array.isArray(aiJson.soalItems) && aiJson.soalItems.length > 0) {
+            setImportFileText(JSON.stringify(aiJson.soalItems));
+            showNotification(
+              'File Terbaca (AI Python Parser)',
+              `Berhasil memproses ${aiJson.soalItems.length} butir soal (Format ZyaCBT / Muhipo terdeteksi). Klik "Proses Import Soal".`,
+              'success'
+            );
+            return;
+          }
+        } catch (aiErr) {
+          console.warn('AI Python parser API error, falling back to client-side parser:', aiErr);
+        }
+
+        // 2. Client-Side Fallback Parser jika API offline
         const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
         const parsedItems: any[] = [];
         let currentSoal: any = null;
 
-        // Cek apakah file menggunakan format vertikal baru (ada kolom Tipe / Type / TIPE)
-        const hasTipeColumn = rawRows.some(
-          (r) => r['Tipe'] !== undefined || r['TIPE'] !== undefined || r['tipe'] !== undefined || r['Type'] !== undefined
-        );
+        // Cek apakah format Vertikal Muhipo (Q, A)
+        const isVerticalFormat = rawRows.some((r) => {
+          const val = String(r['Tipe'] || r['TIPE'] || r['tipe'] || r['Type'] || '').trim().toUpperCase();
+          return val.startsWith('Q') || val === 'A';
+        });
 
-        if (hasTipeColumn) {
-          // ================= FORMAT BARU VERTIKAL (Q, Q2..Q6, A logika 1/0) =================
+        if (isVerticalFormat) {
+          // ================= FORMAT VERTIKAL MUHIPO =================
           for (const row of rawRows) {
             const rawTipe = String(row['Tipe'] || row['TIPE'] || row['tipe'] || row['Type'] || '').trim().toUpperCase();
             const rawContent = convertEquationToKatex(String(row['Isi Soal / Jawaban'] || row['Isi Soal'] || row['Pertanyaan / Soal'] || row['Soal'] || row['Konten'] || '').trim());
             const rawStatus = row['Status Jawaban'] !== undefined ? row['Status Jawaban'] : row['Status'];
             const rawBobot = row['Kesulitan'] !== undefined && row['Kesulitan'] !== '' ? Number(row['Kesulitan']) : (row['Bobot'] ? Number(row['Bobot']) : null);
 
-            // Deteksi baris Soal (Q, Q1, Q2, Q3, Q4, Q5, Q6)
             if (rawTipe.startsWith('Q')) {
-              // Simpan soal sebelumnya jika ada
               if (currentSoal && currentSoal.pertanyaan) {
                 parsedItems.push(currentSoal);
               }
@@ -664,12 +694,10 @@ export default function GuruDashboardPage() {
                 kunciJawabanTeks: undefined,
               };
 
-              // Jika ada kunci/rubrik langsung di baris Q
               if (rawStatus && String(rawStatus).trim()) {
                 currentSoal.kunciJawabanTeks = convertEquationToKatex(String(rawStatus).trim());
               }
             } else if (rawTipe === 'A' && currentSoal) {
-              // Deteksi baris Jawaban / Opsi untuk soal yang sedang aktif
               if (currentSoal.tipeSoal === 'MENJODOHKAN') {
                 const left = rawContent;
                 const right = convertEquationToKatex(String(rawStatus || '').trim());
@@ -677,42 +705,29 @@ export default function GuruDashboardPage() {
                   currentSoal.rawMatchingPairs.push({ left, right });
                 }
               } else if (currentSoal.tipeSoal === 'BENAR_SALAH') {
-                // Untuk Benar/Salah jika baris A tertulis 'Benar' dan status '1' -> kuncinya Benar
                 const isBenar = String(rawStatus).trim() === '1' || String(rawStatus).toLowerCase() === 'benar' || String(rawStatus).toLowerCase() === 'true';
                 const label = letters[currentSoal.opsi.length] || `Opsi ${currentSoal.opsi.length + 1}`;
                 if (rawContent) {
-                  currentSoal.opsi.push({
-                    label,
-                    konten: rawContent,
-                    isBenar,
-                  });
+                  currentSoal.opsi.push({ label, konten: rawContent, isBenar });
                 }
               } else if (currentSoal.tipeSoal === 'ISIAN' || currentSoal.tipeSoal === 'ESAI') {
-                // Jika isian/esai menuliskan kunci di baris A
                 if (rawContent && !currentSoal.kunciJawabanTeks) {
                   currentSoal.kunciJawabanTeks = rawContent;
                 }
               } else {
-                // PG & PG_KOMPLEKS
                 const isBenar = String(rawStatus).trim() === '1' || String(rawStatus).toLowerCase() === 'true';
                 const label = letters[currentSoal.opsi.length] || `Opsi ${currentSoal.opsi.length + 1}`;
                 if (rawContent) {
-                  currentSoal.opsi.push({
-                    label,
-                    konten: rawContent,
-                    isBenar,
-                  });
+                  currentSoal.opsi.push({ label, konten: rawContent, isBenar });
                 }
               }
             }
           }
 
-          // Masukkan soal terakhir
           if (currentSoal && currentSoal.pertanyaan) {
             parsedItems.push(currentSoal);
           }
 
-          // Post-processing untuk setiap soal
           for (const item of parsedItems) {
             if (item.tipeSoal === 'MENJODOHKAN' && item.rawMatchingPairs && item.rawMatchingPairs.length > 0) {
               item.matchingData = JSON.stringify(item.rawMatchingPairs);
@@ -720,56 +735,110 @@ export default function GuruDashboardPage() {
             delete item.rawMatchingPairs;
           }
         } else {
-          // ================= KOMPATIBILITAS FORMAT HORIZONTAL LAMA =================
+          // ================= FORMAT HORIZONTAL ZyaCBT & MUHIPO =================
           for (const row of rawRows) {
-            const tipe = (row['Tipe Soal'] || 'PG').toUpperCase();
-            const pertanyaan = convertEquationToKatex(String(row['Pertanyaan / Soal'] || row['Pertanyaan'] || row['Soal'] || '').trim());
-            const bobot = Number(row['Bobot'] || row['Kesulitan']) || 2.0;
-            const kunci = String(row['Kunci Jawaban (A/B/C/D/E)'] || row['Kunci'] || '').trim().toUpperCase();
-            const kunciTeks = convertEquationToKatex(String(row['Kunci Teks/Rubrik Essay'] || row['Kunci Essay'] || '').trim());
-
-            let matchingData: string | undefined = undefined;
-            if (tipe === 'MENJODOHKAN') {
-              const pairs: { left: string; right: string }[] = [];
-              ['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach((lbl) => {
-                const val = String(row[`Pilihan ${lbl}`] || row[`Opsi ${lbl}`] || row[lbl] || '').trim();
-                if (val && val.includes('=')) {
-                  const [left, ...rest] = val.split('=');
-                  const right = rest.join('=').trim();
-                  if (left.trim() && right) {
-                    pairs.push({
-                      left: convertEquationToKatex(left.trim()),
-                      right: convertEquationToKatex(right),
-                    });
-                  }
+            // Temukan pertanyaan
+            let pertanyaan = '';
+            for (const k of Object.keys(row)) {
+              const kLow = k.toLowerCase().trim();
+              if ((kLow === 'soal' || kLow === 'pertanyaan' || kLow === 'isi soal' || kLow === 'naskah soal') && row[k]) {
+                pertanyaan = convertEquationToKatex(String(row[k]).trim());
+                break;
+              }
+            }
+            if (!pertanyaan) {
+              for (const k of Object.keys(row)) {
+                const kLow = k.toLowerCase().trim();
+                if (
+                  (kLow.includes('soal') || kLow.includes('pertanyaan')) &&
+                  !kLow.includes('jenis') &&
+                  !kLow.includes('tipe') &&
+                  !kLow.includes('no') &&
+                  !kLow.includes('bobot') &&
+                  row[k]
+                ) {
+                  pertanyaan = convertEquationToKatex(String(row[k]).trim());
+                  break;
                 }
-              });
-              if (pairs.length > 0) {
-                matchingData = JSON.stringify(pairs);
+              }
+            }
+            if (!pertanyaan) continue;
+
+            // Temukan Tipe Soal (1=PG, 2=Essay, 3=Isian)
+            let rawTipe = '';
+            for (const k of Object.keys(row)) {
+              const kLow = k.toLowerCase().trim();
+              if (kLow === 'jenis soal' || kLow === 'jenis' || kLow === 'tipe soal' || kLow === 'tipe') {
+                rawTipe = String(row[k]).trim().toUpperCase();
+                break;
               }
             }
 
-            const opsi = ['A', 'B', 'C', 'D', 'E']
-              .map((lbl) => {
-                const konten = row[`Pilihan ${lbl}`] || row[`Opsi ${lbl}`] || row[lbl] || '';
-                return {
-                  label: lbl,
-                  konten: convertEquationToKatex(String(konten || '').trim()),
-                  isBenar: kunci.includes(lbl),
-                };
-              })
-              .filter((o) => o.konten !== '');
+            let tipe = 'PG';
+            if (rawTipe === '2' || rawTipe === 'ESAI' || rawTipe === 'ESSAY' || rawTipe === 'URAIAN') tipe = 'ESAI';
+            else if (rawTipe === '3' || rawTipe === 'ISIAN' || rawTipe === 'ISIAN SINGKAT') tipe = 'ISIAN';
+            else if (rawTipe === '4' || rawTipe.includes('KOMPLEKS')) tipe = 'PG_KOMPLEKS';
+            else if (rawTipe === '5' || rawTipe.includes('BENAR')) tipe = 'BENAR_SALAH';
+            else if (rawTipe === '6' || rawTipe.includes('JODOH') || rawTipe.includes('MATCH')) tipe = 'MENJODOHKAN';
 
-            if (pertanyaan.trim() !== '') {
-              parsedItems.push({
-                tipeSoal: tipe,
-                pertanyaan,
-                bobot,
-                opsi,
-                matchingData,
-                kunciJawabanTeks: kunciTeks || undefined,
-              });
+            // Temukan Bobot
+            let bobot = tipe === 'ESAI' ? 4.0 : (tipe === 'ISIAN' ? 2.0 : 1.0);
+            for (const k of Object.keys(row)) {
+              const kLow = k.toLowerCase().trim();
+              if (kLow.includes('bobot') || kLow.includes('skor') || kLow.includes('poin') || kLow.includes('kesulitan')) {
+                const num = Number(row[k]);
+                if (num > 0) bobot = num;
+                break;
+              }
             }
+
+            // Temukan Kunci
+            let kunci = '';
+            for (const k of Object.keys(row)) {
+              const kLow = k.toLowerCase().trim();
+              if (kLow.includes('kunci') || kLow.includes('jawaban benar') || kLow === 'key') {
+                kunci = String(row[k]).trim().toUpperCase();
+                break;
+              }
+            }
+            const numToLtr: Record<string, string> = { '1': 'A', '2': 'B', '3': 'C', '4': 'D', '5': 'E' };
+            if (numToLtr[kunci]) kunci = numToLtr[kunci];
+
+            // Temukan Opsi A-F
+            const opsi: any[] = [];
+            ['A', 'B', 'C', 'D', 'E', 'F'].forEach((lbl) => {
+              let val = '';
+              for (const k of Object.keys(row)) {
+                const kLow = k.toLowerCase().trim();
+                if (
+                  kLow === `jawaban ${lbl.toLowerCase()}` ||
+                  kLow === `pilihan ${lbl.toLowerCase()}` ||
+                  kLow === `opsi ${lbl.toLowerCase()}` ||
+                  kLow === `pilihan ${lbl}` ||
+                  kLow === `opsi ${lbl}` ||
+                  kLow === lbl.toLowerCase() ||
+                  k === lbl
+                ) {
+                  val = String(row[k] || '').trim();
+                  break;
+                }
+              }
+              if (val) {
+                opsi.push({
+                  label: lbl,
+                  konten: convertEquationToKatex(val),
+                  isBenar: kunci.includes(lbl) || val.toUpperCase() === kunci,
+                });
+              }
+            });
+
+            parsedItems.push({
+              tipeSoal: tipe,
+              pertanyaan,
+              bobot,
+              opsi,
+              kunciJawabanTeks: tipe === 'ESAI' || tipe === 'ISIAN' ? convertEquationToKatex(kunci) : undefined,
+            });
           }
         }
 
@@ -782,7 +851,7 @@ export default function GuruDashboardPage() {
         showNotification('File Terbaca', `Berhasil membaca ${parsedItems.length} butir soal dari file Excel. Klik "Proses Import Soal".`, 'success');
       } catch (err) {
         console.error('File parse error:', err);
-        showNotification('Gagal Membaca File', 'Gagal membaca file Excel. Pastikan menggunakan format template resmi.', 'error');
+        showNotification('Gagal Membaca File', 'Gagal membaca file Excel. Pastikan menggunakan format template resmi ZyaCBT atau CBT Muhipo.', 'error');
       }
     };
     reader.readAsBinaryString(file);
@@ -3690,9 +3759,12 @@ export default function GuruDashboardPage() {
             <div className="space-y-4">
               <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 flex justify-between items-center">
                 <div>
-                  <h4 className="font-bold text-emerald-800 dark:text-emerald-300">Format Template Excel Resmi</h4>
-                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">
-                    Gunakan template standar agar proses import otomatis dan cepat.
+                  <h4 className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Dukungan AI Parser Multi-Format</span>
+                  </h4>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                    Mendukung file Excel format <b>ZyaCBT</b> (Kolom Horizontal) & format resmi <b>CBT Muhipo</b> (Vertikal Q/A).
                   </p>
                 </div>
                 <button
