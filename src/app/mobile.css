@@ -27,7 +27,7 @@
   /* Prevent horizontal overflow & optimize touch rendering */
   html, body {
     overflow-x: hidden;
-    touch-action: manipulation;
+    touch-action: pan-y pinch-zoom;
     -webkit-text-size-adjust: 100%;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
@@ -43,6 +43,7 @@
     min-height: var(--cbt-mobile-touch-size);
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
   }
 
   /* Form Input Optimization (Prevent automatic Safari/Chrome iOS & Android Zoom & Overlap) */
@@ -50,6 +51,26 @@
   select, 
   textarea {
     font-size: 16px !important;
+    touch-action: auto !important;
+    border-radius: 0.75rem;
+  }
+
+  /* Smooth momentum scrolling on mobile containers */
+  main,
+  [data-slot="main-container"],
+  .overflow-y-auto,
+  .custom-scrollbar {
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Interactive touch press state */
+  button:active,
+  [role="button"]:active,
+  .cursor-pointer:active {
+    opacity: 0.88;
+    transform: scale(0.98);
+    transition: transform 0.08s ease, opacity 0.08s ease;
   }
 
   /* Protect input fields with icons from text/icon overlap on mobile */

@@ -510,6 +510,10 @@ export default function LembarUjianPage({
 
     // 7. Context Menu, Copy, Cut, Paste, Drag & Selection Prevention
     const handleContextMenu = (e: MouseEvent | TouchEvent) => {
+      // Jangan blokir jika event touch berasal dari interaksi sentuhan di ponsel
+      if ('touches' in e && e.touches) {
+        return;
+      }
       e.preventDefault();
       cbtSecurityAudio.playWarningBuzzer();
     };
@@ -897,7 +901,7 @@ export default function LembarUjianPage({
   const totalRagu = Object.values(jawabanMap).filter((j) => j.raguRagu).length;
 
   return (
-    <div className="min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between selection:bg-emerald-500 selection:text-white select-none font-sans touch-manipulation overscroll-none pb-16 sm:pb-3">
+    <div className="min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between selection:bg-emerald-500 selection:text-white select-none font-sans touch-manipulation pb-16 sm:pb-3">
       {/* Modal Aktivasi Keamanan & Screen Recording */}
       {ujianInfo?.lockBrowser && (
         <SecurityLockModal
@@ -1405,23 +1409,23 @@ export default function LembarUjianPage({
         </div>
 
         {/* Bottom Navigation Toolbar (Compact & Ergonomis di Android, iOS Safari & Desktop) */}
-        <div className="fixed sm:static bottom-0 left-0 right-0 z-30 sm:mt-4 flex items-center justify-between gap-2 bg-white/95 dark:bg-slate-900/95 sm:bg-white sm:dark:bg-slate-900 border-t sm:border border-slate-200/90 dark:border-white/10 px-3 py-2.5 sm:p-3 sm:rounded-2xl shadow-lg sm:shadow-xs dark:shadow-xl backdrop-blur-md pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+        <div className="fixed sm:static bottom-0 left-0 right-0 z-30 sm:mt-4 flex items-center justify-between gap-2 bg-white/95 dark:bg-slate-900/95 sm:bg-white sm:dark:bg-slate-900 border-t sm:border border-slate-200/90 dark:border-white/10 px-3 py-2.5 sm:p-3 sm:rounded-2xl shadow-lg sm:shadow-xs dark:shadow-xl backdrop-blur-md pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {/* Tombol Sebelumnya */}
           <button
             type="button"
             disabled={currentIndex === 0}
             onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-            className="flex items-center gap-1 px-3 sm:px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer border border-slate-200 dark:border-white/10 active:scale-95"
+            className="min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer border border-slate-200 dark:border-white/10 active:scale-95 touch-manipulation"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span className="hidden xs:inline">Sebelumnya</span>
+            <span>Sebelumnya</span>
           </button>
 
           {/* Tombol Ragu-Ragu */}
           <button
             type="button"
             onClick={handleToggleRagu}
-            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer border active:scale-95 ${
+            className={`min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-extrabold transition cursor-pointer border active:scale-95 touch-manipulation ${
               currentJawaban.raguRagu
                 ? 'bg-amber-500 text-white border-amber-600 shadow-xs shadow-amber-500/20'
                 : 'bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60'
@@ -1436,7 +1440,7 @@ export default function LembarUjianPage({
             <button
               type="button"
               onClick={() => setShowSubmitModal(true)}
-              className="flex items-center gap-1.5 px-3.5 sm:px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-xs font-extrabold text-white shadow-sm shadow-emerald-600/20 transition cursor-pointer active:scale-95"
+              className="min-h-[44px] flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-xs font-extrabold text-white shadow-sm shadow-emerald-600/20 transition cursor-pointer active:scale-95 touch-manipulation"
             >
               <Send className="w-3.5 h-3.5" />
               <span>Selesai</span>
@@ -1445,7 +1449,7 @@ export default function LembarUjianPage({
             <button
               type="button"
               onClick={() => setCurrentIndex((prev) => Math.min(soalList.length - 1, prev + 1))}
-              className="flex items-center gap-1 px-3.5 sm:px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs shadow-emerald-600/20 transition cursor-pointer active:scale-95"
+              className="min-h-[44px] flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs shadow-emerald-600/20 transition cursor-pointer active:scale-95 touch-manipulation"
             >
               <span>Selanjutnya</span>
               <ChevronRight className="w-4 h-4" />

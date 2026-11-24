@@ -436,21 +436,30 @@ img {
 /* ==========================================================================
    ANDROID & MOBILE WEBVIEW OPTIMIZATION
    - Mencegah double tap zoom delay
+   - Mengizinkan gesture sentuh dan scroll normal di layar sentuh
    - Mencegah callout menu teks context tak sengaja saat sentuh tombol di WebView
    - Mencegah visual jitter pada scroll dan form focus di Android
    ========================================================================== */
 @media screen and (max-width: 768px) {
   html, body {
     -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: none;
     overscroll-behavior-y: contain;
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Optimalisasi form & input pada Android WebView */
   input, select, textarea {
     font-size: 16px !important; /* Mencegah auto-zoom yang tidak diinginkan di mobile browser */
+    touch-action: auto !important;
+  }
+
+  /* Universal touch-friendly buttons & interactive elements */
+  button, [role="button"], a, input[type="button"], input[type="submit"] {
+    touch-action: manipulation;
+    cursor: pointer;
   }
 
   /* Performa rendering hardware-accelerated pada elemen sticky mobile */
