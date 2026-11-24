@@ -21,10 +21,63 @@ def clean_text(val):
 def normalize_math_katex(text):
     if not text:
         return ""
-    # Deteksi sintaks math tag [tex]...[/tex] atau <math>...</math> dari ZyaCBT / Moodle
-    text = re.sub(r'\[tex\](.*?)\[/tex\]', r'$\1$', text, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r'<math>(.*?)</math>', r'$\1$', text, flags=re.IGNORECASE | re.DOTALL)
-    return text
+    t = str(text)
+
+    # 1. Decode entitas HTML matematika yang sering terbawa dari copy-paste / editor web / Word
+    t = re.sub(r'&radic;', '√', t, flags=re.I)
+    t = re.sub(r'&#8730;', '√', t)
+    t = re.sub(r'&plusmn;', '±', t, flags=re.I)
+    t = re.sub(r'&#177;', '±', t)
+    t = re.sub(r'&times;', '×', t, flags=re.I)
+    t = re.sub(r'&divide;', '÷', t, flags=re.I)
+    t = re.sub(r'&le;', '≤', t, flags=re.I)
+    t = re.sub(r'&ge;', '≥', t, flags=re.I)
+    t = re.sub(r'&ne;', '≠', t, flags=re.I)
+    t = re.sub(r'&deg;', '°', t, flags=re.I)
+
+    # 2. Deteksi sintaks math tag [tex]...[/tex] atau <math>...</math> dari ZyaCBT / Moodle
+    t = re.sub(r'\[tex\](.*?)\[/tex\]', r'$\1$', t, flags=re.IGNORECASE | re.DOTALL)
+    t = re.sub(r'<math>(.*?)</math>', r'$\1$', t, flags=re.IGNORECASE | re.DOTALL)
+
+    # 3. Format pecahan biasa yang berdampingan dengan akar: 1/4 √14 -> $\frac{1}{4}\sqrt{14}$
+    t = re.sub(
+        r'(\d+)/(\d+)\s*(\$\\sqrt\{[^}]+\}\$|√\s*([0-9a-zA-Z]+))',
+        lambda m: r'$\frac{' + m.group(1) + '}{' + m.group(2) + r'}\sqrt{' + (m.group(4) or '') + '}$',
+        t
+    )
+
+    # 4. Akar kuadrat dan akar pangkat n Unicode
+    t = re.sub(r'(?<![\$\w])([0-9a-zA-Z]+)√\s*\{([^}]+)\}', r'$\\sqrt[\1]{\2}$', t)
+    t = re.sub(r'(?<![\$\w])([0-9a-zA-Z]+)√\s*\(([^)]+)\)', r'$\\sqrt[\1]{\2}$', t)
+    t = re.sub(r'(?<![\$\w])([0-9a-zA-Z]+)√\s*([0-9a-zA-Z]+)', r'$\\sqrt[\1]{\2}$', t)
+    t = re.sub(r'∛\s*\{([^}]+)\}', r'$\\sqrt[3]{\1}$', t)
+    t = re.sub(r'∛\s*\(([^)]+)\)', r'$\\sqrt[3]{\1}$', t)
+    t = re.sub(r'∛\s*([0-9a-zA-Z]+)', r'$\\sqrt[3]{\1}$', t)
+    t = re.sub(r'∜\s*\{([^}]+)\}', r'$\\sqrt[4]{\1}$', t)
+    t = re.sub(r'∜\s*\(([^)]+)\)', r'$\\sqrt[4]{\1}$', t)
+    t = re.sub(r'∜\s*([0-9a-zA-Z]+)', r'$\\sqrt[4]{\1}$', t)
+    t = re.sub(r'(?<![\$\w])√\s*\{([^}]+)\}', r'$\\sqrt{\1}$', t)
+    t = re.sub(r'(?<![\$\w])√\s*\(([^)]+)\)', r'$\\sqrt{\1}$', t)
+    t = re.sub(r'(?<![\$\w])√\s*([0-9a-zA-Z]+)', r'$\\sqrt{\1}$', t)
+
+    # 5. Segmented LaTeX Auto-Wrapper untuk ekspresi LaTeX mentah tanpa pembungkus $
+    segments = re.split(r'(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)', t)
+    for i in range(0, len(segments), 2):
+        seg = segments[i]
+        if not seg:
+            continue
+        seg = re.sub(r'\\sqrt\s+([0-9a-zA-Z]+)', r'\\sqrt{\1}', seg)
+        seg = re.sub(
+            r'(\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{[^{}]*\}|[a-zA-Z0-9\+\-\*/\=\(\)\,\s\\])*)',
+            r'$\1$',
+            seg
+        )
+        segments[i] = seg
+    t = ''.join(segments)
+
+    # 6. Bersihkan $ yang berdempetan
+    t = re.sub(r'\$\s*\$', '', t)
+    return t
 
 def parse_zyacbt_or_muhipo(rows):
     if not rows or not isinstance(rows, list):

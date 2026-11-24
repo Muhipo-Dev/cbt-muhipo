@@ -374,6 +374,10 @@ bdi,
   max-width: none !important;
   fill: currentColor !important;
   stroke: currentColor !important;
+  display: block !important;
+  position: absolute !important;
+  height: inherit !important;
+  width: 100% !important;
 }
 
 .katex svg path {
@@ -381,12 +385,40 @@ bdi,
   fill: currentColor !important;
 }
 
-/* Pastikan garis pecahan (rac) dan garis atap/overline KaTeX selalu tegas dan tampak */
+/* Proteksi simbol akar kuadrat (\sqrt) */
+.katex .sqrt {
+  position: relative;
+  display: inline-block;
+}
+
+.katex .hide-tail {
+  overflow: hidden !important;
+  position: relative !important;
+  width: 100% !important;
+}
+
+.katex .vlist-t {
+  display: inline-table !important;
+  border-collapse: collapse !important;
+}
+
+.katex .vlist-r {
+  display: table-row !important;
+}
+
+.katex .vlist {
+  display: table-cell !important;
+  vertical-align: bottom !important;
+  position: relative !important;
+}
+
+/* Pastikan garis pecahan (\frac) dan garis atap/overline KaTeX selalu tegas dan tampak */
 .katex .mfrac .frac-line,
 .katex .katex-overline .overline-line,
 .katex .katex-underline .underline-line,
 .katex .katex-rule {
   border-bottom-color: currentColor !important;
+  border-bottom-width: 0.04em !important;
 }
 
 .katex-html {

@@ -125,6 +125,18 @@ export function convertEquationToKatex(text: string | null | undefined): string 
   if (!text) return '';
   let str = String(text);
 
+  // 0. Decode entitas HTML matematika yang sering terbawa dari copy-paste / editor web / Word
+  str = str.replace(/&radic;/gi, '√');
+  str = str.replace(/&#8730;/g, '√');
+  str = str.replace(/&plusmn;/gi, '±');
+  str = str.replace(/&#177;/g, '±');
+  str = str.replace(/&times;/gi, '×');
+  str = str.replace(/&divide;/gi, '÷');
+  str = str.replace(/&le;/gi, '≤');
+  str = str.replace(/&ge;/gi, '≥');
+  str = str.replace(/&ne;/gi, '≠');
+  str = str.replace(/&deg;/gi, '°');
+
   // 1. Tangani MathML / OMML jika terdeteksi dalam teks
   if (/<(?:m:oMath|math)[\s>]/i.test(str)) {
     str = str.replace(/<(?:m:oMath|math)[\s\S]*?<\/(?:m:oMath|math)>/gi, (match) => {
@@ -135,7 +147,7 @@ export function convertEquationToKatex(text: string | null | undefined): string 
 
   // 2. Deteksi format LaTeX yang belum dibungkus tanda $
   // Format pecahan biasa yang berdampingan dengan akar: 1/4 √14 -> $\frac{1}{4}\sqrt{14}$
-  str = str.replace(/(\d+)\/(\d+)\s*(\$\sqrt\{[^}]+\}\$|\sqrt\{[^}]+\})/g, '$\frac{$1}{$2}$3$');
+  str = str.replace(/(\d+)\/(\d+)\s*(\$\sqrt\{[^}]+\}\$|\sqrt\{[^}]+\})/g, (_, a, b, c) => `$\\frac{${a}}{${b}}${c.replace(/\$/g, '')}$`);
 
   // Segmented LaTeX Auto-Wrapper: Proses bagian di luar tanda $...$ agar ekspresi majemuk seperti \frac{1}{4}\sqrt{14} otomatis dibungkus utuh
   const mathSegments = str.split(/(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)/g);
@@ -144,7 +156,7 @@ export function convertEquationToKatex(text: string | null | undefined): string 
     if (!segment) continue;
 
     // Rapikan \sqrt 14 -> \sqrt{14}
-    segment = segment.replace(/\\sqrt\s+([0-9a-zA-Z]+)/g, '\\sqrt{$1}');
+    segment = segment.replace(/\\sqrt\s+([0-9a-zA-Z]+)/g, (_, val) => `\\sqrt{${val}}`);
 
     // Tangani ekspresi LaTeX majemuk atau tunggal (misal: \frac{1}{4}\sqrt{14}, \sqrt{14}, \frac{a}{b})
     segment = segment.replace(/(\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{[^{}]*\}|[a-zA-Z0-9\+\-\*/\=\(\)\,\s\\])*)/g, (match) => {
@@ -160,23 +172,23 @@ export function convertEquationToKatex(text: string | null | undefined): string 
 
   // 3. Konversi format Microsoft Excel SQRT / Pangkat
   // =SQRT(x) atau SQRT(x) -> \sqrt{x}
-  str = str.replace(/(?:=|\b)SQRT\(([^)]+)\)/gi, '$\\sqrt{$1}$');
+  str = str.replace(/(?:=|\b)SQRT\(([^)]+)\)/gi, (_, val) => `$\\sqrt{${val}}$`);
   // =POWER(x, y) atau POWER(x, y) -> x^{y}
-  str = str.replace(/(?:=|\b)POWER\(([^,]+),\s*([^)]+)\)/gi, '${$1}^{$2}$');
+  str = str.replace(/(?:=|\b)POWER\(([^,]+),\s*([^)]+)\)/gi, (_, b, p) => `\${${b}}^{\${${p}}\$`);
 
   // 4. Konversi Unicode Akar: akar pangkat n (3√8, 3√(x), ∛x, ∜x) & akar kuadrat (√14, √x, √(x+y))
-  str = str.replace(/(?<![\$\\\w])([0-9a-zA-Z]+)√\s*\{([^}]+)\}/g, '$\\sqrt[$1]{$2}$');
-  str = str.replace(/(?<![\$\\\w])([0-9a-zA-Z]+)√\s*\(([^)]+)\)/g, '$\\sqrt[$1]{$2}$');
-  str = str.replace(/(?<![\$\\\w])([0-9a-zA-Z]+)√\s*([0-9a-zA-Z]+)/g, '$\\sqrt[$1]{$2}$');
-  str = str.replace(/∛\s*\{([^}]+)\}/g, '$\\sqrt[3]{$1}$');
-  str = str.replace(/∛\s*\(([^)]+)\)/g, '$\\sqrt[3]{$1}$');
-  str = str.replace(/∛\s*([a-zA-Z0-9]+)/g, '$\\sqrt[3]{$1}$');
-  str = str.replace(/∜\s*\{([^}]+)\}/g, '$\\sqrt[4]{$1}$');
-  str = str.replace(/∜\s*\(([^)]+)\)/g, '$\\sqrt[4]{$1}$');
-  str = str.replace(/∜\s*([a-zA-Z0-9]+)/g, '$\\sqrt[4]{$1}$');
-  str = str.replace(/(?<![\$\\\w])√\s*\{([^}]+)\}/g, '$\\sqrt{$1}$');
-  str = str.replace(/(?<![\$\\\w])√\s*\(([^)]+)\)/g, '$\\sqrt{$1}$');
-  str = str.replace(/(?<![\$\\\w])√\s*([a-zA-Z0-9]+)/g, '$\\sqrt{$1}$');
+  str = str.replace(/(?<![\$\w])([0-9a-zA-Z]+)√\s*\{([^}]+)\}/g, (_, n, val) => `$\\sqrt[${n}]{${val}}$`);
+  str = str.replace(/(?<![\$\w])([0-9a-zA-Z]+)√\s*\(([^)]+)\)/g, (_, n, val) => `$\\sqrt[${n}]{${val}}$`);
+  str = str.replace(/(?<![\$\w])([0-9a-zA-Z]+)√\s*([0-9a-zA-Z]+)/g, (_, n, val) => `$\\sqrt[${n}]{${val}}$`);
+  str = str.replace(/∛\s*\{([^}]+)\}/g, (_, val) => `$\\sqrt[3]{${val}}$`);
+  str = str.replace(/∛\s*\(([^)]+)\)/g, (_, val) => `$\\sqrt[3]{${val}}$`);
+  str = str.replace(/∛\s*([a-zA-Z0-9]+)/g, (_, val) => `$\\sqrt[3]{${val}}$`);
+  str = str.replace(/∜\s*\{([^}]+)\}/g, (_, val) => `$\\sqrt[4]{${val}}$`);
+  str = str.replace(/∜\s*\(([^)]+)\)/g, (_, val) => `$\\sqrt[4]{${val}}$`);
+  str = str.replace(/∜\s*([a-zA-Z0-9]+)/g, (_, val) => `$\\sqrt[4]{${val}}$`);
+  str = str.replace(/(?<![\$\w])√\s*\{([^}]+)\}/g, (_, val) => `$\\sqrt{${val}}$`);
+  str = str.replace(/(?<![\$\w])√\s*\(([^)]+)\)/g, (_, val) => `$\\sqrt{${val}}$`);
+  str = str.replace(/(?<![\$\w])√\s*([a-zA-Z0-9]+)/g, (_, val) => `$\\sqrt{${val}}$`);
 
   // 5. Konversi Pecahan Unicode: ½, ⅓, ⅔, ¼, ¾, dsb.
   Object.entries(FRACTION_MAP).forEach(([char, latex]) => {
@@ -202,8 +214,8 @@ export function convertEquationToKatex(text: string | null | undefined): string 
   });
 
   // 8. Konversi Simbol Derajat Suhu: 100°C, 360°, 45° -> $100^\circ\text{C}$, $360^\circ$, $45^\circ$
-  str = str.replace(/(\d+)\s*°\s*C\b/gi, '$$$1^\\circ\\text{C}$$');
-  str = str.replace(/(\d+)\s*°/g, '$$$1^\\circ$$');
+  str = str.replace(/(\d+)\s*°\s*C\b/gi, (_, n) => `$${n}^\\circ\\text{C}$`);
+  str = str.replace(/(\d+)\s*°/g, (_, n) => `$${n}^\\circ$`);
 
   // 9. Konversi Simbol Khusus (Greek, Operasi) jika berdiri bebas atau bersama variabel
   // Contoh: α = 0.05, 5 × 10, ± 2.5

@@ -47,6 +47,37 @@ export default function RootLayout({
       suppressHydrationWarning
       className="h-full antialiased"
     >
+      <head>
+        <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <meta httpEquiv="Pragma" content="no-cache" />
+        <meta httpEquiv="Expires" content="0" />
+        <link rel="stylesheet" href="/katex/katex.min.css" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var CBT_BUILD_VERSION = 'cbt-katex-v2.2-clean';
+                  var cachedVer = localStorage.getItem('cbt_client_cache_ver');
+                  if (cachedVer !== CBT_BUILD_VERSION) {
+                    if ('caches' in window) {
+                      caches.keys().then(function(names) {
+                        for (var name of names) caches.delete(name);
+                      });
+                    }
+                    if ('serviceWorker' in navigator) {
+                      navigator.serviceWorker.getRegistrations().then(function(regs) {
+                        for (var r of regs) r.unregister();
+                      });
+                    }
+                    localStorage.setItem('cbt_client_cache_ver', CBT_BUILD_VERSION);
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col antialiased font-sans">
         <ThemeProvider
           attribute="class"
