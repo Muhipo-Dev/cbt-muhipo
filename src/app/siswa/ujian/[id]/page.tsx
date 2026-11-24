@@ -1140,9 +1140,9 @@ export default function LembarUjianPage({
         </div>
       )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-2.5 sm:p-5 lg:p-6 pb-20 sm:pb-6 flex flex-col justify-between">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-2xl sm:rounded-3xl p-3.5 sm:p-7 shadow-xs dark:shadow-xl space-y-4 sm:space-y-5 select-none -webkit-user-select-none">
+      {/* Main Content Area: Diberikan margin-bottom aman (pb-28 di mobile) agar soal & opsi terbawah tidak terpotong atau tertutup bottom navigation bar */}
+      <main className="flex-1 max-w-5xl w-full mx-auto p-2.5 sm:p-5 lg:p-6 pb-28 sm:pb-8 flex flex-col justify-between">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-xs dark:shadow-xl space-y-4 sm:space-y-6 select-none -webkit-user-select-none">
           {/* Question Audio Player (Jika tipe listening) */}
           {currentSoal.mediaAudio && (
             <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3">
@@ -1166,12 +1166,12 @@ export default function LembarUjianPage({
 
           {/* Question Text with KaTeX Math Rendering */}
           <div
-            className={`text-slate-900 dark:text-slate-100 ${
+            className={`text-slate-900 dark:text-slate-100 break-words leading-relaxed overflow-x-auto custom-scrollbar pb-1 ${
               fontSize === 'large'
-                ? 'text-base sm:text-lg leading-relaxed'
+                ? 'text-base sm:text-lg'
                 : fontSize === 'xlarge'
-                ? 'text-lg sm:text-xl leading-relaxed'
-                : 'text-sm sm:text-base leading-relaxed'
+                ? 'text-lg sm:text-xl'
+                : 'text-sm sm:text-base'
             }`}
           >
             <MathRenderer content={currentSoal.pertanyaan} />
@@ -1179,7 +1179,7 @@ export default function LembarUjianPage({
 
           {/* Opsi Jawaban: Pilihan Ganda & Benar Salah */}
           {(currentSoal.tipeSoal === 'PG' || currentSoal.tipeSoal === 'BENAR_SALAH') && (
-            <div className="space-y-2 sm:space-y-2.5 pt-4 border-t border-slate-100 dark:border-white/10">
+            <div className="space-y-2.5 sm:space-y-3 pt-4 border-t border-slate-100 dark:border-white/10">
               {currentSoal.opsiJawaban.map((opsi) => {
                 const isSelected = currentJawaban.jawabanDipilih === opsi.id;
 
@@ -1188,22 +1188,22 @@ export default function LembarUjianPage({
                     key={opsi.id}
                     type="button"
                     onClick={() => handleSelectOpsi(currentSoal.id, opsi.id)}
-                    className={`w-full text-left p-3 sm:p-3.5 rounded-xl border transition-all flex items-start gap-3 cursor-pointer ${
+                    className={`w-full text-left p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all flex items-start gap-3 sm:gap-3.5 cursor-pointer touch-manipulation ${
                       isSelected
-                        ? 'bg-emerald-50/90 dark:bg-emerald-950/50 border-emerald-500 dark:border-emerald-400 text-emerald-950 dark:text-emerald-200 shadow-xs ring-1 ring-emerald-400/50'
-                        : 'bg-white dark:bg-slate-950/60 hover:bg-slate-50/80 dark:hover:bg-slate-800/60 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
+                        ? 'bg-emerald-50/95 dark:bg-emerald-950/60 border-emerald-500 dark:border-emerald-400 text-emerald-950 dark:text-emerald-100 shadow-sm ring-2 ring-emerald-500/30'
+                        : 'bg-white dark:bg-slate-950/70 hover:bg-slate-50 dark:hover:bg-slate-800/60 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
                     }`}
                   >
                     <div
-                      className={`flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg font-extrabold flex items-center justify-center text-xs transition ${
+                      className={`flex-shrink-0 w-8 h-8 rounded-xl font-extrabold flex items-center justify-center text-xs sm:text-sm transition ${
                         isSelected
-                          ? 'bg-emerald-600 text-white shadow-xs'
+                          ? 'bg-emerald-600 text-white shadow-xs scale-105'
                           : 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
                       }`}
                     >
                       {opsi.label}
                     </div>
-                    <div className={`flex-1 pt-0.5 text-xs sm:text-sm ${isSelected ? 'font-medium text-emerald-950 dark:text-emerald-100' : 'text-slate-800 dark:text-slate-200'}`}>
+                    <div className={`flex-1 pt-1 text-xs sm:text-sm break-words overflow-x-auto ${isSelected ? 'font-semibold text-emerald-950 dark:text-emerald-100' : 'text-slate-800 dark:text-slate-200'}`}>
                       <MathRenderer content={opsi.konten} />
                     </div>
                   </button>
@@ -1214,8 +1214,8 @@ export default function LembarUjianPage({
 
           {/* Opsi Jawaban: Pilihan Ganda Kompleks (Multiple Select) */}
           {currentSoal.tipeSoal === 'PG_KOMPLEKS' && (
-            <div className="space-y-2 sm:space-y-2.5 pt-4 border-t border-slate-100 dark:border-white/10">
-              <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 px-3 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1.5">
+            <div className="space-y-2.5 sm:space-y-3 pt-4 border-t border-slate-100 dark:border-white/10">
+              <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 px-3 py-2 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-2">
                 <span>💡</span>
                 <span>Pilihan Ganda Kompleks: Anda dapat memilih lebih dari satu jawaban yang benar.</span>
               </div>
@@ -1233,22 +1233,22 @@ export default function LembarUjianPage({
                     key={opsi.id}
                     type="button"
                     onClick={() => handleSelectOpsiKompleks(currentSoal.id, opsi.id)}
-                    className={`w-full text-left p-3 sm:p-3.5 rounded-xl border transition-all flex items-start gap-3 cursor-pointer ${
+                    className={`w-full text-left p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all flex items-start gap-3 sm:gap-3.5 cursor-pointer touch-manipulation ${
                       isSelected
-                        ? 'bg-teal-50/90 dark:bg-teal-950/50 border-teal-500 dark:border-teal-400 text-teal-950 dark:text-teal-200 shadow-xs ring-1 ring-teal-400/50'
-                        : 'bg-white dark:bg-slate-950/60 hover:bg-slate-50/80 dark:hover:bg-slate-800/60 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
+                        ? 'bg-teal-50/95 dark:bg-teal-950/60 border-teal-500 dark:border-teal-400 text-teal-950 dark:text-teal-100 shadow-sm ring-2 ring-teal-500/30'
+                        : 'bg-white dark:bg-slate-950/70 hover:bg-slate-50 dark:hover:bg-slate-800/60 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
                     }`}
                   >
                     <div
-                      className={`flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg font-extrabold flex items-center justify-center text-xs transition ${
+                      className={`flex-shrink-0 w-8 h-8 rounded-xl font-extrabold flex items-center justify-center text-xs sm:text-sm transition ${
                         isSelected
-                          ? 'bg-teal-600 text-white shadow-xs'
+                          ? 'bg-teal-600 text-white shadow-xs scale-105'
                           : 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
                       }`}
                     >
                       {isSelected ? '✓' : opsi.label}
                     </div>
-                    <div className={`flex-1 pt-0.5 text-xs sm:text-sm ${isSelected ? 'font-medium text-teal-950 dark:text-teal-100' : 'text-slate-800 dark:text-slate-200'}`}>
+                    <div className={`flex-1 pt-1 text-xs sm:text-sm break-words overflow-x-auto ${isSelected ? 'font-semibold text-teal-950 dark:text-teal-100' : 'text-slate-800 dark:text-slate-200'}`}>
                       <MathRenderer content={opsi.konten} />
                     </div>
                   </button>
