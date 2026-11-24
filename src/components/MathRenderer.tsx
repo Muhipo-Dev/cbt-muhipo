@@ -13,6 +13,43 @@ const ARABIC_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE7
 const JAVANESE_REGEX = /[\uA980-\uA9DF]/;
 
 /**
+ * Generator Inline SVG Mandiri untuk simbol akar kuadrat (\sqrt)
+ * Menghasilkan garis atap dan centang akar vektor SVG murni
+ * yang tidak bergantung pada font lokal atau styling eksternal browser.
+ */
+function renderSvgRadical(radicand: string, index: string = ''): string {
+  const rad = (radicand || '').trim();
+  const charCount = rad.length;
+  const contentWidth = Math.max(16, charCount * 9.5 + 6);
+  const svgWidth = contentWidth + 20;
+  const height = 26;
+  const roofEnd = svgWidth - 1;
+  const radicalPath = `M 2,14 L 6,19 L 13,3 L ${roofEnd},3`;
+
+  const indexSvg = index
+    ? `<text x="2" y="11" font-size="9" font-family="KaTeX_Main, Times New Roman, serif" font-style="italic" fill="currentColor">${index}</text>`
+    : '';
+
+  const contentSvg = `<text x="16" y="18" font-size="14" font-family="KaTeX_Main, Times New Roman, serif" fill="currentColor">${rad}</text>`;
+
+  return `<svg class="inline-math-svg inline-block align-middle" style="vertical-align: -0.22em; margin: 0 0.15em;" width="${svgWidth}" height="${height}" viewBox="0 0 ${svgWidth} ${height}" xmlns="http://www.w3.org/2000/svg">${indexSvg}<path d="${radicalPath}" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" />${contentSvg}</svg>`;
+}
+
+/**
+ * Generator Inline SVG Mandiri untuk pecahan (\frac)
+ */
+function renderSvgFraction(numerator: string, denominator: string): string {
+  const num = (numerator || '').trim();
+  const den = (denominator || '').trim();
+  const maxLen = Math.max(num.length, den.length);
+  const width = Math.max(18, maxLen * 9.5 + 8);
+  const height = 34;
+  const centerX = width / 2;
+
+  return `<svg class="inline-math-svg inline-block align-middle" style="vertical-align: -0.55em; margin: 0 0.15em;" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg"><text x="${centerX}" y="12" font-size="12" font-family="KaTeX_Main, Times New Roman, serif" text-anchor="middle" fill="currentColor">${num}</text><line x1="2" y1="17" x2="${width - 2}" y2="17" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" /><text x="${centerX}" y="30" font-size="12" font-family="KaTeX_Main, Times New Roman, serif" text-anchor="middle" fill="currentColor">${den}</text></svg>`;
+}
+
+/**
  * Komponen untuk merender teks campuran Formula KaTeX ($...$ / $$...$$),
  * teks Bahasa Arab (dengan tata letak & harakat optimal), Aksara Jawa (Hanacaraka),
  * serta media embed (gambar, audio, video, dan YouTube iframe).
@@ -83,7 +120,9 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
     // 1. Ganti block math $$...$$
     let formatted = processed.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => {
       try {
-        return katex.renderToString(math.trim(), {
+        const trimmed = math.trim();
+        // Bila berupa ekspresi akar / pecahan sederhana, gunakan juga hybrid visual check
+        return katex.renderToString(trimmed, {
           displayMode: true,
           throwOnError: false,
           output: 'html',
@@ -97,7 +136,34 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
     // 2. Ganti inline math $...$
     formatted = formatted.replace(/\$([^\$\n]+?)\$/g, (_, math) => {
       try {
-        return katex.renderToString(math.trim(), {
+        const trimmed = math.trim();
+        // Cek jika formula berupa pecahan majemuk + akar seperti \frac{1}{4}\sqrt{14}
+        const fracSqrtMatch = trimmed.match(/^\\frac\{([^}]+)\}\{([^}]+)\}\s*\\sqrt\{([^}]+)\}$/);
+        if (fracSqrtMatch) {
+          const fracSvg = renderSvgFraction(fracSqrtMatch[1], fracSqrtMatch[2]);
+          const sqrtSvg = renderSvgRadical(fracSqrtMatch[3]);
+          return `<span class="cbt-ai-math-compound inline-flex items-center gap-0.5">${fracSvg}${sqrtSvg}</span>`;
+        }
+
+        // Cek jika formula berupa akar tunggal seperti \sqrt{14} atau \sqrt{x}
+        const sqrtMatch = trimmed.match(/^\\sqrt\{([^}]+)\}$/);
+        if (sqrtMatch) {
+          return renderSvgRadical(sqrtMatch[1]);
+        }
+
+        // Cek jika formula berupa akar berpangkat seperti \sqrt[3]{8}
+        const rootMatch = trimmed.match(/^\\sqrt\[([^\]]+)\]\{([^}]+)\}$/);
+        if (rootMatch) {
+          return renderSvgRadical(rootMatch[2], rootMatch[1]);
+        }
+
+        // Cek jika formula berupa pecahan tunggal seperti \frac{a}{b}
+        const fracMatch = trimmed.match(/^\\frac\{([^}]+)\}\{([^}]+)\}$/);
+        if (fracMatch) {
+          return renderSvgFraction(fracMatch[1], fracMatch[2]);
+        }
+
+        return katex.renderToString(trimmed, {
           displayMode: false,
           throwOnError: false,
           output: 'html',
