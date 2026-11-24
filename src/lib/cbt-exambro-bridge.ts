@@ -15,6 +15,7 @@ import {
 
 export interface ExambroDetectionInfo {
   isExambro: boolean;
+  isSEB: boolean;
   isAndroidWebView: boolean;
   isStandalonePWA: boolean;
   bridgeName: string | null;
@@ -22,15 +23,17 @@ export interface ExambroDetectionInfo {
 }
 
 /**
- * Deteksi apakah halaman dibuka di dalam aplikasi Android CBT Exambro atau Android WebView
+ * Deteksi apakah halaman dibuka di dalam aplikasi Android CBT Exambro, Safe Exam Browser (SEB), atau Android WebView
  */
 export function detectExambroApp(): ExambroDetectionInfo {
   if (typeof window === 'undefined') {
-    return { isExambro: false, isAndroidWebView: false, isStandalonePWA: false, bridgeName: null, userAgent: '' };
+    return { isExambro: false, isSEB: false, isAndroidWebView: false, isStandalonePWA: false, bridgeName: null, userAgent: '' };
   }
 
   const ua = navigator.userAgent || '';
-  const isExambroUA = /Exambro|ExamBrowser|CBTExambro|Examora|FlyExam|CandyExambro|MuhipoExambro|SafeExam/i.test(ua);
+  // Deteksi Safe Exam Browser (SEB) resmi di iOS, Android, macOS & Windows
+  const isSEBUA = /SEB|SafeExamBrowser|SafeExamBrowserMobile/i.test(ua);
+  const isExambroUA = isSEBUA || /Exambro|ExamBrowser|CBTExambro|Examora|FlyExam|CandyExambro|MuhipoExambro|SafeExam/i.test(ua);
   const isAndroid = /Android/i.test(ua);
   const isAndroidWebView = isAndroid && (/wv|\.0\.0\.0|Version\/[0-9.]+/i.test(ua) || !/Chrome\/[.0-9]+ Mobile/i.test(ua));
   const isStandalonePWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
@@ -38,7 +41,9 @@ export function detectExambroApp(): ExambroDetectionInfo {
   const w = window as any;
   let bridgeName: string | null = null;
 
-  if (w.Android && typeof w.Android === 'object') {
+  if (isSEBUA) {
+    bridgeName = 'SafeExamBrowser';
+  } else if (w.Android && typeof w.Android === 'object') {
     bridgeName = 'Android';
   } else if (w.Exambro && typeof w.Exambro === 'object') {
     bridgeName = 'Exambro';
@@ -54,6 +59,7 @@ export function detectExambroApp(): ExambroDetectionInfo {
 
   return {
     isExambro,
+    isSEB: Boolean(isSEBUA),
     isAndroidWebView,
     isStandalonePWA,
     bridgeName,

@@ -30,6 +30,8 @@ import {
   Filter,
   RefreshCw,
   ShieldAlert,
+  Smartphone,
+  Download,
 } from 'lucide-react';
 
 export default function SiswaPortalPage() {
@@ -307,7 +309,7 @@ export default function SiswaPortalPage() {
         )}
 
         {/* Peringatan Pengawasan CBT Ringkas & Elegan */}
-        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-3 sm:py-3 sm:px-4.5 shadow-xs backdrop-blur-xl flex items-center justify-between gap-3">
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-3 sm:py-3 sm:px-4.5 shadow-xs backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
               <ShieldAlert className="w-4 h-4" />
@@ -321,9 +323,20 @@ export default function SiswaPortalPage() {
               </span>
             </div>
           </div>
-          <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/25 text-[11px] font-semibold text-amber-800 dark:text-amber-300 shrink-0">
-            Anti-Curang Aktif
-          </span>
+          <div className="flex items-center gap-2 w-full md:w-auto shrink-0 justify-between md:justify-end">
+            <a
+              href="/api/seb/config"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-[11px] font-bold text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition shadow-2xs"
+              title="Unduh file konfigurasi Safe Exam Browser (.seb) untuk iOS iPhone, iPad, Android, Mac & Windows"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Config SEB (.seb)</span>
+              <Download className="w-3 h-3 ml-0.5 text-blue-500" />
+            </a>
+            <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/25 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+              Anti-Curang Aktif
+            </span>
+          </div>
         </div>
 
         {/* Section: Search Bar Mandiri */}

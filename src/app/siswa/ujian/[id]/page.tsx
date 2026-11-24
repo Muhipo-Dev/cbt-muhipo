@@ -105,6 +105,7 @@ export default function LembarUjianPage({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [cheatWarning, setCheatWarning] = useState<string | null>(null);
   const [isExambro, setIsExambro] = useState(false);
+  const [isSEB, setIsSEB] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -116,9 +117,10 @@ export default function LembarUjianPage({
 
   // 1. Inisialisasi Android Exambro Native Bridge & Fetch Soal dengan Dukungan Fallback IndexedDB
   useEffect(() => {
-    // Deteksi apakah sedang berjalan di aplikasi Android CBT Exambro
+    // Deteksi apakah sedang berjalan di aplikasi Android CBT Exambro atau Safe Exam Browser (SEB)
     const exambroInfo = detectExambroApp();
     setIsExambro(exambroInfo.isExambro);
+    setIsSEB(exambroInfo.isSEB);
 
     // Daftarkan Global JavaScript Hooks (window.cbtExambro*) agar aplikasi Android dapat berkomunikasi dua arah
     registerGlobalExambroBridge({
@@ -1022,8 +1024,16 @@ export default function LembarUjianPage({
             </span>
           </div>
 
-          {/* Badge Indikator Android CBT Exambro App */}
-          {isExambro && (
+          {/* Badge Indikator Android CBT Exambro App / Safe Exam Browser */}
+          {isSEB ? (
+            <div
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 text-[10px] font-bold shadow-2xs"
+              title="Aplikasi Safe Exam Browser (SEB) iOS / Android Aktif Terkunci Aman"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+              <span>Safe Exam Browser (SEB)</span>
+            </div>
+          ) : isExambro ? (
             <div
               className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80 text-[10px] font-bold shadow-2xs"
               title="Aplikasi Android CBT Exambro Kiosk aktif dengan sinkronisasi native bridge storage ganda"
@@ -1031,7 +1041,7 @@ export default function LembarUjianPage({
               <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
               <span>Exambro Kiosk</span>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Right: Quick Tools (ThemeToggle, Font size, Grid Modal, Fullscreen) */}
