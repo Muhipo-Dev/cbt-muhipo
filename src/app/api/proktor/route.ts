@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser, hashPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { runAIProctorAnalysis } from '@/lib/pythonBridge';
 
 export async function GET(request: NextRequest) {
   try {
@@ -225,12 +226,38 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Komputasi AI Python untuk Pengawasan Ujian Realtime
+    let aiProctorAnalysis = null;
+    if (pesertaList && pesertaList.length > 0) {
+      try {
+        aiProctorAnalysis = await runAIProctorAnalysis(pesertaList);
+        // Sematkan hasil analisis AI ke tiap peserta
+        if (aiProctorAnalysis?.allStudentsAnalysis) {
+          const aiMap = new Map(aiProctorAnalysis.allStudentsAnalysis.map((a: any) => [a.pesertaId, a]));
+          pesertaList = pesertaList.map((p) => {
+            const aiData: any = aiMap.get(p.pesertaUjianId);
+            return {
+              ...p,
+              aiAnalysis: aiData || null,
+              riskScore: aiData?.riskScore ?? 0,
+              threatLevel: aiData?.threatLevel ?? 'LOW',
+              aiRekomendasi: aiData?.rekomendasi ?? null,
+              anomalyFlags: aiData?.anomalyFlags ?? [],
+            };
+          });
+        }
+      } catch (err) {
+        console.error('[AI Proctor Calculation Error]:', err);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
         ujianList,
         activeUjian,
         pesertaList,
+        aiProctor: aiProctorAnalysis,
       },
     });
   } catch (error: any) {

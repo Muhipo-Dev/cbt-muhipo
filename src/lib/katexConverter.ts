@@ -152,13 +152,16 @@ export function convertEquationToKatex(text: string | null | undefined): string 
   // =POWER(x, y) atau POWER(x, y) -> x^{y}
   str = str.replace(/(?:=|\b)POWER\(([^,]+),\s*([^)]+)\)/gi, '${$1}^{$2}$');
 
-  // 4. Konversi Unicode Akar: √(expr), √x, ∛x, ∜x
-  str = str.replace(/√\(([^)]+)\)/g, '$\\sqrt{$1}$');
-  str = str.replace(/√([a-zA-Z0-9]+)/g, '$\\sqrt{$1}$');
-  str = str.replace(/∛\(([^)]+)\)/g, '$\\sqrt[3]{$1}$');
-  str = str.replace(/∛([a-zA-Z0-9]+)/g, '$\\sqrt[3]{$1}$');
-  str = str.replace(/∜\(([^)]+)\)/g, '$\\sqrt[4]{$1}$');
-  str = str.replace(/∜([a-zA-Z0-9]+)/g, '$\\sqrt[4]{$1}$');
+  // 4. Konversi Unicode Akar: √(expr), √x, ∛x, ∜x, √{x}
+  str = str.replace(/√\s*\{([^}]+)\}/g, '$\\sqrt{$1}$');
+  str = str.replace(/√\s*\(([^)]+)\)/g, '$\\sqrt{$1}$');
+  str = str.replace(/√\s*([a-zA-Z0-9]+)/g, '$\\sqrt{$1}$');
+  str = str.replace(/∛\s*\{([^}]+)\}/g, '$\\sqrt[3]{$1}$');
+  str = str.replace(/∛\s*\(([^)]+)\)/g, '$\\sqrt[3]{$1}$');
+  str = str.replace(/∛\s*([a-zA-Z0-9]+)/g, '$\\sqrt[3]{$1}$');
+  str = str.replace(/∜\s*\{([^}]+)\}/g, '$\\sqrt[4]{$1}$');
+  str = str.replace(/∜\s*\(([^)]+)\)/g, '$\\sqrt[4]{$1}$');
+  str = str.replace(/∜\s*([a-zA-Z0-9]+)/g, '$\\sqrt[4]{$1}$');
 
   // 5. Konversi Pecahan Unicode: ½, ⅓, ⅔, ¼, ¾, dsb.
   Object.entries(FRACTION_MAP).forEach(([char, latex]) => {

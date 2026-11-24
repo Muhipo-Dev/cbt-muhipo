@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { CheckCircle2, FileSpreadsheet, Save, Search, UserCheck, AlertCircle, HelpCircle } from 'lucide-react'
+import { CheckCircle2, FileSpreadsheet, Save, Search, UserCheck, AlertCircle, HelpCircle, Bot, Sparkles } from 'lucide-react'
 import { MathRenderer } from '@/components/MathRenderer'
 
 interface TesEvaluasiViewProps {
@@ -19,6 +19,44 @@ export function TesEvaluasiView({
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [scoreInputs, setScoreInputs] = useState<Record<string, number>>({})
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, any>>({})
+  const [aiLoadingId, setAiLoadingId] = useState<string | null>(null)
+
+  const handleRequestAiScore = async (jawaban: any) => {
+    try {
+      setAiLoadingId(jawaban.id)
+      const res = await fetch('/api/guru/koreksi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'AI_EVALUATE_ANSWER',
+          jawabanSiswa: jawaban.jawabanDipilih || '',
+          rubrikKunci: jawaban.soal?.kunciJawabanTeks || '',
+          tipeSoal: jawaban.soal?.tipeSoal || 'ESAI',
+          bobot: jawaban.soal?.bobot || 5.0,
+        }),
+      })
+      const json = await res.json()
+      if (json.success && json.aiEvaluation) {
+        setAiSuggestions((prev) => ({
+          ...prev,
+          [jawaban.id]: json.aiEvaluation,
+        }))
+        const proposedScore = json.aiEvaluation.skorUsulan !== undefined 
+          ? json.aiEvaluation.skorUsulan 
+          : (json.aiEvaluation.isBenar ? (jawaban.soal?.bobot || 5.0) : 0)
+        setScoreInputs((prev) => ({
+          ...prev,
+          [jawaban.id]: proposedScore,
+        }))
+        showNotification('Saran Skor AI Diterapkan', `Rekomendasi AI Python: ${proposedScore} poin (${json.aiEvaluation.feedback || 'Kesesuaian rubrik teranalisis'})`, 'success')
+      }
+    } catch (e: any) {
+      showNotification('Gagal', 'Gagal memanggil Python AI Scorer: ' + e.message, 'error')
+    } finally {
+      setAiLoadingId(null)
+    }
+  }
 
   useEffect(() => {
     if (selectedUjianId) {
@@ -213,8 +251,8 @@ export function TesEvaluasiView({
                         </div>
 
                         {/* Scoring Input & Save Button */}
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-white/5">
-                          <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200/60 dark:border-white/5">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                               Beri Skor:
                             </label>
@@ -233,6 +271,18 @@ export function TesEvaluasiView({
                               className="w-20 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white text-center focus:outline-none focus:border-blue-500"
                             />
                             <span className="text-xs text-slate-400">/ {maxBobot} Poin</span>
+
+                            {/* Tombol Saran AI Python */}
+                            <button
+                              type="button"
+                              onClick={() => handleRequestAiScore(jawaban)}
+                              disabled={aiLoadingId === jawaban.id}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition shadow-2xs cursor-pointer"
+                              title="Hitung skor rekomendasi otomatis berbasis AI Python"
+                            >
+                              <Bot className={`w-3.5 h-3.5 ${aiLoadingId === jawaban.id ? 'animate-spin' : 'text-indigo-600 dark:text-indigo-400'}`} />
+                              <span>{aiLoadingId === jawaban.id ? 'Menganalisis...' : 'Saran AI Python'}</span>
+                            </button>
                           </div>
 
                           <button
@@ -245,6 +295,19 @@ export function TesEvaluasiView({
                             <span>Simpan Nilai</span>
                           </button>
                         </div>
+
+                        {/* Banner Feedback Hasil Evaluasi AI Python */}
+                        {aiSuggestions[jawaban.id] && (
+                          <div className="p-3 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-900 dark:text-indigo-200 space-y-1">
+                            <div className="flex items-center gap-1.5 font-bold text-indigo-700 dark:text-indigo-300">
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Analisis Semantik AI Python:</span>
+                            </div>
+                            <p className="text-[11px] leading-relaxed">
+                              {aiSuggestions[jawaban.id].feedback || 'Jawaban dianalisis berdasarkan kesamaan kata kunci dan rubrik kunci jawaban.'}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )
                   })}

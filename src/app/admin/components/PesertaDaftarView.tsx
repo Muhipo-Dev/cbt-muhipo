@@ -395,7 +395,7 @@ export function PesertaDaftarView({
                 <th className="py-3.5 px-4">Username / ID</th>
                 <th className="py-3.5 px-4">Nama Lengkap Siswa</th>
                 <th className="py-3.5 px-4">Group / Kelas</th>
-                <th className="py-3.5 px-4">Ruang / Sesi</th>
+                <th className="py-3.5 px-4">Sesi Ujian</th>
                 <th className="py-3.5 px-4">No Peserta</th>
                 <th className="py-3.5 px-4 text-right">Aksi</th>
               </tr>
@@ -439,8 +439,9 @@ export function PesertaDaftarView({
                       </span>
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">{s.ruangUjian || 'Ruang 1'}</div>
-                      <div className="text-[10.5px] text-cyan-600 dark:text-cyan-400 font-bold">Sesi {s.sesiUjian || 1}</div>
+                      <span className="px-2.5 py-1 rounded-full bg-cyan-100 dark:bg-cyan-950/60 border border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 font-bold text-xs">
+                        Sesi {s.sesiUjian || 1}
+                      </span>
                     </td>
                     <td className="py-3.5 px-4 font-mono text-slate-500">{s.nomorPeserta || '-'}</td>
                     <td className="py-3.5 px-4 text-right">
@@ -643,35 +644,20 @@ export function PesertaDaftarView({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Ruang Ujian
-                  </label>
-                  <input
-                    type="text"
-                    value={form.ruangUjian}
-                    onChange={(e) => setForm({ ...form, ruangUjian: e.target.value })}
-                    placeholder="Contoh: Ruang 1 / Lab CBT"
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Sesi Ujian
-                  </label>
-                  <select
-                    value={form.sesiUjian}
-                    onChange={(e) => setForm({ ...form, sesiUjian: Number(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value={1}>Sesi 1 (Pagi)</option>
-                    <option value={2}>Sesi 2 (Siang)</option>
-                    <option value={3}>Sesi 3 (Sore)</option>
-                    <option value={4}>Sesi 4 (Khusus/Susulan)</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Sesi Ujian
+                </label>
+                <select
+                  value={form.sesiUjian}
+                  onChange={(e) => setForm({ ...form, sesiUjian: Number(e.target.value) || 1 })}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value={1}>Sesi 1 (Pagi)</option>
+                  <option value={2}>Sesi 2 (Siang)</option>
+                  <option value={3}>Sesi 3 (Sore)</option>
+                  <option value={4}>Sesi 4 (Khusus/Susulan)</option>
+                </select>
               </div>
 
               <div>

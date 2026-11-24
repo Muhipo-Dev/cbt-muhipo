@@ -204,7 +204,12 @@ export default function LembarUjianPage({
       setSoalList(data.data.soalList);
       setSisaDetik(data.data.ujian.sisaWaktuDetik || 0);
 
-      // 1. Simpan salinan sesi ujian ke IndexedDB
+      // Jika ujian tidak memerlukan proteksi browser terkunci (lockBrowser === false),
+      // otomatis buka lembar ujian langsung tanpa modal dan tanpa lockdown
+      if (!data.data.ujian.lockBrowser) {
+        setIsSecurityUnlocked(true);
+        setIsFullscreen(true);
+      }
       await saveExamSessionToIndexedDB(ujianId, {
         pesertaUjianId: data.data.pesertaUjianId,
         ujianInfo: data.data.ujian,
@@ -271,6 +276,10 @@ export default function LembarUjianPage({
       const cachedSession = await getExamSessionFromIndexedDB(ujianId);
       if (cachedSession && cachedSession.soalList?.length) {
         setUjianInfo(cachedSession.ujianInfo);
+        if (!cachedSession.ujianInfo?.lockBrowser) {
+          setIsSecurityUnlocked(true);
+          setIsFullscreen(true);
+        }
         setPesertaUjianId(cachedSession.pesertaUjianId || null);
         setSoalList(cachedSession.soalList);
         const cachedAnswers = await getAllCachedAnswersFromIndexedDB(ujianId);
@@ -368,8 +377,10 @@ export default function LembarUjianPage({
   }, [sisaDetik, loading]);
 
   // 3. Anti-Cheat Engine Lintas Platform & Pengawasan Area Terkoordinasi (Anti-Collision State Machine)
+  // Hanya aktif jika fitur lockBrowser dinyalakan oleh guru/admin pada paket ujian terkait.
+  // Di luar fitur Anti-Cheat Lockdown (ujian biasa / latihan), peserta bebas melakukan scroll, sentuh, dan klik secara normal.
   useEffect(() => {
-    if (!isSecurityUnlocked) return;
+    if (!isSecurityUnlocked || !ujianInfo?.lockBrowser) return;
 
     // Mutex & Debounce Ref untuk mencegah tabrakan event serentak
     let isHandlingViolation = false;
@@ -446,6 +457,12 @@ export default function LembarUjianPage({
       // Jika dokumen sudah hidden, event sudah ditangani oleh visibilitychange
       if (document.hidden) return;
 
+      // Di smartphone mobile (Android / iOS), window blur sering terpicu secara false-positive
+      // ketika memunculkan keyboard virtual on-screen, dropdown/select, atau address bar autohide.
+      // Deteksi tab switch pada mobile cukup diandalkan via visibilitychange dan pagehide.
+      const devInfo = detectDeviceSecurityInfo();
+      if (devInfo.isMobile) return;
+
       dispatchAreaViolation(
         'APP_SWITCH_ALERT',
         'Siswa berpindah aplikasi lain (Jendela Tidak Fokus)',
@@ -510,8 +527,9 @@ export default function LembarUjianPage({
 
     // 7. Context Menu, Copy, Cut, Paste, Drag & Selection Prevention
     const handleContextMenu = (e: MouseEvent | TouchEvent) => {
-      // Jangan blokir jika event touch berasal dari interaksi sentuhan di ponsel
-      if ('touches' in e && e.touches) {
+      // Izinkan sentuhan / long-press di smartphone/tablet agar gesture sentuh tidak terkunci
+      const devInfo = detectDeviceSecurityInfo();
+      if (devInfo.isMobile || devInfo.isTablet || ('touches' in e && e.touches)) {
         return;
       }
       e.preventDefault();
@@ -524,9 +542,13 @@ export default function LembarUjianPage({
     };
 
     const handleSelectStart = (e: Event) => {
-      // Izinkan pemilihan teks hanya di dalam area input / textarea pengerjaan esai
+      // Izinkan pemilihan teks pada input, textarea, serta elemen soal/jawaban agar gesture sentuh lancar
+      const devInfo = detectDeviceSecurityInfo();
+      if (devInfo.isMobile || devInfo.isTablet) {
+        return; // Jangan blokir touch selection / gesture di layar ponsel atau tablet
+      }
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.closest('.select-text'))) {
         return;
       }
       e.preventDefault();
@@ -618,12 +640,13 @@ export default function LembarUjianPage({
 
       if (resJson.data?.isLocked) {
         alert(
-          `AKUN UJIAN ANDA TERKUNCI!\n\nTerdeteksi pelanggaran keamanan (keluar halaman ujian / berpindah aplikasi / berpindah tab). Sistem otomatis langsung mengunci ujian Anda. Silakan hubungi Pengawas / Proktor Ruang untuk membuka kunci ujian Anda.`
+          `AKUN UJIAN ANDA TERKUNCI!\n\nAnda telah mencapai batas maksimal 10 kali pelanggaran keamanan (keluar halaman ujian / berpindah aplikasi / berpindah tab). Sistem otomatis mengunci ujian Anda. Silakan hubungi Pengawas / Proktor untuk membuka kunci ujian Anda.`
         );
         router.push('/siswa');
       } else if (currentViolation > 0) {
+        const sisaPelanggaran = Math.max(0, 10 - currentViolation);
         setCheatWarning(
-          `Peringatan Pelanggaran (${currentViolation}x): Dilarang keluar dari halaman ujian atau berpindah aplikasi! Akun akan langsung terkunci otomatis.`
+          `Peringatan Pelanggaran (${currentViolation}/10): Dilarang keluar dari halaman ujian atau berpindah aplikasi! Sisa toleransi: ${sisaPelanggaran} kali lagi sebelum akun terkunci otomatis.`
         );
       }
     } catch (e) {
@@ -901,7 +924,7 @@ export default function LembarUjianPage({
   const totalRagu = Object.values(jawabanMap).filter((j) => j.raguRagu).length;
 
   return (
-    <div className="min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between selection:bg-emerald-500 selection:text-white select-none font-sans touch-manipulation pb-16 sm:pb-3">
+    <div className="min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between selection:bg-emerald-500 selection:text-white font-sans pb-16 sm:pb-3" style={{ touchAction: 'pan-y pinch-zoom' }}>
       {/* Modal Aktivasi Keamanan & Screen Recording */}
       {ujianInfo?.lockBrowser && (
         <SecurityLockModal
@@ -957,14 +980,14 @@ export default function LembarUjianPage({
       )}
 
       {/* Sticky Header CBT Compact (Light & Dark Modern Style) */}
-      <header className="sticky top-0 z-30 px-2.5 sm:px-6 lg:px-8 py-2 sm:py-2.5 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200/90 dark:border-white/10 backdrop-blur-md flex items-center justify-between shadow-xs">
+      <header className="sticky top-0 z-40 px-2 sm:px-6 lg:px-8 py-1.5 sm:py-2.5 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200/90 dark:border-white/10 backdrop-blur-md flex items-center justify-between gap-1.5 sm:gap-4 shadow-xs">
         {/* Left: Info Ujian & Nomor Soal */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
           <div className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-600 font-extrabold text-white text-xs sm:text-sm shadow-xs shadow-emerald-600/30 shrink-0">
             {currentIndex + 1}
           </div>
           <div className="min-w-0">
-            <h1 className="text-xs sm:text-sm lg:text-base font-extrabold text-slate-900 dark:text-white truncate">
+            <h1 className="text-xs sm:text-sm lg:text-base font-extrabold text-slate-900 dark:text-white truncate max-w-[120px] xs:max-w-[180px] sm:max-w-none">
               {ujianInfo?.judul || 'Lembar Ujian CBT'}
             </h1>
             <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5">
@@ -978,8 +1001,8 @@ export default function LembarUjianPage({
           </div>
         </div>
 
-        {/* Center: Realtime Countdown Timer & Sync Indicator */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* Center: Realtime Countdown Timer */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 px-2 sm:px-3 py-1 rounded-xl shadow-2xs">
             <Clock className={`w-3.5 h-3.5 ${sisaDetik < 300 ? 'text-rose-600 animate-pulse' : 'text-emerald-600 dark:text-emerald-400'}`} />
             <span
@@ -1049,7 +1072,7 @@ export default function LembarUjianPage({
         </div>
 
         {/* Right: Quick Tools (ThemeToggle, Font size, Grid Modal, Fullscreen) */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Tombol Switch Tema Terpadu */}
           <ThemeToggle size="sm" />
 
@@ -1098,7 +1121,7 @@ export default function LembarUjianPage({
           {/* Grid Nomor Soal Button */}
           <button
             onClick={() => setShowNavGrid(!showNavGrid)}
-            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold transition shadow-2xs cursor-pointer"
+            className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold transition shadow-2xs cursor-pointer shrink-0"
           >
             <Grid className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-emerald-400" />
             <span className="hidden sm:inline">Daftar Soal ({totalTerjawab}/{soalList.length})</span>
@@ -1156,7 +1179,7 @@ export default function LembarUjianPage({
 
       {/* Main Content Area: Diberikan margin-bottom aman (pb-28 di mobile) agar soal & opsi terbawah tidak terpotong atau tertutup bottom navigation bar */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-2.5 sm:p-5 lg:p-6 pb-28 sm:pb-8 flex flex-col justify-between">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-xs dark:shadow-xl space-y-4 sm:space-y-6 select-none -webkit-user-select-none">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-xs dark:shadow-xl space-y-4 sm:space-y-6">
           {/* Question Audio Player (Jika tipe listening) */}
           {currentSoal.mediaAudio && (
             <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3">
@@ -1169,18 +1192,18 @@ export default function LembarUjianPage({
 
           {/* Question Media Gambar (Jika ada) */}
           {currentSoal.mediaGambar && (
-            <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 p-1.5 max-w-lg mx-auto">
+            <div className="overflow-hidden bg-transparent p-1 max-w-lg mx-auto">
               <img
                 src={currentSoal.mediaGambar}
                 alt="Gambar Soal"
-                className="w-full h-auto object-contain rounded-lg max-h-64 sm:max-h-80"
+                className="w-full h-auto object-contain max-h-64 sm:max-h-80"
               />
             </div>
           )}
 
           {/* Question Text with KaTeX Math Rendering */}
           <div
-            className={`text-slate-900 dark:text-slate-100 break-words leading-relaxed overflow-x-auto custom-scrollbar pb-1 ${
+            className={`text-slate-900 dark:text-slate-100 break-words leading-relaxed pb-1 select-text ${
               fontSize === 'large'
                 ? 'text-base sm:text-lg'
                 : fontSize === 'xlarge'
@@ -1202,10 +1225,10 @@ export default function LembarUjianPage({
                     key={opsi.id}
                     type="button"
                     onClick={() => handleSelectOpsi(currentSoal.id, opsi.id)}
-                    className={`w-full text-left p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all flex items-start gap-3 sm:gap-3.5 cursor-pointer touch-manipulation ${
+                    className={`w-full text-left p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all flex items-start gap-3 sm:gap-3.5 cursor-pointer touch-manipulation ${
                       isSelected
-                        ? 'bg-emerald-50/95 dark:bg-emerald-950/60 border-emerald-500 dark:border-emerald-400 text-emerald-950 dark:text-emerald-100 shadow-sm ring-2 ring-emerald-500/30'
-                        : 'bg-white dark:bg-slate-950/70 hover:bg-slate-50 dark:hover:bg-slate-800/60 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
+                        ? 'bg-emerald-50/95 dark:bg-emerald-950/60 border-2 border-emerald-500 dark:border-emerald-400 text-emerald-950 dark:text-emerald-100 shadow-sm ring-2 ring-emerald-500/30'
+                        : 'bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
                     }`}
                   >
                     <div
@@ -1217,7 +1240,7 @@ export default function LembarUjianPage({
                     >
                       {opsi.label}
                     </div>
-                    <div className={`flex-1 pt-1 text-xs sm:text-sm break-words overflow-x-auto ${isSelected ? 'font-semibold text-emerald-950 dark:text-emerald-100' : 'text-slate-800 dark:text-slate-200'}`}>
+                    <div className={`flex-1 pt-1 text-xs sm:text-sm break-words select-text border-0 ring-0 outline-none ${isSelected ? 'font-semibold text-emerald-950 dark:text-emerald-100' : 'text-slate-800 dark:text-slate-200'}`}>
                       <MathRenderer content={opsi.konten} />
                     </div>
                   </button>
@@ -1247,10 +1270,10 @@ export default function LembarUjianPage({
                     key={opsi.id}
                     type="button"
                     onClick={() => handleSelectOpsiKompleks(currentSoal.id, opsi.id)}
-                    className={`w-full text-left p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all flex items-start gap-3 sm:gap-3.5 cursor-pointer touch-manipulation ${
+                    className={`w-full text-left p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all flex items-start gap-3 sm:gap-3.5 cursor-pointer touch-manipulation ${
                       isSelected
-                        ? 'bg-teal-50/95 dark:bg-teal-950/60 border-teal-500 dark:border-teal-400 text-teal-950 dark:text-teal-100 shadow-sm ring-2 ring-teal-500/30'
-                        : 'bg-white dark:bg-slate-950/70 hover:bg-slate-50 dark:hover:bg-slate-800/60 border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
+                        ? 'bg-teal-50/95 dark:bg-teal-950/60 border-2 border-teal-500 dark:border-teal-400 text-teal-950 dark:text-teal-100 shadow-sm ring-2 ring-teal-500/30'
+                        : 'bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
                     }`}
                   >
                     <div
@@ -1262,7 +1285,7 @@ export default function LembarUjianPage({
                     >
                       {isSelected ? '✓' : opsi.label}
                     </div>
-                    <div className={`flex-1 pt-1 text-xs sm:text-sm break-words overflow-x-auto ${isSelected ? 'font-semibold text-teal-950 dark:text-teal-100' : 'text-slate-800 dark:text-slate-200'}`}>
+                    <div className={`flex-1 pt-1 text-xs sm:text-sm break-words select-text border-0 ring-0 outline-none ${isSelected ? 'font-semibold text-teal-950 dark:text-teal-100' : 'text-slate-800 dark:text-slate-200'}`}>
                       <MathRenderer content={opsi.konten} />
                     </div>
                   </button>
@@ -1409,23 +1432,24 @@ export default function LembarUjianPage({
         </div>
 
         {/* Bottom Navigation Toolbar (Compact & Ergonomis di Android, iOS Safari & Desktop) */}
-        <div className="fixed sm:static bottom-0 left-0 right-0 z-30 sm:mt-4 flex items-center justify-between gap-2 bg-white/95 dark:bg-slate-900/95 sm:bg-white sm:dark:bg-slate-900 border-t sm:border border-slate-200/90 dark:border-white/10 px-3 py-2.5 sm:p-3 sm:rounded-2xl shadow-lg sm:shadow-xs dark:shadow-xl backdrop-blur-md pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="fixed sm:static bottom-0 left-0 right-0 z-30 sm:mt-4 flex items-center justify-between gap-1.5 xs:gap-2 bg-white/95 dark:bg-slate-900/95 sm:bg-white sm:dark:bg-slate-900 border-t sm:border border-slate-200/90 dark:border-white/10 px-2.5 xs:px-3 py-2 sm:p-3 sm:rounded-2xl shadow-lg sm:shadow-xs dark:shadow-xl backdrop-blur-md pb-[max(0.625rem,env(safe-area-inset-bottom))]">
           {/* Tombol Sebelumnya */}
           <button
             type="button"
             disabled={currentIndex === 0}
             onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-            className="min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer border border-slate-200 dark:border-white/10 active:scale-95 touch-manipulation"
+            className="min-h-[40px] xs:min-h-[44px] flex items-center justify-center gap-1 xs:gap-1.5 px-2.5 xs:px-3.5 sm:px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer border border-slate-200 dark:border-white/10 active:scale-95 touch-manipulation shrink-0"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span>Sebelumnya</span>
+            <span className="hidden xs:inline">Sebelumnya</span>
+            <span className="xs:hidden">Sebelum</span>
           </button>
 
           {/* Tombol Ragu-Ragu */}
           <button
             type="button"
             onClick={handleToggleRagu}
-            className={`min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-extrabold transition cursor-pointer border active:scale-95 touch-manipulation ${
+            className={`min-h-[40px] xs:min-h-[44px] flex items-center justify-center gap-1 xs:gap-1.5 px-2.5 xs:px-3.5 sm:px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer border active:scale-95 touch-manipulation shrink-0 ${
               currentJawaban.raguRagu
                 ? 'bg-amber-500 text-white border-amber-600 shadow-xs shadow-amber-500/20'
                 : 'bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60'
@@ -1440,7 +1464,7 @@ export default function LembarUjianPage({
             <button
               type="button"
               onClick={() => setShowSubmitModal(true)}
-              className="min-h-[44px] flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-xs font-extrabold text-white shadow-sm shadow-emerald-600/20 transition cursor-pointer active:scale-95 touch-manipulation"
+              className="min-h-[40px] xs:min-h-[44px] flex items-center justify-center gap-1 xs:gap-1.5 px-3 xs:px-4 sm:px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-xs font-extrabold text-white shadow-sm shadow-emerald-600/20 transition cursor-pointer active:scale-95 touch-manipulation shrink-0"
             >
               <Send className="w-3.5 h-3.5" />
               <span>Selesai</span>
@@ -1449,9 +1473,10 @@ export default function LembarUjianPage({
             <button
               type="button"
               onClick={() => setCurrentIndex((prev) => Math.min(soalList.length - 1, prev + 1))}
-              className="min-h-[44px] flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs shadow-emerald-600/20 transition cursor-pointer active:scale-95 touch-manipulation"
+              className="min-h-[40px] xs:min-h-[44px] flex items-center justify-center gap-1 xs:gap-1.5 px-3 xs:px-4 sm:px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs shadow-emerald-600/20 transition cursor-pointer active:scale-95 touch-manipulation shrink-0"
             >
-              <span>Selanjutnya</span>
+              <span className="hidden xs:inline">Selanjutnya</span>
+              <span className="xs:hidden">Lanjut</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           )}

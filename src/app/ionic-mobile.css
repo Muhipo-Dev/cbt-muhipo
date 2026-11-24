@@ -265,8 +265,8 @@
     vertical-align: middle !important;
   }
 
-  /* Scrollable Table Containers */
-  .overflow-x-auto,
+  /* Scrollable Table Containers (Tabel admin & guru, bukan teks soal ujian) */
+  table.w-full,
   [data-slot="table-container"],
   .ion-scroll-view,
   .mobile-scroll-container {

@@ -24,8 +24,27 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
   const hasJavanese = JAVANESE_REGEX.test(content);
 
   const renderContentWithMathAndMedia = (text: string) => {
+    // 0. Auto-convert format LaTeX mentah tanpa pembungkus $ (misal: \frac{a}{b}, \sqrt{14}) atau simbol akar Unicode √14
+    let processed = text;
+    // Bersihkan spasi rusak pada KaTeX escape
+    processed = processed.replace(/\\\s+sqrt/g, '\\sqrt');
+    processed = processed.replace(/\\\s+frac/g, '\\frac');
+
+    // Ubah simbol akar Unicode mentah di luar tag HTML: √14 -> $\sqrt{14}$, √(x+y) -> $\sqrt{x+y}$
+    processed = processed.replace(/(?<![\$\\])√\s*\(([^)]+)\)/g, '$\\sqrt{$1}$');
+    processed = processed.replace(/(?<![\$\\])√\s*([0-9a-zA-Z]+)/g, '$\\sqrt{$1}$');
+
+    // Deteksi jika ada ekspresi \frac atau \sqrt yang belum dibungkus $...$
+    processed = processed.replace(/(?<![\$a-zA-Z0-9_\\])(\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|theta|pi)\b(?:\{[^{}]*\}|\[[^[\]]*\])*)/g, (match, expr, offset, full) => {
+      // Cek apakah match sudah di dalam tanda $...$
+      const prefix = full.substring(0, offset);
+      const dollarCount = (prefix.match(/\$/g) || []).length;
+      if (dollarCount % 2 !== 0) return match; // Sudah berada di dalam $...$
+      return `$${match}$`;
+    });
+
     // 1. Ganti block math $$...$$
-    let formatted = text.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => {
+    let formatted = processed.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => {
       try {
         return katex.renderToString(math.trim(), {
           displayMode: true,
@@ -69,7 +88,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
     // 6. Format Markdown Image ![alt](url)
     formatted = formatted.replace(
       /!\[([^\]]*)\]\(([^)]+)\)/gi,
-      `<img src="$2" alt="$1" class="my-2 rounded-xl max-h-72 max-w-full mx-auto border border-slate-200 dark:border-slate-700 shadow-xs object-contain" />`
+      `<img src="$2" alt="$1" class="my-2 max-h-72 max-w-full mx-auto object-contain" />`
     );
 
     // 7. Auto-wrap raw Aksara Jawa yang belum dibungkus tag HTML

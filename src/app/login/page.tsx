@@ -89,7 +89,7 @@ export default function SingleSignInLoginPage() {
   };
 
   return (
-    <div className="h-screen h-dvh max-h-screen max-h-dvh relative flex flex-col justify-between text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white overflow-hidden bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen min-h-[100dvh] relative flex flex-col justify-between text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white overflow-x-hidden overflow-y-auto bg-slate-950 transition-colors duration-300">
       {/* Background Wallpaper Master dari Pengaturan Sistem */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0 transform scale-100 transition-transform duration-1000 opacity-90 dark:opacity-80 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] pointer-events-none"

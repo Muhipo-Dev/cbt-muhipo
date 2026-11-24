@@ -24,6 +24,9 @@ import {
   Calendar,
   Layers,
   KeyRound,
+  Bot,
+  Sparkles,
+  Zap,
 } from 'lucide-react'
 
 interface ProktorLiveViewProps {
@@ -114,8 +117,9 @@ export function ProktorLiveView({
 
   const currentUjian = activeUjianList.find((u: any) => u.id === currentUjianId)
 
-  // Filter peserta
+  // Filter peserta & Analisis AI Python Proctor
   const pesertaList: any[] = proktorData?.pesertaList || []
+  const aiProctor = proktorData?.aiProctor || null
 
   // Auto-refresh interval (3 detik)
   useEffect(() => {
@@ -164,6 +168,52 @@ export function ProktorLiveView({
 
   return (
     <div className="space-y-6">
+      {/* BANNER RADAR AI PROCTOR PYTHON */}
+      {aiProctor && (
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 rounded-3xl p-5 text-white shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                  <Bot className="w-3.5 h-3.5 text-indigo-400" />
+                  Python AI Proctor Engine Active
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${
+                  aiProctor.sessionHealthScore >= 80
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : aiProctor.sessionHealthScore >= 60
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    : 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                }`}>
+                  Status: {aiProctor.statusRuangan}
+                </span>
+              </div>
+              <p className="text-sm text-slate-300 font-medium">
+                {aiProctor.summary}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/10 shrink-0">
+              <div className="text-center px-2">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Health Score</div>
+                <div className="text-xl font-black text-indigo-300 font-mono">{aiProctor.sessionHealthScore}%</div>
+              </div>
+              <div className="h-8 w-px bg-white/10"></div>
+              <div className="text-center px-2">
+                <div className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Anomali Kritis</div>
+                <div className="text-xl font-black text-rose-400 font-mono">{aiProctor.stats?.critical ?? 0}</div>
+              </div>
+              <div className="h-8 w-px bg-white/10"></div>
+              <div className="text-center px-2">
+                <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Kondusif</div>
+                <div className="text-xl font-black text-emerald-400 font-mono">{aiProctor.stats?.low ?? 0}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. Header & Controls */}
       <div className="bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -387,11 +437,27 @@ export function ProktorLiveView({
                     >
                       <td className="py-3 px-3 font-mono">{idx + 1}</td>
                       <td className="py-3 px-3">
-                        <div className="font-bold text-slate-900 dark:text-white">
-                          {p.name}
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            {p.name}
+                          </span>
+                          {p.threatLevel && p.threatLevel !== 'LOW' && (
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                              p.threatLevel === 'CRITICAL'
+                                ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30 animate-pulse'
+                                : 'bg-amber-500/20 text-amber-500 border border-amber-500/30'
+                            }`} title={p.aiRekomendasi || 'Anomali Keamanan Terdeteksi AI'}>
+                              AI: {p.threatLevel} ({p.riskScore}%)
+                            </span>
+                          )}
                         </div>
-                        <div className="text-[11px] font-mono text-slate-400">
-                          {p.username} {p.nomorPeserta && p.nomorPeserta !== '-' ? `• No: ${p.nomorPeserta}` : ''}
+                        <div className="text-[11px] font-mono text-slate-400 flex items-center gap-1.5 mt-0.5">
+                          <span>{p.username} {p.nomorPeserta && p.nomorPeserta !== '-' ? `• No: ${p.nomorPeserta}` : ''}</span>
+                          {p.anomalyFlags && p.anomalyFlags.length > 0 && (
+                            <span className="text-rose-500 font-sans text-[10px] font-semibold">
+                              ⚠️ {p.anomalyFlags[0]}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="py-3 px-3 font-semibold">{p.kelas || '-'}</td>
@@ -525,6 +591,41 @@ export function ProktorLiveView({
 
             {/* Modal Body: Log List */}
             <div className="p-4 sm:p-6 overflow-y-auto space-y-3 flex-1">
+              {/* Rekomendasi & Analisis AI Python */}
+              {inspectModal.aiAnalysis && (
+                <div className="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800/60 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-700 dark:text-indigo-300">
+                      <Bot className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      Python AI Threat Assessment
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                      inspectModal.threatLevel === 'CRITICAL'
+                        ? 'bg-rose-500/20 text-rose-600 border border-rose-500/30'
+                        : inspectModal.threatLevel === 'HIGH'
+                        ? 'bg-amber-500/20 text-amber-600 border border-amber-500/30'
+                        : 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
+                    }`}>
+                      Indeks Risiko: {inspectModal.riskScore}% ({inspectModal.threatLevel})
+                    </span>
+                  </div>
+                  {inspectModal.aiRekomendasi && (
+                    <p className="text-xs text-indigo-950 dark:text-indigo-200 font-medium leading-relaxed">
+                      💡 <b>Rekomendasi AI:</b> {inspectModal.aiRekomendasi}
+                    </p>
+                  )}
+                  {inspectModal.anomalyFlags && inspectModal.anomalyFlags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {inspectModal.anomalyFlags.map((flag: string, fIdx: number) => (
+                        <span key={fIdx} className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+                          {flag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-white/10">
                 <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
                   Riwayat Log Aktivitas & Peringatan ({inspectModal.logsTerakhir?.length || 0})

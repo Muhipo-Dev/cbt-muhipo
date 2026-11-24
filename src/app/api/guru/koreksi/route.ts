@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { runAIEssayEvaluation, runAIMathIsianMatch } from '@/lib/pythonBridge';
 
 export async function GET(request: NextRequest) {
   try {
@@ -88,7 +89,19 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { jawabanPesertaId, skor, catatanKoreksi, pesertaUjianId } = body;
+    const { action, jawabanPesertaId, skor, catatanKoreksi, pesertaUjianId } = body;
+
+    // FITUR REKOMENDASI KOREKSI AI PYTHON UNTUK ESAI & ISIAN
+    if (action === 'AI_EVALUATE_ANSWER') {
+      const { jawabanSiswa, rubrikKunci, tipeSoal, bobot } = body;
+      if (tipeSoal === 'ISIAN') {
+        const aiRes = await runAIMathIsianMatch(jawabanSiswa || '', rubrikKunci || '');
+        return NextResponse.json({ success: true, aiEvaluation: aiRes });
+      } else {
+        const aiRes = await runAIEssayEvaluation(jawabanSiswa || '', rubrikKunci || '', Number(bobot || 10));
+        return NextResponse.json({ success: true, aiEvaluation: aiRes });
+      }
+    }
 
     if (jawabanPesertaId) {
       await prisma.jawabanPeserta.update({

@@ -27,10 +27,10 @@
   /* Prevent horizontal overflow & optimize touch rendering */
   html, body {
     overflow-x: hidden;
+    overflow-y: auto;
     touch-action: pan-y pinch-zoom;
     -webkit-text-size-adjust: 100%;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
     background-color: var(--cbt-mobile-bg);
   }
 
@@ -61,7 +61,6 @@
   .overflow-y-auto,
   .custom-scrollbar {
     -webkit-overflow-scrolling: touch !important;
-    overscroll-behavior-y: contain;
   }
 
   /* Interactive touch press state */

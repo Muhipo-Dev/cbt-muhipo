@@ -1337,7 +1337,7 @@ export function BackupDataView({
                 Ekspor Database Peserta Siswa (Excel)
               </h4>
               <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Unduh seluruh data peserta aktif beserta nomor peserta, group kelas, ruang ujian, dan sesi ujian dalam format spreadsheet.
+                Unduh seluruh data peserta aktif beserta nomor peserta, group kelas, dan sesi ujian dalam format spreadsheet.
               </p>
             </div>
             <button

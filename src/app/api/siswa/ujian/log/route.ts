@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Jika terjadi pelanggaran (1 kali pelanggaran), kunci ujian otomatis tanpa toleransi
-      if (totalPelanggaran >= 1) {
+      // Kunci ujian otomatis hanya jika akumulasi pelanggaran mencapai 10 kali atau lebih
+      if (totalPelanggaran >= 10) {
         await prisma.pesertaUjian.update({
           where: { id: pesertaUjianId },
           data: { status: 'TERKUNCI' },

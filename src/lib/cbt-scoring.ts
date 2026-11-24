@@ -33,6 +33,30 @@ export interface OpsiItem {
 }
 
 /**
+ * Normalisasi ekspresi matematika agar ekuivalen (akar, pecahan, KaTeX)
+ */
+export function normalizeMathExpression(expr: string): string {
+  if (!expr) return '';
+  let m = String(expr).trim();
+  m = m.replace(/^\$+|\$+$/g, '').trim();
+  m = m.replace(/\s+/g, '');
+  m = m.replace(/\\(?:times|cdot)|\*/g, 'x');
+  m = m.replace(/\\div|:/g, '/');
+  m = m.replace(/(\d+),(\d+)/g, '$1.$2');
+  m = m.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)');
+  m = m.replace(/\\sqrt\{([^}]+)\}/g, 'sqrt($1)');
+  m = m.replace(/\\sqrt\(([^)]+)\)/g, 'sqrt($1)');
+  m = m.replace(/\\sqrt([0-9a-zA-Z]+)/g, 'sqrt($1)');
+  m = m.replace(/√\{([^}]+)\}/g, 'sqrt($1)');
+  m = m.replace(/√\(([^)]+)\)/g, 'sqrt($1)');
+  m = m.replace(/√([0-9a-zA-Z]+)/g, 'sqrt($1)');
+  m = m.replace(/\\(?:left|right|mathrm|mathbf|text)/g, '');
+  m = m.replace(/\((\d+)\)\/\((\d+)\)/g, '$1/$2');
+  m = m.replace(/\\/g, '');
+  return m.toLowerCase();
+}
+
+/**
  * Normalisasi teks untuk perbandingan isian cerdas
  */
 export function normalizeAnswerText(text: string): string {
@@ -84,15 +108,20 @@ export function matchIsianSingkat(jawabanSiswa: string, kunciJawabanTeks: string
   const rawKunci = kunciJawabanTeks || '';
   if (!rawKunci.trim()) return false;
 
+  const userMath = normalizeMathExpression(jawabanSiswa);
+
   // Mendukung multi-kunci alternatif yang dipisahkan oleh tanda |, ;, atau koma
   // Contoh: "Jakarta | DKI Jakarta" atau "Oksigen, O2"
   const delimiterRegex = /[|;]/;
   const kunciList = rawKunci.includes('|') || rawKunci.includes(';')
-    ? rawKunci.split(delimiterRegex).map((k) => normalizeAnswerText(k)).filter(Boolean)
-    : [normalizeAnswerText(rawKunci)];
+    ? rawKunci.split(delimiterRegex).map((k) => k.trim()).filter(Boolean)
+    : [rawKunci.trim()];
 
-  for (const kunci of kunciList) {
-    if (userClean === kunci) return true;
+  for (const rawK of kunciList) {
+    const kunci = normalizeAnswerText(rawK);
+    const kunciMath = normalizeMathExpression(rawK);
+
+    if (userClean === kunci || (userMath && userMath === kunciMath)) return true;
 
     // Normalisasi angka desimal: 2,5 vs 2.5
     const cleanNumUser = userClean.replace(',', '.');

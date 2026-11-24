@@ -27,6 +27,8 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
+  Bot,
+  Zap,
 } from 'lucide-react';
 
 export default function ProktorPage() {
@@ -563,6 +565,33 @@ export default function ProktorPage() {
             </div>
           </div>
 
+          {/* AI Proctor Radar Banner */}
+          {data?.aiProctor && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-950/80 via-slate-900/90 to-indigo-950/80 border border-indigo-500/40 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    <Bot className="w-3.5 h-3.5 text-indigo-400" />
+                    Python AI Proctor
+                  </span>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                    data.aiProctor.sessionHealthScore >= 80
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse'
+                  }`}>
+                    {data.aiProctor.statusRuangan}
+                  </span>
+                </div>
+                <div className="text-[11px] font-mono text-indigo-300/90">
+                  Health Score: <b>{data.aiProctor.sessionHealthScore}%</b> • Anomali Kritis: <b className="text-rose-400">{data.aiProctor.stats?.critical ?? 0}</b>
+                </div>
+              </div>
+              <p className="text-xs text-slate-300">
+                {data.aiProctor.summary}
+              </p>
+            </div>
+          )}
+
           {/* Quick Live Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-800/80 text-xs">
             <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
@@ -691,7 +720,18 @@ export default function ProktorPage() {
                           {peserta.username}
                         </td>
                         <td className="py-3 px-4">
-                          <span className="font-bold text-white block">{peserta.name}</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-white block">{peserta.name}</span>
+                            {peserta.threatLevel && peserta.threatLevel !== 'LOW' && (
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                peserta.threatLevel === 'CRITICAL'
+                                  ? 'bg-rose-500/25 text-rose-300 border border-rose-500/40 animate-pulse'
+                                  : 'bg-amber-500/25 text-amber-300 border border-amber-500/40'
+                              }`} title={peserta.aiRekomendasi || 'Anomali AI'}>
+                                AI: {peserta.threatLevel} ({peserta.riskScore}%)
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[11px] text-slate-500 font-mono">@{peserta.username}</span>
                         </td>
                         <td className="py-3 px-4 text-slate-300">{peserta.kelas || '-'}</td>

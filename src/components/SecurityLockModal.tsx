@@ -100,9 +100,9 @@ export function SecurityLockModal({
           <div className="flex items-start gap-2 sm:gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <b className="text-slate-900 text-xs">3. Larangan Pelanggaran (1x Langsung Terkunci):</b>
+              <b className="text-slate-900 text-xs">3. Batas Pelanggaran (Maksimal 10x):</b>
               <span className="text-slate-500 block text-[11px] mt-0.5">
-                Setelah masa adaptasi 5 detik berakhir, jika berpindah tab, berpindah aplikasi, atau keluar fullscreen, sistem akan <b>langsung mengunci otomatis</b> lembar ujian Anda tanpa toleransi dan wajib dibuka oleh pengawas/proktor.
+                Sistem memberikan batas toleransi hingga <b>10 kali pelanggaran</b> (berpindah tab, berganti aplikasi, atau keluar dari layar penuh). Jika akumulasi pelanggaran mencapai 10 kali, lembar ujian akan <b>otomatis terkunci</b> dan wajib dibuka oleh pengawas/proktor.
               </span>
             </div>
           </div>

@@ -147,7 +147,7 @@ body {
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   transition: background-color 0.2s ease, color 0.2s ease;
   overflow-x: hidden;
-  touch-action: manipulation;
+  touch-action: pan-y pinch-zoom;
 }
 
 /* =========================================================================
@@ -366,6 +366,58 @@ bdi,
   color: inherit;
   font-size: 1.08em;
   text-rendering: auto;
+  line-height: normal;
+}
+
+/* Proteksi Krusial Simbol Akar & Tanda Matematika KaTeX: Jangan terpotong atau gepeng oleh aturan global svg/box-sizing */
+.katex .sqrt {
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
+}
+
+.katex .sqrt > .root {
+  margin-left: 0.27777778em;
+  margin-right: -0.55555556em;
+}
+
+.katex svg {
+  max-width: none !important;
+  fill: currentColor !important;
+  stroke: currentColor !important;
+  display: block !important;
+  position: absolute !important;
+  overflow: visible !important;
+  box-sizing: content-box !important;
+}
+
+.katex svg path {
+  stroke: none !important;
+  fill: currentColor !important;
+}
+
+.katex .hide-tail {
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+.katex .svg-align {
+  text-align: left !important;
+}
+
+.katex-html {
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+.katex-display {
+  display: block;
+  margin: 0.75em 0;
+  text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .dark .katex {
@@ -385,6 +437,33 @@ bdi,
 .dark .katex .mpunct,
 .dark .katex .minner {
   color: #f1f5f9 !important;
+}
+
+/* Reset & Hapus semua frame border / box-border di dalam konten soal dan opsi jawaban */
+.prose,
+.prose * {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background-color: transparent !important;
+}
+
+/* Biarkan gambar soal bersih tanpa border, frame, atau background */
+.prose img,
+.prose video,
+.prose iframe {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  border-radius: 0.5rem;
+}
+
+/* Pastikan KaTeX tidak terpengaruh border reset dan simbol akar tetap utuh */
+.prose .katex,
+.prose .katex-html {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* Rich MathRenderer Content Styling */
@@ -423,7 +502,8 @@ h1, h2, h3, h4, h5, h6, p {
   overflow-wrap: break-word;
 }
 
-img, svg, video, canvas, audio, iframe, embed, object {
+/* Terapkan max-width pada gambar/media tetapi jangan merusak SVG internal matematika KaTeX */
+img, video, canvas, audio, iframe, embed, object, svg:not(.katex svg):not(.katex-html svg):not([preserveAspectRatio]) {
   max-width: 100%;
 }
 
@@ -443,11 +523,11 @@ img {
 @media screen and (max-width: 768px) {
   html, body {
     -webkit-tap-highlight-color: transparent;
-    overscroll-behavior-y: contain;
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
     touch-action: pan-y pinch-zoom;
     -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
   }
 
   /* Optimalisasi form & input pada Android WebView */

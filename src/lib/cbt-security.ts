@@ -50,7 +50,10 @@ export function detectDeviceSecurityInfo(): DeviceSecurityInfo {
 
   const hasDisplayMedia = Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function');
   
-  // Deteksi Fullscreen API: Catatan khusus iPhone Safari tidak mendukung requestFullscreen pada documentElement (hanya iPadOS & Mac)
+  // Deteksi Fullscreen API:
+  // Catatan: Pada smartphone mobile (Android phone & iPhone), Fullscreen DOM Element API sangat tidak stabil,
+  // sering memicu resize jitter, keyboard virtual menutup fullscreen otomatis, serta statusbar browser memicu status false.
+  // Hanya desktop PC/laptop dan tablet (iPadOS/Android Tablet) yang memberlakukan mode Fullscreen API kaku.
   const doc: any = typeof document !== 'undefined' ? document : {};
   const hasNativeFullscreen = Boolean(
     doc.fullscreenEnabled ||
@@ -58,8 +61,8 @@ export function detectDeviceSecurityInfo(): DeviceSecurityInfo {
     doc.mozFullScreenEnabled ||
     doc.msFullscreenEnabled
   );
-  // iPhone Safari secara sengaja menonaktifkan Fullscreen API untuk DOM element, tetapi tetap mendukung viewport lock
-  const hasFullscreen = Boolean(hasNativeFullscreen && !isIOS);
+  // Fullscreen ketat hanya diaktifkan untuk perangkat non-mobile (Desktop/Laptop dan Tablet)
+  const hasFullscreen = Boolean(hasNativeFullscreen && !isMobile);
 
   let deviceName = 'Desktop PC / Laptop';
   if (isIOS) {

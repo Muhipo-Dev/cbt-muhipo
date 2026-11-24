@@ -283,12 +283,6 @@ export default function SiswaPortalPage() {
               <span>No. Peserta: <b className="text-blue-600 dark:text-blue-400 font-mono font-bold">{siswa?.nomorPeserta || siswa?.username || '-'}</b></span>
               <span>•</span>
               <span>Kelas: <b className="text-slate-800 dark:text-slate-200 font-semibold">{siswa?.kelas?.nama || siswa?.kelas || '-'}</b></span>
-              {siswa?.ruangUjian && (
-                <>
-                  <span>•</span>
-                  <span>Ruang: <b className="text-slate-800 dark:text-slate-200 font-semibold">{siswa.ruangUjian}</b></span>
-                </>
-              )}
             </div>
           </div>
         </div>
@@ -309,21 +303,21 @@ export default function SiswaPortalPage() {
         )}
 
         {/* Peringatan Pengawasan CBT Ringkas & Elegan */}
-        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-3 sm:py-3 sm:px-4.5 shadow-xs backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-              <ShieldAlert className="w-4 h-4" />
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-3 sm:py-3 sm:px-4.5 shadow-xs backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+              <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
-            <div className="text-xs text-slate-700 dark:text-slate-300 min-w-0 leading-relaxed">
-              <span className="font-bold text-amber-900 dark:text-amber-200 mr-1.5">
-                Peringatan!!
+            <div className="text-[11px] sm:text-xs text-slate-700 dark:text-slate-300 min-w-0 leading-relaxed">
+              <span className="font-bold text-amber-900 dark:text-amber-200 mr-1">
+                Peringatan!
               </span>
               <span>
-                Dilarang keluar dari aplikasi ujian. Akun akan <b>otomatis langsung terkunci</b> jika terjadi <b>1 kali pelanggaran</b> (berpindah aplikasi / keluar fullscreen).
+                Dilarang keluar dari lembar ujian. Ujian akan <b>langsung terkunci</b> jika berpindah tab/aplikasi.
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2 w-full md:w-auto shrink-0 justify-between md:justify-end">
+          <div className="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end pt-1 md:pt-0 border-t md:border-t-0 border-amber-500/15">
             <a
               href="/api/seb/config"
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-[11px] font-bold text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition shadow-2xs"
