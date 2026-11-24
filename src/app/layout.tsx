@@ -57,7 +57,7 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
-                  var CBT_BUILD_VERSION = 'cbt-katex-v2.2-clean';
+                  var CBT_BUILD_VERSION = 'cbt-katex-v2.5-fixed';
                   var cachedVer = localStorage.getItem('cbt_client_cache_ver');
                   if (cachedVer !== CBT_BUILD_VERSION) {
                     if ('caches' in window) {

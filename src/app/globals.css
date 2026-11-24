@@ -361,69 +361,11 @@ bdi,
   background: rgba(148, 163, 184, 0.7);
 }
 
-/* KaTeX & Math Formula High-Contrast Styling untuk Dark & Light Mode */
+/* KaTeX & Math Formula Styling:
+   Gunakan 100% spesifikasi murni KaTeX bawaan dari katex.min.css.
+   Hanya berikan penyesuaian warna inheren dan overflow scroll untuk display block formula panjang. */
 .katex {
-  color: inherit;
-  font-size: 1.08em;
   text-rendering: auto;
-  line-height: normal;
-}
-
-/* Proteksi Universal Simbol Matematika KaTeX (Akar, Pecahan, Integral, Matriks, Limit, Simbol Yunani, Operator) */
-.katex svg {
-  max-width: none !important;
-  fill: currentColor !important;
-  stroke: currentColor !important;
-  display: block !important;
-  position: absolute !important;
-  height: inherit !important;
-  width: 100% !important;
-}
-
-.katex svg path {
-  stroke: none !important;
-  fill: currentColor !important;
-}
-
-/* Proteksi simbol akar kuadrat (\sqrt) */
-.katex .sqrt {
-  position: relative;
-  display: inline-block;
-}
-
-.katex .hide-tail {
-  overflow: hidden !important;
-  position: relative !important;
-  width: 100% !important;
-}
-
-.katex .vlist-t {
-  display: inline-table !important;
-  border-collapse: collapse !important;
-}
-
-.katex .vlist-r {
-  display: table-row !important;
-}
-
-.katex .vlist {
-  display: table-cell !important;
-  vertical-align: bottom !important;
-  position: relative !important;
-}
-
-/* Pastikan garis pecahan (\frac) dan garis atap/overline KaTeX selalu tegas dan tampak */
-.katex .mfrac .frac-line,
-.katex .katex-overline .overline-line,
-.katex .katex-underline .underline-line,
-.katex .katex-rule {
-  border-bottom-color: currentColor !important;
-  border-bottom-width: 0.04em !important;
-}
-
-.katex-html {
-  /* Jangan batasi overflow pada .katex-html agar SVG akar memanjang 400em tidak terpotong */
-  vertical-align: middle;
 }
 
 .katex-display {
@@ -437,35 +379,12 @@ bdi,
   -webkit-overflow-scrolling: touch;
 }
 
-/* Responsif Mobile & Touch UX untuk KaTeX & Math Formula:
-   - Mencegah formula panjang (matriks, pecahan panjang, persamaan aljabar) merusak layout grid/card mobile
-   - Izinkan formula inline membungkus (wrap) secara fleksibel pada viewport sempit tanpa memotong akar
-*/
-.prose .katex-display {
-  padding: 0.5rem 0.25rem;
-}
-
-@media screen and (max-width: 640px) {
-  .katex {
-    font-size: 1.02em;
-  }
-  .katex-display {
-    font-size: 0.95em;
-    margin: 0.5em 0;
-  }
-}
-
 .dark .katex {
-  color: #f1f5f9 !important;
+  color: #f1f5f9;
 }
 
 .dark .katex-display {
-  color: #f8fafc !important;
-}
-
-.dark .katex * {
-  color: #f1f5f9 !important;
-  border-color: #f1f5f9 !important;
+  color: #f8fafc;
 }
 
 /* Reset & Hapus semua frame border / box-border di dalam konten soal dan opsi jawaban,
@@ -531,8 +450,8 @@ h1, h2, h3, h4, h5, h6, p {
   overflow-wrap: break-word;
 }
 
-/* Terapkan max-width pada gambar/media tetapi jangan merusak SVG internal matematika KaTeX */
-img, video, canvas, audio, iframe, embed, object, svg:not(.katex svg):not(.katex-html svg):not([preserveAspectRatio]) {
+/* Terapkan max-width pada gambar/media tetapi jangan pernah menyentuh elemen matematika KaTeX */
+img, video, canvas, audio, iframe, embed, object, svg:not(.katex *):not([preserveAspectRatio]) {
   max-width: 100%;
 }
 

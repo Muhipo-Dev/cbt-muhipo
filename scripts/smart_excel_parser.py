@@ -75,8 +75,6 @@ def normalize_math_katex(text):
         segments[i] = seg
     t = ''.join(segments)
 
-    # 6. Bersihkan $ yang berdempetan
-    t = re.sub(r'\$\s*\$', '', t)
     return t
 
 def parse_zyacbt_or_muhipo(rows):

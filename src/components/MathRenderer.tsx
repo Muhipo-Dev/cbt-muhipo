@@ -80,15 +80,14 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
     }
     processed = mathSegments.join('');
 
-    // Gabungkan $...$ yang bersentuhan atau bersebelahan: misal $\frac{1}{4}$$\sqrt{14}$ -> $\frac{1}{4}\sqrt{14}$
-    processed = processed.replace(/\$\s*\$/g, '');
-
     // 1. Ganti block math $$...$$
     let formatted = processed.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => {
       try {
         return katex.renderToString(math.trim(), {
           displayMode: true,
           throwOnError: false,
+          output: 'html',
+          trust: true,
         });
       } catch (err) {
         return `$$${math}$$`;
@@ -101,6 +100,8 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
         return katex.renderToString(math.trim(), {
           displayMode: false,
           throwOnError: false,
+          output: 'html',
+          trust: true,
         });
       } catch (err) {
         return `$${math}$`;

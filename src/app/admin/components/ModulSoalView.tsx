@@ -1657,7 +1657,13 @@ export function ModulSoalView({
                 </span>
                 <div className="p-2 bg-white dark:bg-slate-900 rounded border border-indigo-100 dark:border-indigo-900/50 min-h-[40px] flex items-center justify-center text-sm">
                   {customKatexInput.trim() ? (
-                    <MathRenderer content={`$$${customKatexInput}$$`} />
+                    <MathRenderer
+                      content={
+                        customKatexInput.trim().startsWith('$')
+                          ? customKatexInput.trim()
+                          : `$$${customKatexInput.trim()}$$`
+                      }
+                    />
                   ) : (
                     <span className="text-xs text-slate-400 italic">Rumus akan muncul di sini...</span>
                   )}
