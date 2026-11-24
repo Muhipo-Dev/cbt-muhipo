@@ -15,20 +15,25 @@ import {
 
 export interface ExambroDetectionInfo {
   isExambro: boolean;
+  isAndroidWebView: boolean;
+  isStandalonePWA: boolean;
   bridgeName: string | null;
   userAgent: string;
 }
 
 /**
- * Deteksi apakah halaman dibuka di dalam aplikasi Android CBT Exambro
+ * Deteksi apakah halaman dibuka di dalam aplikasi Android CBT Exambro atau Android WebView
  */
 export function detectExambroApp(): ExambroDetectionInfo {
   if (typeof window === 'undefined') {
-    return { isExambro: false, bridgeName: null, userAgent: '' };
+    return { isExambro: false, isAndroidWebView: false, isStandalonePWA: false, bridgeName: null, userAgent: '' };
   }
 
   const ua = navigator.userAgent || '';
   const isExambroUA = /Exambro|ExamBrowser|CBTExambro|Examora|FlyExam|CandyExambro|MuhipoExambro|SafeExam/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  const isAndroidWebView = isAndroid && (/wv|\.0\.0\.0|Version\/[0-9.]+/i.test(ua) || !/Chrome\/[.0-9]+ Mobile/i.test(ua));
+  const isStandalonePWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
 
   const w = window as any;
   let bridgeName: string | null = null;
@@ -49,6 +54,8 @@ export function detectExambroApp(): ExambroDetectionInfo {
 
   return {
     isExambro,
+    isAndroidWebView,
+    isStandalonePWA,
     bridgeName,
     userAgent: ua,
   };
