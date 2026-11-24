@@ -506,20 +506,51 @@ export default function LembarUjianPage({
       }
     };
 
-    // 7. Context Menu & Copy Prevention
-    const handleContextMenu = (e: MouseEvent) => {
+    // 7. Context Menu, Copy, Cut, Paste, Drag & Selection Prevention
+    const handleContextMenu = (e: MouseEvent | TouchEvent) => {
       e.preventDefault();
       cbtSecurityAudio.playWarningBuzzer();
     };
 
-    const handleCopy = (e: ClipboardEvent) => {
+    const handleCopyCutPaste = (e: ClipboardEvent) => {
       e.preventDefault();
+      cbtSecurityAudio.playWarningBuzzer();
+    };
+
+    const handleSelectStart = (e: Event) => {
+      // Izinkan pemilihan teks hanya di dalam area input / textarea pengerjaan esai
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
+      e.preventDefault();
+    };
+
+    // 8. Mobile App Lifecycle & Split-Screen / App-Switch Detection
+    // Menangkap perpindahan aplikasi saat notification shade ditarik atau multi-window diaktifkan
+    const handleWindowFocusChange = () => {
+      if (document.hidden) {
+        dispatchAreaViolation(
+          'TAB_SWITCH_ALERT',
+          'Siswa berpindah tab / aplikasi browser mobile',
+          'Peringatan! Dilarang meninggalkan layar ujian!'
+        );
+      }
+    };
+
+    // Mencegah pull-down refresh gesture di Android Chrome / Safari yang bisa memicu reload
+    const handleTouchMove = (e: TouchEvent) => {
+      // Jika scroll berada di paling atas dan mencoba menarik ke bawah
+      if (window.scrollY === 0 && e.touches[0].clientY > 0) {
+        // biarkan browser menangani scroll biasa kecuali pull-to-refresh
+      }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('focus', handleWindowFocusChange);
     document.addEventListener('click', handleDocumentClickToFullscreen, { capture: true });
     document.addEventListener('mouseleave', handleMouseLeave);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -527,7 +558,10 @@ export default function LembarUjianPage({
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     document.addEventListener('MSFullscreenChange', handleFullscreenChange);
     window.addEventListener('contextmenu', handleContextMenu);
-    window.addEventListener('copy', handleCopy);
+    window.addEventListener('copy', handleCopyCutPaste);
+    window.addEventListener('cut', handleCopyCutPaste);
+    window.addEventListener('paste', handleCopyCutPaste);
+    document.addEventListener('selectstart', handleSelectStart);
 
     return () => {
       if (pendingViolationTimer) clearTimeout(pendingViolationTimer);
@@ -537,6 +571,7 @@ export default function LembarUjianPage({
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('focus', handleWindowFocusChange);
       document.removeEventListener('click', handleDocumentClickToFullscreen, { capture: true });
       document.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
@@ -544,7 +579,10 @@ export default function LembarUjianPage({
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
       window.removeEventListener('contextmenu', handleContextMenu);
-      window.removeEventListener('copy', handleCopy);
+      window.removeEventListener('copy', handleCopyCutPaste);
+      window.removeEventListener('cut', handleCopyCutPaste);
+      window.removeEventListener('paste', handleCopyCutPaste);
+      document.removeEventListener('selectstart', handleSelectStart);
     };
   }, [isSecurityUnlocked, pesertaUjianId, ujianInfo]);
 
@@ -1103,8 +1141,8 @@ export default function LembarUjianPage({
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col justify-between">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-xs dark:shadow-xl space-y-4 sm:space-y-5">
+      <main className="flex-1 max-w-5xl w-full mx-auto p-2.5 sm:p-5 lg:p-6 pb-20 sm:pb-6 flex flex-col justify-between">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-2xl sm:rounded-3xl p-3.5 sm:p-7 shadow-xs dark:shadow-xl space-y-4 sm:space-y-5 select-none -webkit-user-select-none">
           {/* Question Audio Player (Jika tipe listening) */}
           {currentSoal.mediaAudio && (
             <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3">
@@ -1356,8 +1394,8 @@ export default function LembarUjianPage({
           )}
         </div>
 
-        {/* Bottom Navigation Toolbar (Compact & Ergonomis di Android & Desktop) */}
-        <div className="fixed sm:static bottom-0 left-0 right-0 z-20 sm:mt-4 flex items-center justify-between gap-2 bg-white/95 dark:bg-slate-900/95 sm:bg-white sm:dark:bg-slate-900 border-t sm:border border-slate-200/90 dark:border-white/10 p-2 sm:p-3 sm:rounded-2xl shadow-lg sm:shadow-xs dark:shadow-xl backdrop-blur-md safe-area-bottom">
+        {/* Bottom Navigation Toolbar (Compact & Ergonomis di Android, iOS Safari & Desktop) */}
+        <div className="fixed sm:static bottom-0 left-0 right-0 z-30 sm:mt-4 flex items-center justify-between gap-2 bg-white/95 dark:bg-slate-900/95 sm:bg-white sm:dark:bg-slate-900 border-t sm:border border-slate-200/90 dark:border-white/10 px-3 py-2.5 sm:p-3 sm:rounded-2xl shadow-lg sm:shadow-xs dark:shadow-xl backdrop-blur-md pb-[max(0.625rem,env(safe-area-inset-bottom))]">
           {/* Tombol Sebelumnya */}
           <button
             type="button"
@@ -1408,9 +1446,9 @@ export default function LembarUjianPage({
 
       {/* Grid Nomor Soal Drawer / Modal */}
       {showNavGrid && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/10 pb-3">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-6 sm:zoom-in duration-200 max-h-[85vh] flex flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/10 pb-3 shrink-0">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Grid className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 Navigasi Nomor Soal Ujian
@@ -1424,7 +1462,7 @@ export default function LembarUjianPage({
             </div>
 
             {/* Grid Soal */}
-            <div className="grid grid-cols-5 sm:grid-cols-6 gap-2.5 max-h-72 overflow-y-auto p-1 custom-scrollbar">
+            <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-2.5 overflow-y-auto p-1 custom-scrollbar flex-1">
               {soalList.map((s, idx) => {
                 const j = jawabanMap[s.id];
                 const isAnswered = Boolean(j?.jawabanDipilih);
