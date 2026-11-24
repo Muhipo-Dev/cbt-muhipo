@@ -134,17 +134,29 @@ export function convertEquationToKatex(text: string | null | undefined): string 
   }
 
   // 2. Deteksi format LaTeX yang belum dibungkus tanda $
-  // Contoh: \frac{a}{b}, \sqrt{x}, \sum_{i=1}^{n}, \int_{0}^{\pi}, \begin{matrix}
-  const rawLatexRegex = /(?:\\(?:frac|sqrt|sum|int|lim|prod|alpha|beta|gamma|delta|theta|pi|sigma|omega|Delta|Omega|times|div|pm|le|ge|neq|approx|infty|cdot|deg|circ|mathbf|mathrm|text|left|right|begin)\{[^}]*\})+/g;
-  
-  // Jika ada raw \frac{...}{...} tanpa $
-  str = str.replace(/(\\(?:frac|sqrt|sum|int|lim|prod|left|right)\{[^{}]*\}(?:\{[^{}]*\})?)/g, (match, p1, offset, full) => {
-    // Cek apakah sudah di dalam $...$
-    const before = full.substring(0, offset);
-    const dollarCount = (before.match(/\$/g) || []).length;
-    if (dollarCount % 2 !== 0) return match; // Sudah di dalam math block
-    return `$${match}$`;
-  });
+  // Format pecahan biasa yang berdampingan dengan akar: 1/4 √14 -> $\frac{1}{4}\sqrt{14}$
+  str = str.replace(/(\d+)\/(\d+)\s*(\$\sqrt\{[^}]+\}\$|\sqrt\{[^}]+\})/g, '$\frac{$1}{$2}$3$');
+
+  // Segmented LaTeX Auto-Wrapper: Proses bagian di luar tanda $...$ agar ekspresi majemuk seperti \frac{1}{4}\sqrt{14} otomatis dibungkus utuh
+  const mathSegments = str.split(/(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)/g);
+  for (let i = 0; i < mathSegments.length; i += 2) {
+    let segment = mathSegments[i];
+    if (!segment) continue;
+
+    // Rapikan \sqrt 14 -> \sqrt{14}
+    segment = segment.replace(/\\sqrt\s+([0-9a-zA-Z]+)/g, '\\sqrt{$1}');
+
+    // Tangani ekspresi LaTeX majemuk atau tunggal (misal: \frac{1}{4}\sqrt{14}, \sqrt{14}, \frac{a}{b})
+    segment = segment.replace(/(\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{[^{}]*\}|[a-zA-Z0-9\+\-\*/\=\(\)\,\s\\])*)/g, (match) => {
+      return '$' + match.trim() + '$';
+    });
+
+    mathSegments[i] = segment;
+  }
+  str = mathSegments.join('');
+
+  // Gabungkan $...$ yang bersentuhan atau bersebelahan: misal $\frac{1}{4}$$\sqrt{14}$ -> $\frac{1}{4}\sqrt{14}$
+  str = str.replace(/\$\s*\$/g, '');
 
   // 3. Konversi format Microsoft Excel SQRT / Pangkat
   // =SQRT(x) atau SQRT(x) -> \sqrt{x}
@@ -152,16 +164,19 @@ export function convertEquationToKatex(text: string | null | undefined): string 
   // =POWER(x, y) atau POWER(x, y) -> x^{y}
   str = str.replace(/(?:=|\b)POWER\(([^,]+),\s*([^)]+)\)/gi, '${$1}^{$2}$');
 
-  // 4. Konversi Unicode Akar: √(expr), √x, ∛x, ∜x, √{x}
-  str = str.replace(/√\s*\{([^}]+)\}/g, '$\\sqrt{$1}$');
-  str = str.replace(/√\s*\(([^)]+)\)/g, '$\\sqrt{$1}$');
-  str = str.replace(/√\s*([a-zA-Z0-9]+)/g, '$\\sqrt{$1}$');
+  // 4. Konversi Unicode Akar: akar pangkat n (3√8, 3√(x), ∛x, ∜x) & akar kuadrat (√14, √x, √(x+y))
+  str = str.replace(/(?<![\$\\\w])([0-9a-zA-Z]+)√\s*\{([^}]+)\}/g, '$\\sqrt[$1]{$2}$');
+  str = str.replace(/(?<![\$\\\w])([0-9a-zA-Z]+)√\s*\(([^)]+)\)/g, '$\\sqrt[$1]{$2}$');
+  str = str.replace(/(?<![\$\\\w])([0-9a-zA-Z]+)√\s*([0-9a-zA-Z]+)/g, '$\\sqrt[$1]{$2}$');
   str = str.replace(/∛\s*\{([^}]+)\}/g, '$\\sqrt[3]{$1}$');
   str = str.replace(/∛\s*\(([^)]+)\)/g, '$\\sqrt[3]{$1}$');
   str = str.replace(/∛\s*([a-zA-Z0-9]+)/g, '$\\sqrt[3]{$1}$');
   str = str.replace(/∜\s*\{([^}]+)\}/g, '$\\sqrt[4]{$1}$');
   str = str.replace(/∜\s*\(([^)]+)\)/g, '$\\sqrt[4]{$1}$');
   str = str.replace(/∜\s*([a-zA-Z0-9]+)/g, '$\\sqrt[4]{$1}$');
+  str = str.replace(/(?<![\$\\\w])√\s*\{([^}]+)\}/g, '$\\sqrt{$1}$');
+  str = str.replace(/(?<![\$\\\w])√\s*\(([^)]+)\)/g, '$\\sqrt{$1}$');
+  str = str.replace(/(?<![\$\\\w])√\s*([a-zA-Z0-9]+)/g, '$\\sqrt{$1}$');
 
   // 5. Konversi Pecahan Unicode: ½, ⅓, ⅔, ¼, ¾, dsb.
   Object.entries(FRACTION_MAP).forEach(([char, latex]) => {

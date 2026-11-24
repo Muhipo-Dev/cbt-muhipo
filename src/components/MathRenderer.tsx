@@ -30,18 +30,45 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
     processed = processed.replace(/\\\s+sqrt/g, '\\sqrt');
     processed = processed.replace(/\\\s+frac/g, '\\frac');
 
-    // Ubah simbol akar Unicode mentah di luar tag HTML: √14 -> $\sqrt{14}$, √(x+y) -> $\sqrt{x+y}$
-    processed = processed.replace(/(?<![\$\\])√\s*\(([^)]+)\)/g, '$\\sqrt{$1}$');
-    processed = processed.replace(/(?<![\$\\])√\s*([0-9a-zA-Z]+)/g, '$\\sqrt{$1}$');
+    // Ubah akar pangkat n: misal 3√8, 3√(x), ∛x, ∜x, √[3]{8}
+    processed = processed.replace(/(?<![\$\\\w])([0-9a-zA-Z]+)√\s*\{([^}]+)\}/g, '$\\sqrt[$1]{$2}$');
+    processed = processed.replace(/(?<![\$\\\w])([0-9a-zA-Z]+)√\s*\(([^)]+)\)/g, '$\\sqrt[$1]{$2}$');
+    processed = processed.replace(/(?<![\$\\\w])([0-9a-zA-Z]+)√\s*([0-9a-zA-Z]+)/g, '$\\sqrt[$1]{$2}$');
+    processed = processed.replace(/∛\s*\{([^}]+)\}/g, '$\\sqrt[3]{$1}$');
+    processed = processed.replace(/∛\s*\(([^)]+)\)/g, '$\\sqrt[3]{$1}$');
+    processed = processed.replace(/∛\s*([0-9a-zA-Z]+)/g, '$\\sqrt[3]{$1}$');
+    processed = processed.replace(/∜\s*\{([^}]+)\}/g, '$\\sqrt[4]{$1}$');
+    processed = processed.replace(/∜\s*\(([^)]+)\)/g, '$\\sqrt[4]{$1}$');
+    processed = processed.replace(/∜\s*([0-9a-zA-Z]+)/g, '$\\sqrt[4]{$1}$');
 
-    // Deteksi jika ada ekspresi \frac atau \sqrt yang belum dibungkus $...$
-    processed = processed.replace(/(?<![\$a-zA-Z0-9_\\])(\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|theta|pi)\b(?:\{[^{}]*\}|\[[^[\]]*\])*)/g, (match, expr, offset, full) => {
-      // Cek apakah match sudah di dalam tanda $...$
-      const prefix = full.substring(0, offset);
-      const dollarCount = (prefix.match(/\$/g) || []).length;
-      if (dollarCount % 2 !== 0) return match; // Sudah berada di dalam $...$
-      return `$${match}$`;
-    });
+    // Ubah simbol akar kuadrat Unicode mentah di luar tag HTML: √14 -> $\sqrt{14}$, √(x+y) -> $\sqrt{x+y}$
+    processed = processed.replace(/(?<![\$\\\w])√\s*\{([^}]+)\}/g, '$\\sqrt{$1}$');
+    processed = processed.replace(/(?<![\$\\\w])√\s*\(([^)]+)\)/g, '$\\sqrt{$1}$');
+    processed = processed.replace(/(?<![\$\\\w])√\s*([0-9a-zA-Z]+)/g, '$\\sqrt{$1}$');
+
+    // Format pecahan biasa yang berdampingan dengan akar: 1/4 √14 -> $\frac{1}{4}\sqrt{14}$
+    processed = processed.replace(/(\d+)\/(\d+)\s*(\$\sqrt\{[^}]+\}\$|\sqrt\{[^}]+\})/g, '$\frac{$1}{$2}$3$');
+
+    // Segmented LaTeX Auto-Wrapper: Proses bagian di luar tanda $...$ agar ekspresi majemuk seperti \frac{1}{4}\sqrt{14} otomatis dibungkus utuh
+    const mathSegments = processed.split(/(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)/g);
+    for (let i = 0; i < mathSegments.length; i += 2) {
+      let segment = mathSegments[i];
+      if (!segment) continue;
+
+      // Rapikan \sqrt 14 -> \sqrt{14}
+      segment = segment.replace(/\\sqrt\s+([0-9a-zA-Z]+)/g, '\\sqrt{$1}');
+
+      // Tangani ekspresi LaTeX majemuk atau tunggal (misal: \frac{1}{4}\sqrt{14}, \sqrt{14}, \frac{a}{b})
+      segment = segment.replace(/(\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{[^{}]*\}|[a-zA-Z0-9\+\-\*/\=\(\)\,\s\\])*)/g, (match) => {
+        return '$' + match.trim() + '$';
+      });
+
+      mathSegments[i] = segment;
+    }
+    processed = mathSegments.join('');
+
+    // Gabungkan $...$ yang bersentuhan atau bersebelahan: misal $\frac{1}{4}$$\sqrt{14}$ -> $\frac{1}{4}\sqrt{14}$
+    processed = processed.replace(/\$\s*\$/g, '');
 
     // 1. Ganti block math $$...$$
     let formatted = processed.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => {

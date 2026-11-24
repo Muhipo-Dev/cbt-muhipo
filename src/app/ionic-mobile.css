@@ -238,13 +238,13 @@
     overflow-wrap: break-word !important;
   }
 
-  /* 6. DATA TABLES & ACTION CONTROLS IN ALL MODULES (Ionic Data Table) */
-  table {
+  /* 6. DATA TABLES & ACTION CONTROLS IN ALL MODULES (Ionic Data Table) - Jangan ganggu tabel internal KaTeX (.mtable, .vlist-t) */
+  table:not(.katex table):not([class*="vlist"]):not([class*="mtable"]) {
     font-size: 0.8125rem !important;
     width: 100% !important;
   }
 
-  th,
+  th:not(.katex th),
   [data-slot="table-head"] {
     padding: 0.625rem 0.75rem !important;
     font-size: 0.6875rem !important;
@@ -257,7 +257,7 @@
     white-space: nowrap !important;
   }
 
-  td,
+  td:not(.katex td),
   [data-slot="table-cell"] {
     padding: 0.75rem !important;
     font-size: 0.8125rem !important;
