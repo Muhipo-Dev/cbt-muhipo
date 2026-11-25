@@ -116,6 +116,16 @@ export async function GET(request: NextRequest) {
       const isStarted = scheduledStart ? now >= scheduledStart : true;
       const isEnded = scheduledEnd ? now > scheduledEnd : false;
 
+      // Cek apakah sudah lewat toleransi kompensasi 15 menit untuk siswa yang belum mulai
+      const batasKompensasiMs = 15 * 60 * 1000;
+      const batasAkhirMasuk = scheduledStart ? new Date(scheduledStart.getTime() + batasKompensasiMs) : null;
+      const isLewatKompensasi = Boolean(
+        scheduledStart &&
+        batasAkhirMasuk &&
+        statusPeserta === 'BELUM_MULAI' &&
+        now > batasAkhirMasuk
+      );
+
       // Status waktu & kesiapan
       const isMulaiHariIni = scheduledStart ? scheduledStart >= startOfToday && scheduledStart <= endOfToday : false;
       const isSedangBerlangsungHariIni = scheduledStart && scheduledEnd
@@ -126,7 +136,7 @@ export async function GET(request: NextRequest) {
       const isFuture = scheduledStart ? scheduledStart > now : false;
       const isPast = (scheduledEnd ? now > scheduledEnd : false) || isArchived;
       
-      const isReady = isStarted && !isEnded && !isArchived && statusPeserta !== 'SELESAI';
+      const isReady = isStarted && !isEnded && !isArchived && !isLewatKompensasi && statusPeserta !== 'SELESAI';
       const isWorking = statusPeserta === 'SEDANG_MENGERJAKAN';
       const isFinished = statusPeserta === 'SELESAI';
       const isArsip = isArchived || isPast || (isFinished && isPast);
@@ -154,6 +164,7 @@ export async function GET(request: NextRequest) {
         waktuSelesai: u.waktuSelesai,
         statusUjian: u.status,
         statusPeserta,
+        isLewatKompensasi,
         nilaiPG: p?.nilaiPG != null ? Number(Number(p.nilaiPG).toFixed(2)) : null,
         nilaiEsai: p?.nilaiEsai != null ? Number(Number(p.nilaiEsai).toFixed(2)) : null,
         nilaiTotal: p?.nilaiTotal != null ? Number(Number(p.nilaiTotal).toFixed(2)) : null,

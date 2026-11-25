@@ -1316,6 +1316,29 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, message: 'Pilih Topik / Mata Pelajaran untuk tes ini' }, { status: 400 });
       }
 
+      const durasiNum = Number(durasiMenit) || 90;
+      if (durasiNum <= 0) {
+        return NextResponse.json({ success: false, message: 'Durasi ujian harus lebih besar dari 0 menit.' }, { status: 400 });
+      }
+
+      if (waktuMulai && waktuSelesai) {
+        const startDt = new Date(waktuMulai);
+        const endDt = new Date(waktuSelesai);
+        if (isNaN(startDt.getTime()) || isNaN(endDt.getTime())) {
+          return NextResponse.json({ success: false, message: 'Format waktu mulai atau selesai tidak valid.' }, { status: 400 });
+        }
+        if (endDt <= startDt) {
+          return NextResponse.json({ success: false, message: 'Jadwal waktu selesai harus setelah waktu mulai.' }, { status: 400 });
+        }
+        const rentangMenit = Math.floor((endDt.getTime() - startDt.getTime()) / (1000 * 60));
+        if (rentangMenit < durasiNum) {
+          return NextResponse.json({
+            success: false,
+            message: `Waktu tidak sinkron! Rentang jadwal ujian (${rentangMenit} menit) lebih kecil dari durasi pengerjaan yang ditentukan (${durasiNum} menit). Jadwal selesai minimal harus ${durasiNum} menit setelah waktu mulai.`,
+          }, { status: 400 });
+        }
+      }
+
       const generatedToken = (token || generateRandomToken()).toUpperCase().trim();
 
       const newUjian = await prisma.ujian.create({
@@ -1403,6 +1426,35 @@ export async function POST(request: NextRequest) {
       } = body;
 
       const targetMapelId = mataPelajaranId || bankSoalId;
+
+      const existingUjian = await prisma.ujian.findUnique({ where: { id: ujianId } });
+      if (!existingUjian) {
+        return NextResponse.json({ success: false, message: 'Data ujian tidak ditemukan.' }, { status: 404 });
+      }
+
+      const finalDurasi = durasiMenit ? Number(durasiMenit) : existingUjian.durasiMenit;
+      const finalWaktuMulai = waktuMulai ? new Date(waktuMulai) : existingUjian.waktuMulai;
+      const finalWaktuSelesai = waktuSelesai ? new Date(waktuSelesai) : existingUjian.waktuSelesai;
+
+      if (finalDurasi <= 0) {
+        return NextResponse.json({ success: false, message: 'Durasi ujian harus lebih besar dari 0 menit.' }, { status: 400 });
+      }
+
+      if (finalWaktuMulai && finalWaktuSelesai) {
+        if (isNaN(finalWaktuMulai.getTime()) || isNaN(finalWaktuSelesai.getTime())) {
+          return NextResponse.json({ success: false, message: 'Format waktu mulai atau selesai tidak valid.' }, { status: 400 });
+        }
+        if (finalWaktuSelesai <= finalWaktuMulai) {
+          return NextResponse.json({ success: false, message: 'Jadwal waktu selesai harus setelah waktu mulai.' }, { status: 400 });
+        }
+        const rentangMenit = Math.floor((finalWaktuSelesai.getTime() - finalWaktuMulai.getTime()) / (1000 * 60));
+        if (rentangMenit < finalDurasi) {
+          return NextResponse.json({
+            success: false,
+            message: `Waktu tidak sinkron! Rentang jadwal ujian (${rentangMenit} menit) lebih kecil dari durasi pengerjaan yang ditentukan (${finalDurasi} menit). Jadwal selesai minimal harus ${finalDurasi} menit setelah waktu mulai.`,
+          }, { status: 400 });
+        }
+      }
 
       const updated = await prisma.ujian.update({
         where: { id: ujianId },

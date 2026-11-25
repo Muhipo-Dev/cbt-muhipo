@@ -494,6 +494,28 @@ export async function POST(request: NextRequest) {
       const examTitle = judul || `Ujian: ${mapel.nama}`;
       const duration = Number(durasiMenit) || mapel.durasiMenit || 90;
 
+      if (duration <= 0) {
+        return NextResponse.json({ success: false, message: 'Durasi ujian harus lebih besar dari 0 menit.' }, { status: 400 });
+      }
+
+      if (waktuMulai && waktuSelesai) {
+        const startDt = new Date(waktuMulai);
+        const endDt = new Date(waktuSelesai);
+        if (isNaN(startDt.getTime()) || isNaN(endDt.getTime())) {
+          return NextResponse.json({ success: false, message: 'Format waktu mulai atau selesai tidak valid.' }, { status: 400 });
+        }
+        if (endDt <= startDt) {
+          return NextResponse.json({ success: false, message: 'Jadwal waktu selesai harus setelah waktu mulai.' }, { status: 400 });
+        }
+        const rentangMenit = Math.floor((endDt.getTime() - startDt.getTime()) / (1000 * 60));
+        if (rentangMenit < duration) {
+          return NextResponse.json({
+            success: false,
+            message: `Waktu tidak sinkron! Rentang jadwal ujian (${rentangMenit} menit) lebih kecil dari durasi pengerjaan yang ditentukan (${duration} menit). Jadwal selesai minimal harus ${duration} menit setelah waktu mulai.`,
+          }, { status: 400 });
+        }
+      }
+
       const newUjian = await prisma.ujian.create({
         data: {
           kodeUjian: generatedKode,

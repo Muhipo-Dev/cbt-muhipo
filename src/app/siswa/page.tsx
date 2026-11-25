@@ -413,6 +413,12 @@ export default function SiswaPortalPage() {
                   const now = new Date();
                   const isNotStartedYet = scheduledStart ? now < scheduledStart : false;
                   const isExpired = scheduledEnd ? now > scheduledEnd : false;
+                  const isLewatKompensasi = Boolean(
+                    ujian.isLewatKompensasi ||
+                    (scheduledStart &&
+                      ujian.statusPeserta === 'BELUM_MULAI' &&
+                      now.getTime() > scheduledStart.getTime() + 15 * 60 * 1000)
+                  );
 
                   // Format date & time
                   const dateStartStr = scheduledStart
@@ -463,6 +469,8 @@ export default function SiswaPortalPage() {
                                 ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
                                 : isExpired
                                 ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
+                                : isLewatKompensasi
+                                ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
                                 : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30'
                             }`}
                           >
@@ -474,6 +482,8 @@ export default function SiswaPortalPage() {
                               ? 'BELUM DIBUKA'
                               : isExpired
                               ? 'WAKTU HABIS'
+                              : isLewatKompensasi
+                              ? 'LEWAT KOMPENSASI'
                               : 'SIAP DIKERJAKAN'}
                           </span>
                         </div>
@@ -589,6 +599,10 @@ export default function SiswaPortalPage() {
                         ) : isExpired ? (
                           <div className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
                             Jadwal Ujian Telah Berakhir
+                          </div>
+                        ) : isLewatKompensasi ? (
+                          <div className="w-full py-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 text-center text-xs font-semibold text-rose-600 dark:text-rose-400">
+                            Batas Masuk (15 Menit) Telah Habis
                           </div>
                         ) : (
                           <button

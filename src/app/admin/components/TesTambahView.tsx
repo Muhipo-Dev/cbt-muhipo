@@ -92,6 +92,32 @@ export function TesTambahView({
       return
     }
 
+    if (form.waktuMulai && form.waktuSelesai) {
+      const startDt = new Date(form.waktuMulai)
+      const endDt = new Date(form.waktuSelesai)
+      const durasiNum = Number(form.durasiMenit) || 90
+
+      if (durasiNum <= 0) {
+        showNotification('Peringatan', 'Durasi pengerjaan harus lebih besar dari 0 menit.', 'warning')
+        return
+      }
+
+      if (endDt <= startDt) {
+        showNotification('Waktu Tidak Sinkron', 'Jadwal waktu selesai harus setelah waktu mulai.', 'warning')
+        return
+      }
+
+      const rentangMenit = Math.floor((endDt.getTime() - startDt.getTime()) / (1000 * 60))
+      if (rentangMenit < durasiNum) {
+        showNotification(
+          'Waktu Tidak Sinkron',
+          `Rentang waktu ujian (${rentangMenit} menit) lebih kecil dari durasi pengerjaan (${durasiNum} menit). Jadwal selesai minimal harus ${durasiNum} menit setelah waktu mulai.`,
+          'warning'
+        )
+        return
+      }
+    }
+
     try {
       setSaving(true)
       const finalKode = form.kodeUjian || `TES-${Date.now().toString().slice(-6)}`

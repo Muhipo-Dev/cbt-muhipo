@@ -109,6 +109,33 @@ export function TesDaftarView({
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (editForm.waktuMulai && editForm.waktuSelesai) {
+      const startDt = new Date(editForm.waktuMulai)
+      const endDt = new Date(editForm.waktuSelesai)
+      const durasiNum = Number(editForm.durasiMenit) || 90
+
+      if (durasiNum <= 0) {
+        showNotification('Peringatan', 'Durasi pengerjaan harus lebih besar dari 0 menit.', 'warning')
+        return
+      }
+
+      if (endDt <= startDt) {
+        showNotification('Waktu Tidak Sinkron', 'Jadwal waktu selesai harus setelah waktu mulai.', 'warning')
+        return
+      }
+
+      const rentangMenit = Math.floor((endDt.getTime() - startDt.getTime()) / (1000 * 60))
+      if (rentangMenit < durasiNum) {
+        showNotification(
+          'Waktu Tidak Sinkron',
+          `Rentang waktu ujian (${rentangMenit} menit) lebih kecil dari durasi pengerjaan (${durasiNum} menit). Jadwal selesai minimal harus ${durasiNum} menit setelah waktu mulai.`,
+          'warning'
+        )
+        return
+      }
+    }
+
     try {
       setSaving(true)
       const res = await fetch('/api/admin', {

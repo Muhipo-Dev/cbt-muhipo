@@ -96,26 +96,35 @@ export async function POST(
         }, { status: 400 });
       }
 
-      const scheduledEndFromDuration = new Date(scheduledStart.getTime() + totalMaxDetik * 1000);
-      let absoluteEnd = scheduledEndFromDuration;
-      if (ujian.waktuSelesai) {
-        const strictEnd = new Date(ujian.waktuSelesai);
-        if (strictEnd < absoluteEnd) {
-          absoluteEnd = strictEnd;
-        }
-      }
+      // Validasi Batas Kompensasi Keterlambatan Masuk Ujian (15 Menit sejak waktu mulai)
+      // Khusus untuk peserta yang baru pertama kali mulai / belum pernah mengerjakan
+      const isBelumMulai = !peserta || peserta.status === 'BELUM_MULAI';
+      const batasKompensasiMs = 15 * 60 * 1000; // 15 menit
+      const batasAkhirMasuk = new Date(scheduledStart.getTime() + batasKompensasiMs);
 
-      const diffMs = absoluteEnd.getTime() - now.getTime();
-      const sisaDariJadwal = Math.floor(diffMs / 1000);
-
-      if (sisaDariJadwal <= 0) {
+      if (isBelumMulai && now > batasAkhirMasuk) {
+        const formattedBatas = batasAkhirMasuk.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
         return NextResponse.json({
           success: false,
-          message: 'Waktu pelaksanaan ujian ini telah berakhir.',
-        }, { status: 400 });
+          message: `Batas waktu toleransi keterlambatan masuk ujian telah berakhir (maksimal 15 menit setelah jadwal mulai, yaitu pukul ${formattedBatas} WIB). Silakan hubungi proktor ruang ujian.`,
+        }, { status: 403 });
       }
 
-      computedSisaDetik = Math.min(totalMaxDetik, sisaDariJadwal);
+      // Batas selesai ujian secara keseluruhan
+      if (ujian.waktuSelesai) {
+        const strictEnd = new Date(ujian.waktuSelesai);
+        const diffMs = strictEnd.getTime() - now.getTime();
+        const sisaDariJadwal = Math.floor(diffMs / 1000);
+
+        if (sisaDariJadwal <= 0) {
+          return NextResponse.json({
+            success: false,
+            message: 'Waktu pelaksanaan ujian ini telah berakhir.',
+          }, { status: 400 });
+        }
+
+        computedSisaDetik = Math.min(totalMaxDetik, sisaDariJadwal);
+      }
     }
 
     if (!peserta) {
