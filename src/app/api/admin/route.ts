@@ -611,27 +611,69 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'IMPORT_PESERTA_EXCEL') {
-      const { rows } = body;
+      const { rows, mergeMode = 'REPLACE_MERGE' } = body;
+      // mergeMode:
+      // 'REPLACE_MERGE' (default) -> update pengguna duplikat dengan data terbaru
+      // 'SKIP_DUPLICATE' -> lewati pengguna jika sudah ada, hanya tambahkan yang baru
       if (!Array.isArray(rows) || rows.length === 0) {
         return NextResponse.json({ success: false, message: 'Data baris Excel kosong.' }, { status: 400 });
       }
 
       let insertedCount = 0;
       let updatedCount = 0;
+      let skippedCount = 0;
 
       const kelasCache = new Map<string, string>();
       const existingKelas = await prisma.kelas.findMany();
       existingKelas.forEach((k) => kelasCache.set(k.nama.toUpperCase().trim(), k.id));
 
+      // Helper pembersih & normalisasi karakter simbol (petik tunggal/ganda, whitespace unicode, zero-width)
+      const sanitizeImportText = (val: any, opts?: { isUsername?: boolean; isPassword?: boolean; fallback?: string }): string => {
+        if (val === undefined || val === null) return opts?.fallback || '';
+        let str = String(val);
+        // Hapus karakter kontrol unicode & normalisasi spasi
+        str = str.replace(/[\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]/g, ' ');
+        str = str.replace(/[\u200B-\u200D]/g, '');
+
+        if (!opts?.isPassword) {
+          str = str.trim();
+        }
+
+        if (opts?.isUsername) {
+          // Buang petik tunggal/ganda pembungkus terluar (artefak sel Excel teks seperti '12345),
+          // tetapi jika username memiliki karakter simbol di dalamnya, tetap dipertahankan.
+          str = str.replace(/^['"`]+|['"`]+$/g, '').trim();
+          return str || (opts?.fallback || '');
+        }
+
+        // Normalisasi curly quote agar konsisten di database dan pencarian tanpa merusak nama (Ma'ruf, Syafi'i, O'Connor)
+        str = str.replace(/[\u2018\u2019\u201B\u0060]/g, "'");
+        str = str.replace(/[\u201C\u201D]/g, '"');
+        str = str.replace(/ {2,}/g, ' ').trim();
+
+        return str || (opts?.fallback || '');
+      };
+
+      // Jika di dalam rows file Excel ada multiple duplikat dengan username yang sama,
+      // kita urutkan dan ambil data yang paling akhir (data terbaru dalam urutan file)
+      const dedupedRowsMap = new Map<string, any>();
       for (const row of rows) {
-        const username = String(row.username || row.Username || row.id || row.ID || '').trim();
-        const rawPassword = String(row.password || row.Password || '123456').trim();
-        const name = String(row.name || row.Nama || row['Nama Lengkap'] || row['Nama Peserta'] || row['Nama Siswa'] || 'Peserta').trim();
-        const nomorPeserta = String(row.nomorPeserta || row['No Peserta'] || row['Nomor Peserta'] || username).trim();
+        const u = sanitizeImportText(row.username || row.Username || row.id || row.ID || '', { isUsername: true });
+        if (u) {
+          dedupedRowsMap.set(u.toLowerCase(), row);
+        }
+      }
+      const processedRows = Array.from(dedupedRowsMap.values());
+
+      for (const row of processedRows) {
+        const username = sanitizeImportText(row.username || row.Username || row.id || row.ID || '', { isUsername: true });
+        const rawPassword = sanitizeImportText(row.password || row.Password, { isPassword: true, fallback: '123456' });
+        const name = sanitizeImportText(row.name || row.Nama || row['Nama Lengkap'] || row['Nama Peserta'] || row['Nama Siswa'], { fallback: 'Peserta' });
+        const nomorPeserta = sanitizeImportText(row.nomorPeserta || row['No Peserta'] || row['Nomor Peserta'] || username, { isUsername: true, fallback: username });
         
-        // Format Kolom: Kelas (Tingkat: X, XI, XII atau 10, 11, 12, atau nama kelas lengkap X-MIPA 1) & Group (Nama Rombel / Group)
-        const rawKelas = String(row.kelas || row.Kelas || '').trim();
-        const rawGroup = String(row.group || row.Group || row.grup || row.Grup || '').trim();
+        // Format Kolom: Kelas & Group (Tetap pertahankan simbol pemisah kelas seperti X-MIPA 1, XI-IPS-2)
+        const rawKelas = sanitizeImportText(row.kelas || row.Kelas || '');
+        const rawGroup = sanitizeImportText(row.group || row.Group || row.grup || row.Grup || '');
         const kelasTingkatStr = rawKelas || rawGroup || 'X';
         const groupStr = rawGroup || rawKelas || 'Umum';
         
@@ -681,6 +723,12 @@ export async function POST(request: NextRequest) {
         });
 
         if (existingUser) {
+          if (mergeMode === 'SKIP_DUPLICATE') {
+            skippedCount++;
+            continue;
+          }
+
+          // REPLACE_MERGE: Timpa/update data pengguna yang duplikat dengan data terbaru dari Excel
           await prisma.user.update({
             where: { id: existingUser.id },
             data: {
@@ -716,9 +764,24 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const duplicateFileDetected = rows.length - processedRows.length;
+      let infoMsg = `Import selesai! ${insertedCount} peserta baru didaftarkan, ${updatedCount} data peserta diperbarui (merge/replace).`;
+      if (skippedCount > 0) {
+        infoMsg += ` ${skippedCount} peserta duplikat dilewati.`;
+      }
+      if (duplicateFileDetected > 0) {
+        infoMsg += ` (${duplicateFileDetected} duplikasi internal baris file Excel diselesaikan dengan mengambil entri terbaru).`;
+      }
+
       return NextResponse.json({
         success: true,
-        message: `Import berhasil! ${insertedCount} peserta baru didaftarkan, ${updatedCount} peserta diperbarui.`,
+        message: infoMsg,
+        data: {
+          insertedCount,
+          updatedCount,
+          skippedCount,
+          duplicateFileDetected,
+        },
       });
     }
 

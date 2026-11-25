@@ -676,6 +676,7 @@ export default function ComprehensiveAdminDashboard() {
 
           {activeTab === 'peserta_import' && (
             <PesertaImportView
+              siswaList={siswaList}
               onRefresh={fetchAllData}
               showNotification={showNotification}
             />
