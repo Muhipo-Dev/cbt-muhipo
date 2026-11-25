@@ -55,7 +55,7 @@ export function AppNavbar({
             <button
               type="button"
               onClick={onToggleSidebar}
-              className="lg:hidden min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 cursor-pointer shrink-0 transition touch-manipulation"
+              className="lg:hidden min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 cursor-pointer shrink-0 transition active:scale-95 touch-manipulation"
               title="Buka Menu"
             >
               <Menu className="w-4 h-4" />
@@ -133,7 +133,7 @@ export function AppNavbar({
             <button
               type="button"
               onClick={onLogout}
-              className="min-h-[38px] flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/25 font-semibold text-xs transition cursor-pointer active:scale-95 touch-manipulation"
+              className="min-h-[44px] sm:min-h-[38px] flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/25 font-semibold text-xs transition cursor-pointer active:scale-95 touch-manipulation"
               title="Keluar dari Akun"
             >
               <LogOut className="w-3.5 h-3.5" />

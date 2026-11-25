@@ -121,7 +121,7 @@ export function AppSidebar({
                     data-ai-nav-group={item.id}
                     aria-expanded={isGroupExpanded}
                     onClick={() => toggleGroup(item.id)}
-                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg transition-all duration-150 text-xs font-semibold cursor-pointer touch-manipulation ${
+                    className={`w-full min-h-[44px] lg:min-h-[34px] flex items-center justify-between px-2.5 py-2 lg:py-1.5 rounded-lg transition-all duration-150 text-xs font-semibold cursor-pointer active:scale-[0.98] touch-manipulation ${
                       isChildActive
                         ? 'bg-blue-600/20 text-white font-bold border border-blue-500/30'
                         : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
@@ -158,7 +158,7 @@ export function AppSidebar({
                               onSelect(sub.id)
                               onClose()
                             }}
-                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] font-medium transition-all duration-150 cursor-pointer touch-manipulation ${
+                            className={`w-full min-h-[44px] lg:min-h-[32px] flex items-center gap-2 px-2.5 py-2 lg:py-1.5 rounded-md text-[11px] font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] touch-manipulation ${
                               isSubActive
                                 ? 'bg-blue-600 text-white font-bold shadow-xs'
                                 : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -191,7 +191,7 @@ export function AppSidebar({
                   onSelect(item.id)
                   onClose()
                 }}
-                className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg transition-all duration-150 text-xs font-semibold cursor-pointer touch-manipulation ${
+                className={`w-full min-h-[44px] lg:min-h-[34px] flex items-center justify-between px-2.5 py-2 lg:py-1.5 rounded-lg transition-all duration-150 text-xs font-semibold cursor-pointer active:scale-[0.98] touch-manipulation ${
                   isDirectActive
                     ? 'bg-blue-600 text-white font-bold shadow-sm shadow-blue-600/30'
                     : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'

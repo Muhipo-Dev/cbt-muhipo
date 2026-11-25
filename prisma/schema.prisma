@@ -40,6 +40,8 @@ model User {
 
   @@index([role])
   @@index([kelasId])
+  @@index([role, kelasId])
+  @@index([group])
 }
 
 model Kelas {
@@ -163,6 +165,7 @@ model Soal {
 
   @@index([mataPelajaranId])
   @@index([tipeSoal])
+  @@index([mataPelajaranId, nomorUrut])
 }
 
 model OpsiJawaban {
@@ -215,6 +218,8 @@ model Ujian {
   @@index([status])
   @@index([waktuMulai])
   @@index([waktuSelesai])
+  @@index([status, waktuMulai])
+  @@index([waktuMulai, waktuSelesai])
 }
 
 model PesertaUjian {
@@ -252,6 +257,8 @@ model PesertaUjian {
   @@index([siswaId])
   @@index([ujianId])
   @@index([status])
+  @@index([ujianId, status])
+  @@index([status, waktuSelesai])
 }
 
 model JawabanPeserta {
@@ -291,6 +298,12 @@ model LogAktivitasUjian {
   fotoBukti       String?        @db.Text // Base64 screenshot snapshot saat pelanggaran terjadi
   
   createdAt       DateTime       @default(now())
+
+  @@index([pesertaUjianId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([aktivitas])
+  @@index([pesertaUjianId, createdAt])
 }
 
 model PengaturanSistem {

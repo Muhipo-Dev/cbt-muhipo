@@ -220,7 +220,9 @@ export default function ComprehensiveAdminDashboard() {
     } catch {}
 
     fetchAllData()
+  }, [])
 
+  useEffect(() => {
     // Polling Proktor Live every 5 seconds if on proktor tab
     const timer = setInterval(() => {
       if (activeTab === 'proktor_live' || activeTab === 'dashboard') {
