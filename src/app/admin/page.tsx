@@ -641,7 +641,7 @@ export default function ComprehensiveAdminDashboard() {
         />
 
         {/* Page Content */}
-        <main className="p-3 sm:p-5 lg:p-6 print:p-0 print:m-0 print:max-w-none space-y-4 sm:space-y-5 max-w-7xl w-full mx-auto flex-1">
+        <main className="p-3 sm:p-5 lg:p-6 xl:px-8 print:p-0 print:m-0 print:max-w-none space-y-4 sm:space-y-5 max-w-[1600px] 2xl:max-w-[1800px] w-full min-w-0 overflow-x-hidden mx-auto flex-1">
           {/* Header Title Bar Compact */}
           <div className="print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-xl sm:rounded-2xl p-3 sm:p-4 backdrop-blur-xl shadow-xs">
             <div>
@@ -692,7 +692,7 @@ export default function ComprehensiveAdminDashboard() {
                     'info'
                   )
                 }
-                className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50/90 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/70 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-lg transition cursor-pointer touch-manipulation"
+                className="inline-flex items-center gap-1.5 min-h-[44px] text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50/90 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/70 border border-indigo-200 dark:border-indigo-800 px-3 py-2 rounded-xl transition cursor-pointer touch-manipulation active:scale-[0.98]"
                 title="Panduan & Protokol Otomasi untuk ChatGPT Task / Gemini Task"
               >
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -977,7 +977,7 @@ export default function ComprehensiveAdminDashboard() {
                 max="120"
                 value={extraMinutes}
                 onChange={(e) => setExtraMinutes(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white"
+                className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-base sm:text-xs font-bold text-slate-800 dark:text-white"
               />
             </div>
 
@@ -985,14 +985,14 @@ export default function ComprehensiveAdminDashboard() {
               <button
                 type="button"
                 onClick={() => setExtraTimeModal(null)}
-                className="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition cursor-pointer"
+                className="flex-1 min-h-[44px] py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition cursor-pointer touch-manipulation active:scale-[0.98]"
               >
                 Batal
               </button>
               <button
                 type="button"
                 onClick={handleExecuteAddExtraTime}
-                className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition cursor-pointer"
+                className="flex-1 min-h-[44px] py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition cursor-pointer touch-manipulation active:scale-[0.98]"
               >
                 Tambahkan
               </button>

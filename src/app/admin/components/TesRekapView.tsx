@@ -94,7 +94,10 @@ export function TesRekapView({
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap_Nilai')
     const suffix = selectedKelas !== 'ALL' ? `_${selectedKelas}` : ''
-    XLSX.writeFile(workbook, `Rekap_Nilai_${data?.activeUjian?.kodeUjian || 'Tes'}${suffix}.xlsx`)
+    const rawNamaTes = data?.activeUjian?.judul || data?.activeUjian?.kodeUjian || 'Tes'
+    const safeNamaTes = rawNamaTes.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+    const dateStr = new Date().toISOString().slice(0, 10)
+    XLSX.writeFile(workbook, `Hasil_Tes_${safeNamaTes}${suffix}_${dateStr}.xlsx`)
     showNotification('Berhasil', 'Rekap nilai berhasil diekspor ke Excel.', 'success')
   }
 

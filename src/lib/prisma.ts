@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { withAccelerate } from '@prisma/extension-accelerate';
+import { withOptimize } from '@prisma/extension-optimize';
 
 export * from './enums';
 
@@ -32,11 +33,17 @@ function createPrismaClient() {
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   });
 
-  if (optimizedUrl?.startsWith('prisma://') || optimizedUrl?.startsWith('prisma+postgres://')) {
-    return baseClient.$extends(withAccelerate()) as unknown as PrismaClient;
+  let client: any = baseClient;
+
+  if (process.env.OPTIMIZE_API_KEY) {
+    client = client.$extends(withOptimize({ apiKey: process.env.OPTIMIZE_API_KEY }));
   }
 
-  return baseClient;
+  if (optimizedUrl?.startsWith('prisma://') || optimizedUrl?.startsWith('prisma+postgres://')) {
+    client = client.$extends(withAccelerate());
+  }
+
+  return client as PrismaClient;
 }
 
 const globalForPrisma = globalThis as unknown as {

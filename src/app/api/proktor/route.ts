@@ -169,6 +169,7 @@ export async function GET(request: NextRequest) {
           include: {
             gurus: { include: { guru: { select: { id: true, name: true } } } },
             pembuat: { select: { id: true, name: true } },
+            _count: { select: { soalList: true } },
           },
         },
       },
@@ -178,9 +179,9 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    const activeUjian = ujianId
+    const activeUjian = (ujianId
       ? ujianList.find((u) => u.id === ujianId)
-      : ujianList[0] || null;
+      : null) || ujianList[0] || null;
 
     let pesertaList: any[] = [];
     if (activeUjian) {
@@ -236,6 +237,9 @@ export async function GET(request: NextRequest) {
             const parsedIds = JSON.parse(p.urutanSoalIds);
             if (Array.isArray(parsedIds)) totalSoalPeserta = parsedIds.length;
           } catch {}
+        }
+        if (totalSoalPeserta === 0) {
+          totalSoalPeserta = activeUjian.maxSoal || activeUjian.mataPelajaran?._count?.soalList || 0;
         }
 
         return {

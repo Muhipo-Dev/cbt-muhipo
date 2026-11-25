@@ -376,6 +376,7 @@ export async function POST(request: NextRequest) {
 
       const {
         pengaturanSistem = [],
+        modul = [],
         kelas = [],
         users = [],
         mataPelajaran = [],
@@ -387,6 +388,15 @@ export async function POST(request: NextRequest) {
         jawabanPeserta = [],
       } = backupData.data;
 
+      // ID remapping tables for safe merge across different database snapshots
+      const modulIdMap = new Map<string, string>();
+      const kelasIdMap = new Map<string, string>();
+      const userIdMap = new Map<string, string>();
+      const mapelIdMap = new Map<string, string>();
+      const soalIdMap = new Map<string, string>();
+      const ujianIdMap = new Map<string, string>();
+      const pesertaUjianIdMap = new Map<string, string>();
+
       // 1.1 Restore Pengaturan
       for (const p of pengaturanSistem) {
         await (prisma as any).pengaturanSistem.upsert({
@@ -396,90 +406,130 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // 1.2 Restore Kelas
+      // 1.1b Restore / Merge Modul
+      for (const mod of modul) {
+        const existingMod = await prisma.modul.findFirst({
+          where: { OR: [{ id: mod.id }, { nama: mod.nama }] },
+        });
+        if (existingMod) {
+          const updatedMod = await prisma.modul.update({
+            where: { id: existingMod.id },
+            data: { nama: mod.nama, deskripsi: mod.deskripsi ?? existingMod.deskripsi },
+          });
+          if (mod.id) modulIdMap.set(mod.id, updatedMod.id);
+        } else {
+          const createdMod = await prisma.modul.create({
+            data: { id: mod.id, nama: mod.nama, deskripsi: mod.deskripsi ?? null },
+          });
+          if (mod.id) modulIdMap.set(mod.id, createdMod.id);
+        }
+      }
+
+      // 1.2 Restore / Merge Kelas
       for (const k of kelas) {
-        await prisma.kelas.upsert({
-          where: { id: k.id },
-          update: { nama: k.nama, tingkat: k.tingkat, jurusan: k.jurusan },
-          create: { id: k.id, nama: k.nama, tingkat: k.tingkat, jurusan: k.jurusan },
+        const existingKelas = await prisma.kelas.findFirst({
+          where: { OR: [{ id: k.id }, { nama: k.nama }] },
         });
+        if (existingKelas) {
+          const updatedKelas = await prisma.kelas.update({
+            where: { id: existingKelas.id },
+            data: { nama: k.nama, tingkat: k.tingkat, jurusan: k.jurusan },
+          });
+          if (k.id) kelasIdMap.set(k.id, updatedKelas.id);
+        } else {
+          const createdKelas = await prisma.kelas.create({
+            data: { id: k.id, nama: k.nama, tingkat: k.tingkat, jurusan: k.jurusan },
+          });
+          if (k.id) kelasIdMap.set(k.id, createdKelas.id);
+        }
       }
 
-      // 1.3 Restore Users
+      // 1.3 Restore / Merge Users
       for (const u of users) {
-        await prisma.user.upsert({
-          where: { id: u.id },
-          update: {
-            username: u.username,
-            password: u.password,
-            plainPassword: u.plainPassword || null,
-            name: u.name,
-            role: u.role,
-            nip: u.nip,
-            nomorPeserta: u.nomorPeserta,
-            ruangUjian: u.ruangUjian,
-            sesiUjian: u.sesiUjian,
-            jenisKelamin: u.jenisKelamin,
-            kelasId: u.kelasId,
-          },
-          create: {
-            id: u.id,
-            username: u.username,
-            password: u.password,
-            plainPassword: u.plainPassword || null,
-            name: u.name,
-            role: u.role,
-            nip: u.nip,
-            nomorPeserta: u.nomorPeserta,
-            ruangUjian: u.ruangUjian,
-            sesiUjian: u.sesiUjian,
-            jenisKelamin: u.jenisKelamin,
-            kelasId: u.kelasId,
-          },
+        const resolvedKelasId = u.kelasId ? (kelasIdMap.get(u.kelasId) ?? u.kelasId) : null;
+        const orConditions: any[] = [{ id: u.id }, { username: u.username }];
+        if (u.nip) orConditions.push({ nip: u.nip });
+        if (u.nomorPeserta) orConditions.push({ nomorPeserta: u.nomorPeserta });
+
+        const existingUser = await prisma.user.findFirst({
+          where: { OR: orConditions },
         });
+
+        const userData = {
+          username: u.username,
+          password: u.password,
+          plainPassword: u.plainPassword || null,
+          name: u.name,
+          role: u.role,
+          nip: u.nip ?? null,
+          nomorPeserta: u.nomorPeserta ?? null,
+          ruangUjian: u.ruangUjian ?? null,
+          sesiUjian: u.sesiUjian ?? 1,
+          jenisKelamin: u.jenisKelamin ?? null,
+          group: u.group ?? null,
+          kelasId: resolvedKelasId,
+        };
+
+        if (existingUser) {
+          const updatedUser = await prisma.user.update({
+            where: { id: existingUser.id },
+            data: userData,
+          });
+          if (u.id) userIdMap.set(u.id, updatedUser.id);
+        } else {
+          const createdUser = await prisma.user.create({
+            data: { id: u.id, ...userData },
+          });
+          if (u.id) userIdMap.set(u.id, createdUser.id);
+        }
       }
 
-      // 1.4 Restore Mata Pelajaran (Topik) & Nested Soal jika ada
+      // 1.4 Restore / Merge Mata Pelajaran (Topik) & Nested Soal jika ada
       for (const m of mataPelajaran) {
-        await prisma.mataPelajaran.upsert({
-          where: { id: m.id },
-          update: {
-            kode: m.kode,
-            nama: m.nama,
-            namaModul: m.namaModul || 'Default',
-            tingkat: m.tingkat,
-            jurusan: m.jurusan,
-            durasiMenit: m.durasiMenit,
-            kkm: m.kkm,
-            nilaiMinimal: m.nilaiMinimal,
-            nilaiMaksimal: m.nilaiMaksimal,
-            pembuatId: m.pembuatId,
-            status: m.status || 'AKTIF',
-          },
-          create: {
-            id: m.id,
-            kode: m.kode,
-            nama: m.nama,
-            namaModul: m.namaModul || 'Default',
-            tingkat: m.tingkat,
-            jurusan: m.jurusan,
-            durasiMenit: m.durasiMenit,
-            kkm: m.kkm,
-            nilaiMinimal: m.nilaiMinimal,
-            nilaiMaksimal: m.nilaiMaksimal,
-            pembuatId: m.pembuatId,
-            status: m.status || 'AKTIF',
-          },
+        const resolvedModulId = m.modulId ? (modulIdMap.get(m.modulId) ?? m.modulId) : null;
+        const resolvedPembuatId = m.pembuatId ? (userIdMap.get(m.pembuatId) ?? m.pembuatId) : null;
+        const existingMapel = await prisma.mataPelajaran.findFirst({
+          where: { OR: [{ id: m.id }, { kode: m.kode }] },
         });
+
+        const mapelData = {
+          kode: m.kode,
+          nama: m.nama,
+          modulId: resolvedModulId,
+          namaModul: m.namaModul || 'Default',
+          tingkat: m.tingkat,
+          jurusan: m.jurusan,
+          durasiMenit: m.durasiMenit,
+          kkm: m.kkm,
+          nilaiMinimal: m.nilaiMinimal,
+          nilaiMaksimal: m.nilaiMaksimal,
+          pembuatId: resolvedPembuatId,
+          status: m.status || 'AKTIF',
+        };
+
+        let targetMapelId = m.id;
+        if (existingMapel) {
+          const updatedMapel = await prisma.mataPelajaran.update({
+            where: { id: existingMapel.id },
+            data: mapelData,
+          });
+          targetMapelId = updatedMapel.id;
+        } else {
+          const createdMapel = await prisma.mataPelajaran.create({
+            data: { id: m.id, ...mapelData },
+          });
+          targetMapelId = createdMapel.id;
+        }
+        if (m.id) mapelIdMap.set(m.id, targetMapelId);
 
         // Jika soal tersarang di dalam mataPelajaran
         const nestedSoal = Array.isArray(m.soalList) ? m.soalList : (Array.isArray(m.soal) ? m.soal : null);
         if (nestedSoal) {
           for (const s of nestedSoal) {
-            await prisma.soal.upsert({
+            const upsertedSoal = await prisma.soal.upsert({
               where: { id: s.id },
               update: {
-                mataPelajaranId: s.mataPelajaranId || m.id,
+                mataPelajaranId: targetMapelId,
                 nomorUrut: s.nomorUrut,
                 tipeSoal: s.tipeSoal,
                 pertanyaan: s.pertanyaan,
@@ -491,7 +541,7 @@ export async function POST(request: NextRequest) {
               },
               create: {
                 id: s.id,
-                mataPelajaranId: s.mataPelajaranId || m.id,
+                mataPelajaranId: targetMapelId,
                 nomorUrut: s.nomorUrut,
                 tipeSoal: s.tipeSoal,
                 pertanyaan: s.pertanyaan,
@@ -502,13 +552,14 @@ export async function POST(request: NextRequest) {
                 matchingData: s.matchingData,
               },
             });
+            if (s.id) soalIdMap.set(s.id, upsertedSoal.id);
 
             if (Array.isArray(s.opsiJawaban)) {
               for (const o of s.opsiJawaban) {
                 await prisma.opsiJawaban.upsert({
                   where: { id: o.id },
                   update: {
-                    soalId: o.soalId || s.id,
+                    soalId: upsertedSoal.id,
                     label: o.label,
                     konten: o.konten,
                     gambar: o.gambar,
@@ -516,7 +567,7 @@ export async function POST(request: NextRequest) {
                   },
                   create: {
                     id: o.id,
-                    soalId: o.soalId || s.id,
+                    soalId: upsertedSoal.id,
                     label: o.label,
                     konten: o.konten,
                     gambar: o.gambar,
@@ -531,10 +582,11 @@ export async function POST(request: NextRequest) {
 
       // 1.5 Restore Soal (Flat list)
       for (const s of soal) {
-        await prisma.soal.upsert({
+        const resolvedMapelId = mapelIdMap.get(s.mataPelajaranId) ?? s.mataPelajaranId;
+        const upsertedSoal = await prisma.soal.upsert({
           where: { id: s.id },
           update: {
-            mataPelajaranId: s.mataPelajaranId,
+            mataPelajaranId: resolvedMapelId,
             nomorUrut: s.nomorUrut,
             tipeSoal: s.tipeSoal,
             pertanyaan: s.pertanyaan,
@@ -546,7 +598,7 @@ export async function POST(request: NextRequest) {
           },
           create: {
             id: s.id,
-            mataPelajaranId: s.mataPelajaranId,
+            mataPelajaranId: resolvedMapelId,
             nomorUrut: s.nomorUrut,
             tipeSoal: s.tipeSoal,
             pertanyaan: s.pertanyaan,
@@ -557,14 +609,16 @@ export async function POST(request: NextRequest) {
             matchingData: s.matchingData,
           },
         });
+        if (s.id) soalIdMap.set(s.id, upsertedSoal.id);
       }
 
       // 1.6 Restore Opsi Jawaban (Flat list)
       for (const o of opsiJawaban) {
+        const resolvedSoalId = soalIdMap.get(o.soalId) ?? o.soalId;
         await prisma.opsiJawaban.upsert({
           where: { id: o.id },
           update: {
-            soalId: o.soalId,
+            soalId: resolvedSoalId,
             label: o.label,
             konten: o.konten,
             gambar: o.gambar,
@@ -572,7 +626,7 @@ export async function POST(request: NextRequest) {
           },
           create: {
             id: o.id,
-            soalId: o.soalId,
+            soalId: resolvedSoalId,
             label: o.label,
             konten: o.konten,
             gambar: o.gambar,
@@ -581,119 +635,141 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // 1.7 Restore Ujian & Distribusi Kelas
+      // 1.7 Restore / Merge Ujian & Distribusi Kelas
       for (const u of ujian) {
         const startDt = u.waktuMulai ? new Date(u.waktuMulai) : new Date();
         const endDt = u.waktuSelesai ? new Date(u.waktuSelesai) : new Date(Date.now() + 86400000);
-        await prisma.ujian.upsert({
-          where: { id: u.id },
-          update: {
-            judul: u.judul,
-            kodeUjian: u.kodeUjian,
-            token: u.token,
-            durasiMenit: u.durasiMenit || 90,
-            minSoal: u.minSoal ?? null,
-            maxSoal: u.maxSoal ?? null,
-            minJawaban: u.minJawaban ?? null,
-            waktuMulai: startDt,
-            waktuSelesai: endDt,
-            status: u.status,
-            lockBrowser: Boolean(u.lockBrowser),
-            acakSoal: Boolean(u.acakSoal),
-            acakOpsi: Boolean(u.acakOpsi),
-            tampilkanHasil: Boolean(u.tampilkanHasil),
-            mataPelajaranId: u.mataPelajaranId,
-          },
-          create: {
-            id: u.id,
-            judul: u.judul,
-            kodeUjian: u.kodeUjian,
-            token: u.token,
-            durasiMenit: u.durasiMenit || 90,
-            minSoal: u.minSoal ?? null,
-            maxSoal: u.maxSoal ?? null,
-            minJawaban: u.minJawaban ?? null,
-            waktuMulai: startDt,
-            waktuSelesai: endDt,
-            status: u.status,
-            lockBrowser: Boolean(u.lockBrowser),
-            acakSoal: Boolean(u.acakSoal),
-            acakOpsi: Boolean(u.acakOpsi),
-            tampilkanHasil: Boolean(u.tampilkanHasil),
-            mataPelajaranId: u.mataPelajaranId,
-          },
+        const resolvedMapelId = mapelIdMap.get(u.mataPelajaranId) ?? u.mataPelajaranId;
+
+        const existingUjian = await prisma.ujian.findFirst({
+          where: { OR: [{ id: u.id }, { kodeUjian: u.kodeUjian }] },
         });
+
+        const ujianData = {
+          judul: u.judul,
+          kodeUjian: u.kodeUjian,
+          token: u.token,
+          durasiMenit: u.durasiMenit || 90,
+          minSoal: u.minSoal ?? null,
+          maxSoal: u.maxSoal ?? null,
+          minJawaban: u.minJawaban ?? null,
+          waktuMulai: startDt,
+          waktuSelesai: endDt,
+          status: u.status,
+          lockBrowser: Boolean(u.lockBrowser),
+          acakSoal: Boolean(u.acakSoal),
+          acakOpsi: Boolean(u.acakOpsi),
+          tampilkanHasil: Boolean(u.tampilkanHasil),
+          mataPelajaranId: resolvedMapelId,
+        };
+
+        if (existingUjian) {
+          const updatedUjian = await prisma.ujian.update({
+            where: { id: existingUjian.id },
+            data: ujianData,
+          });
+          if (u.id) ujianIdMap.set(u.id, updatedUjian.id);
+        } else {
+          const createdUjian = await prisma.ujian.create({
+            data: { id: u.id, ...ujianData },
+          });
+          if (u.id) ujianIdMap.set(u.id, createdUjian.id);
+        }
       }
 
       for (const uk of ujianKelas) {
-        await prisma.ujianKelas.upsert({
-          where: { id: uk.id },
-          update: { ujianId: uk.ujianId, kelasId: uk.kelasId },
-          create: { id: uk.id, ujianId: uk.ujianId, kelasId: uk.kelasId },
+        const resolvedUjianId = ujianIdMap.get(uk.ujianId) ?? uk.ujianId;
+        const resolvedKelasId = kelasIdMap.get(uk.kelasId) ?? uk.kelasId;
+        const existingUk = await prisma.ujianKelas.findFirst({
+          where: {
+            OR: [
+              { id: uk.id },
+              { ujianId: resolvedUjianId, kelasId: resolvedKelasId },
+            ],
+          },
         });
+        if (!existingUk) {
+          await prisma.ujianKelas.create({
+            data: { id: uk.id, ujianId: resolvedUjianId, kelasId: resolvedKelasId },
+          });
+        }
       }
 
-      // 1.8 Restore Peserta Ujian & Jawaban
+      // 1.8 Restore / Merge Peserta Ujian & Jawaban
       for (const p of pesertaUjian) {
-        await prisma.pesertaUjian.upsert({
-          where: { id: p.id },
-          update: {
-            ujianId: p.ujianId,
-            siswaId: p.siswaId,
-            status: p.status,
-            nilaiPG: p.nilaiPG || 0,
-            nilaiEsai: p.nilaiEsai || 0,
-            nilaiTotal: p.nilaiTotal || 0,
-            isKoreksiSelesai: Boolean(p.isKoreksiSelesai),
-            waktuMulai: p.waktuMulai ? new Date(p.waktuMulai) : null,
-            waktuSelesai: p.waktuSelesai ? new Date(p.waktuSelesai) : null,
-            sisaDetik: p.sisaDetik,
-            ipAddress: p.ipAddress,
-            userAgent: p.userAgent,
-            urutanSoalIds: p.urutanSoalIds,
-          },
-          create: {
-            id: p.id,
-            ujianId: p.ujianId,
-            siswaId: p.siswaId,
-            status: p.status,
-            nilaiPG: p.nilaiPG || 0,
-            nilaiEsai: p.nilaiEsai || 0,
-            nilaiTotal: p.nilaiTotal || 0,
-            isKoreksiSelesai: Boolean(p.isKoreksiSelesai),
-            waktuMulai: p.waktuMulai ? new Date(p.waktuMulai) : null,
-            waktuSelesai: p.waktuSelesai ? new Date(p.waktuSelesai) : null,
-            sisaDetik: p.sisaDetik,
-            ipAddress: p.ipAddress,
-            userAgent: p.userAgent,
-            urutanSoalIds: p.urutanSoalIds,
+        const resolvedUjianId = ujianIdMap.get(p.ujianId) ?? p.ujianId;
+        const resolvedSiswaId = userIdMap.get(p.siswaId) ?? p.siswaId;
+        const existingPu = await prisma.pesertaUjian.findFirst({
+          where: {
+            OR: [
+              { id: p.id },
+              { ujianId: resolvedUjianId, siswaId: resolvedSiswaId },
+            ],
           },
         });
+
+        const puData = {
+          ujianId: resolvedUjianId,
+          siswaId: resolvedSiswaId,
+          status: p.status,
+          nilaiPG: p.nilaiPG || 0,
+          nilaiEsai: p.nilaiEsai || 0,
+          nilaiTotal: p.nilaiTotal || 0,
+          isKoreksiSelesai: Boolean(p.isKoreksiSelesai),
+          waktuMulai: p.waktuMulai ? new Date(p.waktuMulai) : null,
+          waktuSelesai: p.waktuSelesai ? new Date(p.waktuSelesai) : null,
+          sisaDetik: p.sisaDetik,
+          ipAddress: p.ipAddress,
+          userAgent: p.userAgent,
+          urutanSoalIds: p.urutanSoalIds,
+        };
+
+        if (existingPu) {
+          const updatedPu = await prisma.pesertaUjian.update({
+            where: { id: existingPu.id },
+            data: puData,
+          });
+          if (p.id) pesertaUjianIdMap.set(p.id, updatedPu.id);
+        } else {
+          const createdPu = await prisma.pesertaUjian.create({
+            data: { id: p.id, ...puData },
+          });
+          if (p.id) pesertaUjianIdMap.set(p.id, createdPu.id);
+        }
       }
 
       for (const j of jawabanPeserta) {
-        await prisma.jawabanPeserta.upsert({
-          where: { id: j.id },
-          update: {
-            pesertaUjianId: j.pesertaUjianId,
-            soalId: j.soalId,
-            jawabanDipilih: j.jawabanDipilih,
-            raguRagu: Boolean(j.raguRagu),
-            isBenar: j.isBenar,
-            skor: j.skor || 0,
-            catatanKoreksi: j.catatanKoreksi,
-          },
-          create: {
-            id: j.id,
-            pesertaUjianId: j.pesertaUjianId,
-            soalId: j.soalId,
-            jawabanDipilih: j.jawabanDipilih,
-            raguRagu: Boolean(j.raguRagu),
-            isBenar: j.isBenar,
-            skor: j.skor || 0,
-            catatanKoreksi: j.catatanKoreksi,
+        const resolvedPuId = pesertaUjianIdMap.get(j.pesertaUjianId) ?? j.pesertaUjianId;
+        const resolvedSoalId = soalIdMap.get(j.soalId) ?? j.soalId;
+        const existingJwb = await prisma.jawabanPeserta.findFirst({
+          where: {
+            OR: [
+              { id: j.id },
+              { pesertaUjianId: resolvedPuId, soalId: resolvedSoalId },
+            ],
           },
         });
+
+        const jwbData = {
+          pesertaUjianId: resolvedPuId,
+          soalId: resolvedSoalId,
+          jawabanDipilih: j.jawabanDipilih,
+          raguRagu: Boolean(j.raguRagu),
+          isBenar: j.isBenar,
+          skor: j.skor || 0,
+          catatanKoreksi: j.catatanKoreksi,
+        };
+
+        if (existingJwb) {
+          await prisma.jawabanPeserta.update({
+            where: { id: existingJwb.id },
+            data: jwbData,
+          });
+        } else {
+          await prisma.jawabanPeserta.create({
+            data: { id: j.id, ...jwbData },
+          });
+        }
       }
 
       return NextResponse.json({

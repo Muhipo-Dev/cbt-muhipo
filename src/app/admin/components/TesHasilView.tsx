@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { CheckCircle2, RotateCcw, Search, GraduationCap, ShieldAlert, Award, AlertTriangle, Download } from 'lucide-react'
+import { CheckCircle2, RotateCcw, Search, GraduationCap, ShieldAlert, Award, AlertTriangle, Download, FileSpreadsheet } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 interface TesHasilViewProps {
   ujianList: any[]
@@ -68,6 +69,44 @@ export function TesHasilView({
     }
   }
 
+  // Ekspor Hasil Tes ke Excel (.xlsx)
+  const handleExportExcel = () => {
+    if (!filtered.length) {
+      showNotification('Informasi', 'Belum ada data hasil tes untuk diekspor.', 'info')
+      return
+    }
+
+    const currentUjian = data?.activeUjian || ujianList.find((u: any) => u.id === selectedUjianId)
+    const kkm = Number(currentUjian?.bankSoal?.kkm || currentUjian?.mataPelajaran?.kkm || 75.0)
+
+    const rows = filtered.map((p: any, idx: number) => {
+      const totalNilai = Number(p.nilaiTotal ?? 0)
+      return {
+        No: idx + 1,
+        Username: p.siswa?.username || '-',
+        'Nomor Peserta': p.siswa?.nomorPeserta || p.siswa?.username || '-',
+        'Nama Lengkap': p.siswa?.name || '-',
+        Kelas: p.siswa?.kelas?.nama || '-',
+        'Nilai PG / Pilihan': Number(Number(p.nilaiPG || 0).toFixed(2)),
+        'Nilai Isian & Esai': Number(Number(p.nilaiEsai || 0).toFixed(2)),
+        'Total Nilai': Number(totalNilai.toFixed(2)),
+        'KKM Mapel': kkm,
+        Ketuntasan: totalNilai >= kkm ? 'TUNTAS' : 'REMIDIAL',
+        'Status Ujian': p.status || '-',
+      }
+    })
+
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Hasil_Tes')
+    const suffix = filterKelas !== 'ALL' ? `_${filterKelas}` : ''
+    const rawNamaTes = currentUjian?.judul || currentUjian?.kodeUjian || 'Tes'
+    const safeNamaTes = rawNamaTes.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+    const dateStr = new Date().toISOString().slice(0, 10)
+    XLSX.writeFile(workbook, `Hasil_Tes_${safeNamaTes}${suffix}_${dateStr}.xlsx`)
+    showNotification('Berhasil', 'Hasil tes berhasil diekspor ke Excel.', 'success')
+  }
+
   const handleResetPeserta = (p: any) => {
     showConfirm(
       'Reset Status Ujian Peserta?',
@@ -131,9 +170,19 @@ export function TesHasilView({
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             type="button"
+            onClick={handleExportExcel}
+            title="Ekspor rincian hasil tes peserta ke file Excel (.xlsx)"
+            className="min-h-[44px] px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition cursor-pointer touch-manipulation active:scale-[0.98]"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Ekspor Excel</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleBackupHasilJson}
             title="Cadangkan seluruh lembar pengerjaan & hasil tes ini ke format JSON"
-            className="px-3.5 py-2.5 rounded-xl bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/50 text-teal-700 dark:text-teal-300 font-bold text-xs border border-teal-200 dark:border-teal-800 flex items-center gap-1.5 transition cursor-pointer"
+            className="min-h-[44px] px-3.5 py-2.5 rounded-xl bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/50 text-teal-700 dark:text-teal-300 font-bold text-xs border border-teal-200 dark:border-teal-800 flex items-center gap-1.5 transition cursor-pointer touch-manipulation active:scale-[0.98]"
           >
             <Download className="w-4 h-4" />
             <span>Backup Hasil (.JSON)</span>
