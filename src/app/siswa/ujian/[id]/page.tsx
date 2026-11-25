@@ -612,7 +612,6 @@ export default function LembarUjianPage({
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
     window.addEventListener('pagehide', handlePageHide);
-    window.addEventListener('focus', handleWindowFocusChange);
     document.addEventListener('click', handleDocumentClickToFullscreen, { capture: true });
     document.addEventListener('mouseleave', handleMouseLeave);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -636,7 +635,6 @@ export default function LembarUjianPage({
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('focus', handleWindowFocusChange);
       document.removeEventListener('click', handleDocumentClickToFullscreen, { capture: true });
       document.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
