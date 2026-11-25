@@ -582,7 +582,7 @@ img {
     -webkit-text-size-adjust: 100%;
     touch-action: pan-y pinch-zoom;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: none;
+    overscroll-behavior-y: auto;
     overflow-y: auto;
   }
 
@@ -669,6 +669,7 @@ header img,
    - Blokir context menu callout di iOS & Android WebView
    - Blokir dragging gambar/soal keluar window
    - Blokir highlight teks
+   - TETAP MENGIZINKAN: scrolling touchscreen lancar dan gesture pinch-to-zoom pada soal/gambar
    ========================================================================== */
 .cbt-exam-lockdown,
 .cbt-exam-lockdown * {
@@ -677,6 +678,7 @@ header img,
   -ms-user-select: none !important;
   user-select: none !important;
   -webkit-touch-callout: none !important;
+  touch-action: pan-y pinch-zoom;
 }
 
 .cbt-exam-lockdown input,
@@ -685,10 +687,12 @@ header img,
   -moz-user-select: text !important;
   -ms-user-select: text !important;
   user-select: text !important;
+  touch-action: auto !important;
 }
 
 .cbt-exam-lockdown img {
   -webkit-user-drag: none !important;
   user-drag: none !important;
-  pointer-events: none;
+  pointer-events: auto !important;
+  touch-action: pan-y pinch-zoom;
 }

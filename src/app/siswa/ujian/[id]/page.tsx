@@ -541,6 +541,11 @@ export default function LembarUjianPage({
     };
 
     const handleSelectStart = (e: Event) => {
+      // Izinkan pemilihan teks jika target berada dalam input atau textarea
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
       e.preventDefault();
     };
 
