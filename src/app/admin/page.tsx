@@ -530,7 +530,7 @@ export default function ComprehensiveAdminDashboard() {
       />
 
       {/* Main Layout Area */}
-      <div className="flex-1 lg:ml-72 print:ml-0 print:m-0 print:p-0 flex flex-col justify-between min-w-0 transition-all duration-300 relative z-10">
+      <div className="flex-1 lg:ml-64 print:ml-0 print:m-0 print:p-0 flex flex-col justify-between min-w-0 transition-all duration-300 relative z-10">
         {/* Navbar */}
         <AppNavbar
           appTitle={settingsForm.appTitle ? settingsForm.appTitle : 'CBT'}
@@ -543,7 +543,7 @@ export default function ComprehensiveAdminDashboard() {
             username: currentUser?.username,
           }}
           actions={
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/15 border border-blue-400/30 text-blue-700 dark:text-blue-200 font-bold text-xs shrink-0 backdrop-blur-md">
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/15 border border-blue-400/30 text-blue-700 dark:text-blue-200 font-bold text-xs shrink-0 backdrop-blur-md">
               <CalendarDays className="w-3.5 h-3.5 text-blue-600 dark:text-blue-300 shrink-0" />
               <span>TA: {settingsForm.academicYear} ({settingsForm.semester})</span>
             </div>
@@ -552,19 +552,19 @@ export default function ComprehensiveAdminDashboard() {
         />
 
         {/* Page Content */}
-        <main className="p-3.5 sm:p-6 lg:p-8 print:p-0 print:m-0 print:max-w-none space-y-6 max-w-7xl w-full mx-auto flex-1">
-          {/* Header Title Bar */}
-          <div className="print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 dark:bg-slate-900/75 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl shadow-sm dark:shadow-xl">
+        <main className="p-3 sm:p-5 lg:p-6 print:p-0 print:m-0 print:max-w-none space-y-4 sm:space-y-5 max-w-7xl w-full mx-auto flex-1">
+          {/* Header Title Bar Compact */}
+          <div className="print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white/85 dark:bg-slate-900/80 border border-slate-200/80 dark:border-white/10 rounded-xl sm:rounded-2xl p-3 sm:p-4 backdrop-blur-xl shadow-xs">
             <div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">
                 CBT
               </span>
-              <h1 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white capitalize">
+              <h1 className="text-base sm:text-xl font-black text-slate-900 dark:text-white capitalize">
                 {getTabTitle(activeTab)}
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-600 dark:text-slate-300 bg-slate-100/90 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-3 py-1.5 rounded-xl font-medium backdrop-blur-sm">
+              <span className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-100/90 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2.5 py-1 rounded-lg font-medium backdrop-blur-sm">
                 T.A {settingsForm.academicYear} • Semester {settingsForm.semester}
               </span>
             </div>
