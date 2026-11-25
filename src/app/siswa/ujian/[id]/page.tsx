@@ -117,6 +117,13 @@ export default function LembarUjianPage({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPrivacyObscured, setIsPrivacyObscured] = useState(false);
   const [cheatWarning, setCheatWarning] = useState<string | null>(null);
+  const [systemNoticeModal, setSystemNoticeModal] = useState<{
+    variant: 'completed' | 'locked' | 'error';
+    title: string;
+    subtitle: string;
+    scoreText?: string;
+    redirectTo?: string;
+  } | null>(null);
   const [isExambro, setIsExambro] = useState(false);
   const [isSEB, setIsSEB] = useState(false);
   const [isKeyboardTyping, setIsKeyboardTyping] = useState(false);
@@ -265,21 +272,39 @@ export default function LembarUjianPage({
         });
         const json = await res.json();
         if (res.status === 403 && json.isLocked) {
+          isSubmittedRef.current = true;
           await exitUniversalFullscreen();
           releaseExambroKioskSecurity();
-          alert(
-            json.message ||
-              'Akun ujian Anda telah dikunci oleh Pengawas/Proktor. Silakan hubungi pengawas ruang.'
+          cbtSecurityAudio.triggerFullWarning(
+            'Perhatian. Sesi ujian Anda telah ditangguhkan oleh Pengawas Ruang. Silakan melapor kepada Pengawas Ruang dengan tertib.'
           );
-          router.push('/siswa');
+          setSystemNoticeModal({
+            variant: 'locked',
+            title: 'Sesi Ujian Ditangguhkan',
+            subtitle:
+              json.message ||
+              'Akses pengerjaan ujian Anda telah dikunci sementara oleh Pengawas Ruang. Silakan melapor kepada Pengawas Ruang dengan tertib untuk verifikasi lebih lanjut.',
+            redirectTo: '/siswa',
+          });
           return;
         }
         if ((res.status === 400 && json.isFinished) || (res.status === 409 && json.isResetLogin)) {
           isSubmittedRef.current = true;
           await exitUniversalFullscreen();
           releaseExambroKioskSecurity();
-          alert(json.message || 'Sesi ujian telah diperbarui oleh Pengawas.');
-          router.push('/siswa');
+          if (res.status === 400 && json.isFinished) {
+            cbtSecurityAudio.speakSuccess(
+              'Sesi ujian Anda telah diselesaikan oleh Pengawas Ruang dan seluruh jawaban yang terisi berhasil diamankan.'
+            );
+          }
+          setSystemNoticeModal({
+            variant: res.status === 400 && json.isFinished ? 'completed' : 'locked',
+            title: res.status === 400 && json.isFinished ? 'Sesi Ujian Telah Diselesaikan' : 'Pembaruan Sesi Perangkat',
+            subtitle:
+              json.message ||
+              'Status sesi ujian Anda telah diperbarui oleh Pengawas Ruang. Silakan kembali ke halaman daftar ujian.',
+            redirectTo: '/siswa',
+          });
           return;
         }
         if (res.ok && json.success && typeof json.sisaDetik === 'number') {
@@ -545,8 +570,12 @@ export default function LembarUjianPage({
     if (!isAuto && answeredCount < requiredCount) {
       const firstUnansweredIdx = soalList.findIndex((s) => !isSoalAnswered(s, currentMap[s.id]?.jawabanDipilih));
       const remainingUnanswered = requiredCount - answeredCount;
+      cbtSecurityAudio.playWarningBuzzer();
+      cbtSecurityAudio.speakWarning(
+        `Mohon perhatian. Masih terdapat ${remainingUnanswered} butir soal yang belum terjawab. Silakan lengkapi seluruh jawaban terlebih dahulu sebelum mengumpulkan ujian.`
+      );
       setCheatWarning(
-        `Harap isi seluruh soal terlebih dahulu! Masih ada ${remainingUnanswered} soal yang belum diisi.`
+        `Pemberitahuan Akademik: Masih terdapat ${remainingUnanswered} butir soal yang belum terjawab. Mohon lengkapi seluruh soal terlebih dahulu sebelum menyelesaikan ujian.`
       );
       setShowSubmitModal(false);
       if (firstUnansweredIdx >= 0) {
@@ -582,25 +611,38 @@ export default function LembarUjianPage({
 
       if (!data.success) {
         isSubmittedRef.current = false;
-        alert(data.message || 'Gagal menyelesaikan ujian.');
+        setSystemNoticeModal({
+          variant: 'error',
+          title: 'Pengumpulan Jawaban Belum Berhasil',
+          subtitle: data.message || 'Terjadi kendala saat menyimpan pengumpulan jawaban. Silakan periksa kelengkapan soal dan coba kembali.',
+        });
         setSubmitting(false);
         return;
       }
 
+      setShowSubmitModal(false);
       setIsSecurityUnlocked(false);
       await exitUniversalFullscreen();
       setIsFullscreen(false);
       releaseExambroKioskSecurity();
 
-      cbtSecurityAudio.speakSuccess('Ujian selesai, terimakasih telah mengerjakan');
+      if (isAuto) {
+        cbtSecurityAudio.speakSuccess(
+          'Waktu pengerjaan ujian telah berakhir. Seluruh jawaban Anda telah dikumpulkan dan disimpan secara otomatis oleh sistem. Terima kasih atas partisipasi dan kejujuran Anda.'
+        );
+      } else {
+        cbtSecurityAudio.speakSuccess(
+          'Pelaksanaan ujian telah selesai dan seluruh jawaban Anda berhasil tersimpan. Terima kasih atas kejujuran dan ketertiban Anda dalam mengikuti ujian ini.'
+        );
+      }
 
       try {
         const isLowEnd =
           typeof document !== 'undefined' && document.documentElement.classList.contains('low-end-webview');
         if (!isLowEnd && typeof confetti === 'function') {
           confetti({
-            particleCount: 50,
-            spread: 60,
+            particleCount: 45,
+            spread: 55,
             origin: { y: 0.6 },
           });
         }
@@ -609,25 +651,25 @@ export default function LembarUjianPage({
       const tampilkanHasil = data?.data?.tampilkanHasil === true;
       const nilaiTotal = data?.data?.nilaiTotal ?? data?.data?.nilaiPG;
 
-      if (isAuto) {
-        if (tampilkanHasil && nilaiTotal !== undefined) {
-          alert(`Waktu habis! Jawaban Anda telah otomatis dikumpulkan.\n\nNilai Anda: ${nilaiTotal}/100`);
-        } else {
-          alert('Waktu habis! Jawaban Anda telah otomatis dikumpulkan.');
-        }
-      } else {
-        if (tampilkanHasil && nilaiTotal !== undefined) {
-          alert(`Ujian berhasil diselesaikan!\n\nNilai Perolehan: ${nilaiTotal}/100`);
-        } else {
-          alert('Ujian berhasil diselesaikan!\n\nJawaban Anda telah tersimpan aman.');
-        }
-      }
-      router.push('/siswa');
+      setSystemNoticeModal({
+        variant: 'completed',
+        title: isAuto
+          ? 'Waktu Ujian Berakhir — Jawaban Tersimpan Otomatis'
+          : 'Pelaksanaan Ujian Selesai',
+        subtitle: isAuto
+          ? 'Batas waktu pengerjaan telah berakhir. Seluruh jawaban Anda telah direkam dan disimpan secara otomatis ke server sekolah. Terima kasih atas kejujuran dan ketertiban Anda.'
+          : 'Seluruh jawaban ujian Anda telah berhasil direkam dan disimpan dengan aman pada sistem sekolah. Terima kasih telah mengikuti ujian dengan jujur dan tertib.',
+        scoreText: tampilkanHasil && nilaiTotal !== undefined ? `${nilaiTotal} / 100` : undefined,
+        redirectTo: '/siswa',
+      });
     } catch {
       isSubmittedRef.current = false;
-      alert(
-        'Terjadi kendala koneksi ke server saat pengumpulan. Seluruh jawaban Anda tetap AMAN tersimpan di perangkat ini (IndexedDB). Silakan laporkan ke proktor ruang atau klik tombol Cadangan Jawaban.'
-      );
+      setSystemNoticeModal({
+        variant: 'error',
+        title: 'Gangguan Koneksi Jaringan Saat Pengumpulan',
+        subtitle:
+          'Koneksi ke server sekolah sedang mengalami gangguan sementara. Seluruh jawaban Anda tetap tersimpan aman pada perangkat ini. Silakan laporkan kepada Pengawas Ruang atau unduh Cadangan Jawaban.',
+      });
     } finally {
       setSubmitting(false);
     }
@@ -780,9 +822,9 @@ export default function LembarUjianPage({
       if (isHandlingViolation) return;
       isHandlingViolation = true;
 
-      triggerCheatLog(primaryType, detailMsg);
+      triggerCheatLog(primaryType, detailMsg, voiceWarning);
       cbtSecurityAudio.triggerFullWarning(voiceWarning);
-      setCheatWarning(`Peringatan: ${detailMsg}`);
+      setCheatWarning(`Peringatan Tata Tertib: ${detailMsg}`);
 
       if (pendingViolationTimer) clearTimeout(pendingViolationTimer);
       pendingViolationTimer = setTimeout(() => {
@@ -799,8 +841,8 @@ export default function LembarUjianPage({
       }
       dispatchAreaViolation(
         'KEYBOARD_SHORTCUT_VIOLATION',
-        'Tombol kembali / gesture swipe-back dicegah! Harap tetap di lembar ujian.',
-        'Dilarang menekan tombol kembali selama ujian!'
+        'Navigasi kembali dinonaktifkan selama pelaksanaan ujian. Mohon tetap berada pada lembar soal.',
+        'Perhatian. Navigasi kembali tidak diizinkan selama pelaksanaan ujian berlangsung. Mohon tetap berada pada halaman ujian.'
       );
     });
 
@@ -814,7 +856,7 @@ export default function LembarUjianPage({
       dispatchAreaViolation(
         'KEYBOARD_SHORTCUT_VIOLATION',
         detail,
-        'Peringatan! Tangkapan layar dan rekam layar dilarang keras selama ujian!'
+        'Perhatian. Pengambilan tangkapan layar maupun perekaman layar tidak diperkenankan demi menjaga kerahasiaan naskah ujian.'
       );
     });
 
@@ -824,7 +866,7 @@ export default function LembarUjianPage({
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isSubmittedRef.current) return;
       const warningText =
-        'Peringatan: Ujian sedang berlangsung! Jika Anda keluar atau memuat ulang, aktivitas akan dicatat pelanggaran.';
+        'Sesi ujian sedang berlangsung. Meninggalkan atau memuat ulang halaman ini akan tercatat sebagai pelanggaran tata tertib ujian.';
       e.preventDefault();
       e.returnValue = warningText;
       return warningText;
@@ -835,7 +877,7 @@ export default function LembarUjianPage({
       dispatchAreaViolation(
         'KEYBOARD_SHORTCUT_VIOLATION',
         reason,
-        'Peringatan! Tombol pintasan dilarang selama ujian!'
+        'Perhatian. Penggunaan pintasan papan ketik tersebut dibatasi selama pelaksanaan ujian.'
       );
     });
 
@@ -845,8 +887,8 @@ export default function LembarUjianPage({
         setIsPrivacyObscured(true);
         dispatchAreaViolation(
           'TAB_SWITCH_ALERT',
-          'Peserta meninggalkan halaman ujian (pindah tab / meminimalkan browser ponsel)',
-          'Peringatan! Anda terdeteksi meninggalkan halaman ujian!'
+          'Peserta terdeteksi meninggalkan halaman ujian (berpindah tab atau meminimalkan peramban).',
+          'Perhatian. Sistem mendeteksi Anda meninggalkan halaman ujian. Mohon segera kembali ke lembar ujian demi menjaga ketertiban dan kejujuran akademik.'
         );
       } else {
         // Saat kembali ke halaman ujian, nyalakan kembali WakeLock & hitung ulang timer seketika
@@ -880,9 +922,9 @@ export default function LembarUjianPage({
           dispatchAreaViolation(
             'APP_SWITCH_ALERT',
             devInfo.isMobile || devInfo.isTablet
-              ? 'Layar ujian kehilangan fokus (membuka jendela aplikasi lain / panel notifikasi)'
-              : 'Peserta berpindah ke jendela aplikasi lain (Window Blur)',
-            'Peringatan! Dilarang membuka aplikasi atau panel lain selama ujian!'
+              ? 'Halaman ujian kehilangan fokus karena membuka panel sistem atau jendela aplikasi lain.'
+              : 'Halaman ujian kehilangan fokus karena berpindah ke jendela aplikasi lain.',
+            'Perhatian. Mohon tidak membuka panel notifikasi atau aplikasi lain selama sesi ujian berlangsung.'
           );
         }
       }, 650);
@@ -899,8 +941,8 @@ export default function LembarUjianPage({
       if (isSubmittedRef.current) return;
       dispatchAreaViolation(
         'TAB_SWITCH_ALERT',
-        'Peserta menutup atau meninggalkan tab ujian',
-        'Peringatan! Dilarang menutup halaman ujian!'
+        'Peserta menutup atau meninggalkan tab pelaksanaan ujian.',
+        'Perhatian. Mohon tidak menutup halaman ujian sebelum menyelesaikan seluruh butir soal.'
       );
     };
 
@@ -912,7 +954,7 @@ export default function LembarUjianPage({
       }
       if (e.clientY <= 0) {
         cbtSecurityAudio.playWarningBuzzer();
-        setCheatWarning('Peringatan: Kursor terdeteksi meninggalkan area ujian!');
+        setCheatWarning('Pemberitahuan: Kursor terdeteksi keluar dari batas area lembar ujian. Mohon tetap fokus pada layar pengerjaan.');
       }
     };
 
@@ -937,8 +979,8 @@ export default function LembarUjianPage({
         setWasExitedForKeyboard(false);
         dispatchAreaViolation(
           'FULLSCREEN_EXIT',
-          'Peserta keluar dari mode layar penuh (Fullscreen Lockdown)',
-          'Peringatan! Layar terkunci! Harap segera kembali ke mode layar penuh!'
+          'Peserta keluar dari mode layar penuh sebelum ujian diselesaikan.',
+          'Perhatian. Anda keluar dari mode layar penuh. Silakan ketuk tombol Masuk Layar Penuh untuk melanjutkan pengerjaan soal dengan tertib.'
         );
       }
     };
@@ -954,8 +996,8 @@ export default function LembarUjianPage({
         if (splitDetected) {
           dispatchAreaViolation(
             'SECURITY_ALERT',
-            'Terdeteksi mode Layar Belah (Split-Screen / Jendela Mengambang) pada perangkat mobile!',
-            'Peringatan! Dilarang menggunakan fitur layar belah atau jendela mengambang selama ujian!'
+            'Terdeteksi penggunaan tampilan layar terbagi (Split-Screen) atau jendela mengambang pada perangkat.',
+            'Perhatian. Penggunaan fitur layar terbagi atau jendela mengambang tidak diperkenankan selama ujian. Mohon kembalikan peramban ke tampilan layar penuh.'
           );
         }
       }, 400);
@@ -965,8 +1007,6 @@ export default function LembarUjianPage({
     const handleContextMenu = (e: MouseEvent | TouchEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      // Jika event berasal dari klik kanan mouse desktop, bunyikan peringatan;
-      // jika berasal dari tahan-sentuh / cubit 2 jari touchscreen, cukup blokir menu konteks secara senyap agar scroll & zoom nyaman!
       const pType = (e as any).pointerType;
       const isTouchContext =
         isMultiTouchPinchingRef.current ||
@@ -975,7 +1015,7 @@ export default function LembarUjianPage({
         (pType === undefined && typeof window !== 'undefined' && 'ontouchstart' in window);
       if (!isTouchContext) {
         cbtSecurityAudio.playWarningBuzzer();
-        setCheatWarning('Peringatan: Klik kanan diblokir selama ujian!');
+        setCheatWarning('Pemberitahuan: Menu klik kanan dinonaktifkan selama pelaksanaan ujian.');
       }
     };
 
@@ -984,8 +1024,8 @@ export default function LembarUjianPage({
       e.stopPropagation();
       cbtSecurityAudio.playWarningBuzzer();
       const actionName =
-        e.type === 'copy' ? 'Menyalin (Copy)' : e.type === 'cut' ? 'Memotong (Cut)' : 'Menempel (Paste)';
-      setCheatWarning(`Peringatan: Akses ${actionName} diblokir total selama ujian!`);
+        e.type === 'copy' ? 'menyalin teks' : e.type === 'cut' ? 'memotong teks' : 'menempelkan teks';
+      setCheatWarning(`Pemberitahuan: Fitur ${actionName} dinonaktifkan selama pelaksanaan ujian berlangsung.`);
     };
 
     const handleSelectStart = (e: Event) => {
@@ -1050,7 +1090,7 @@ export default function LembarUjianPage({
     };
   }, [isSecurityUnlocked, pesertaUjianId, ujianInfo]);
 
-  const triggerCheatLog = async (aktivitas: string, detail: string) => {
+  const triggerCheatLog = async (aktivitas: string, detail: string, baseVoiceMsg?: string) => {
     if (securityUnlockedAtRef.current && Date.now() - securityUnlockedAtRef.current < 5000) {
       return;
     }
@@ -1072,15 +1112,30 @@ export default function LembarUjianPage({
       setViolationCount(currentViolation);
 
       if (resJson.data?.isLocked) {
-        alert(
-          `AKUN UJIAN ANDA TERKUNCI!\n\nAnda telah mencapai batas maksimal 10 kali pelanggaran keamanan (keluar halaman ujian / berpindah aplikasi / berpindah tab). Sistem otomatis mengunci ujian Anda. Silakan hubungi Pengawas / Proktor untuk membuka kunci ujian Anda.`
+        isSubmittedRef.current = true;
+        await exitUniversalFullscreen();
+        releaseExambroKioskSecurity();
+        cbtSecurityAudio.triggerFullWarning(
+          'Perhatian. Anda telah melampaui batas maksimal sepuluh kali pelanggaran tata tertib ujian. Sesi pengerjaan Anda kini dikunci oleh sistem. Silakan melapor kepada Pengawas Ruang dengan sopan dan tertib.'
         );
-        router.push('/siswa');
+        setSystemNoticeModal({
+          variant: 'locked',
+          title: 'Sesi Ujian Terkunci Otomatis (10/10 Pelanggaran)',
+          subtitle:
+            'Anda telah mencapai batas maksimal 10 kali pelanggaran tata tertib keamanan ujian. Demi menjaga integritas akademik, sesi pengerjaan ini ditangguhkan sementara. Silakan melapor kepada Pengawas Ruang dengan tertib.',
+          redirectTo: '/siswa',
+        });
       } else if (currentViolation > 0) {
         const sisaPelanggaran = Math.max(0, 10 - currentViolation);
         setCheatWarning(
-          `Pelanggaran (${currentViolation}/10): ${detail} — Sisa toleransi ${sisaPelanggaran}x lagi sebelum terkunci otomatis.`
+          `Catatan Pelanggaran (${currentViolation}/10): ${detail} Sisa batas toleransi ${sisaPelanggaran} kali sebelum sesi ujian dikunci otomatis.`
         );
+        // Peringatan suara khusus saat mendekati ambang penguncian (pelanggaran ke-8 atau ke-9)
+        if (sisaPelanggaran <= 2 && baseVoiceMsg) {
+          cbtSecurityAudio.speakWarning(
+            `Peringatan penting. Ini adalah catatan pelanggaran ke-${currentViolation} dari batas maksimal sepuluh kali. Tersisa ${sisaPelanggaran} kesempatan sebelum sesi ujian Anda dikunci secara otomatis.`
+          );
+        }
       }
     } catch {
       // silent
@@ -1127,8 +1182,20 @@ export default function LembarUjianPage({
         });
         const data = await res.json();
         if (res.status === 403 && data.isLocked) {
-          alert(data.message || 'Akun ujian Anda telah dikunci oleh Pengawas.');
-          router.push('/siswa');
+          isSubmittedRef.current = true;
+          await exitUniversalFullscreen();
+          releaseExambroKioskSecurity();
+          cbtSecurityAudio.triggerFullWarning(
+            'Perhatian. Sesi ujian Anda telah ditangguhkan oleh Pengawas Ruang. Silakan melapor kepada Pengawas Ruang dengan tertib.'
+          );
+          setSystemNoticeModal({
+            variant: 'locked',
+            title: 'Sesi Ujian Ditangguhkan',
+            subtitle:
+              data.message ||
+              'Akses pengerjaan ujian Anda telah dikunci sementara oleh Pengawas Ruang. Silakan melapor kepada Pengawas Ruang untuk verifikasi.',
+            redirectTo: '/siswa',
+          });
           return;
         }
         if (res.ok && data.success) {
@@ -1341,10 +1408,10 @@ export default function LembarUjianPage({
             <ShieldAlert className="w-6 h-6" />
           </div>
           <h3 className="text-base sm:text-lg font-bold text-white">
-            Layar Soal Disamarkan (Privacy Guard)
+            Perlindungan Kerahasiaan Naskah Ujian Aktif
           </h3>
-          <p className="text-xs text-slate-400 mt-1.5 max-w-sm leading-relaxed">
-            Harap tetap fokus di layar ujian. Perpindahan aplikasi, panel sistem, dan tangkapan layar diblokir demi integritas ujian.
+          <p className="text-xs text-slate-300 mt-1.5 max-w-md leading-relaxed">
+            Mohon tetap berfokus pada lembar pengerjaan ujian. Perpindahan aplikasi, pembukaan panel sistem, serta tangkapan layar tidak diperkenankan demi menjaga integritas akademik.
           </p>
         </div>
       )}
@@ -1356,10 +1423,10 @@ export default function LembarUjianPage({
             <AlertTriangle className="w-6 h-6" />
           </div>
           <h3 className="text-base sm:text-lg font-bold text-white">
-            Mode Layar Belah (Split-Screen) Terdeteksi
+            Tampilan Layar Terbagi Tidak Diperkenankan
           </h3>
           <p className="text-xs text-slate-300 mt-1.5 max-w-md leading-relaxed">
-            Tutup aplikasi kedua / jendela mengambang dan kembalikan browser ke ukuran layar penuh untuk melanjutkan mengerjakan soal.
+            Mohon tutup aplikasi kedua atau jendela mengambang pada perangkat Anda, kemudian kembalikan peramban ke tampilan layar penuh untuk melanjutkan pengerjaan soal.
           </p>
         </div>
       )}
@@ -1399,19 +1466,19 @@ export default function LembarUjianPage({
                   }`}
                 >
                   {wasExitedForKeyboard
-                    ? 'Keyboard Ditutup • Tanpa Sanksi'
-                    : `Pelanggaran ${violationCount}/10`}
+                    ? 'Penyesuaian Papan Ketik • Tanpa Sanksi'
+                    : `Catatan Pelanggaran ${violationCount}/10`}
                 </span>
                 <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-1">
-                  Kembali ke Mode Layar Penuh
+                  Kembalikan Tampilan Layar Penuh
                 </h2>
               </div>
             </div>
 
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
               {wasExitedForKeyboard
-                ? 'Ketuk tombol di bawah untuk mengunci kembali layar penuh dan melanjutkan pengerjaan soal.'
-                : 'Anda keluar dari mode layar penuh. Ketuk tombol di bawah untuk mengembalikan layar penuh dan melanjutkan ujian.'}
+                ? 'Silakan ketuk tombol di bawah ini untuk mengaktifkan kembali mode layar penuh dan melanjutkan pengerjaan soal.'
+                : 'Sistem mendeteksi Anda keluar dari mode layar penuh sebelum ujian berakhir. Mohon ketuk tombol di bawah ini untuk mengembalikan tampilan layar penuh dan melanjutkan pengerjaan dengan tertib.'}
             </p>
 
             <button
@@ -2218,6 +2285,87 @@ export default function LembarUjianPage({
                 {submitting ? 'Mengumpulkan...' : 'Kumpulkan & Keluar'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Institusional Penyelesaian Ujian / Penangguhan Sesi (Tidak Memblokir Suara TTS seperti window.alert!) */}
+      {systemNoticeModal && (
+        <div className="fixed inset-0 bg-slate-950/80 z-[110] flex items-center justify-center p-4 overflow-y-auto overscroll-contain">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 text-left my-auto">
+            <div className="flex items-start gap-3 border-b border-slate-200 dark:border-slate-800 pb-3.5">
+              <div
+                className={`w-10 h-10 rounded-lg border flex items-center justify-center shrink-0 ${
+                  systemNoticeModal.variant === 'completed'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400'
+                    : systemNoticeModal.variant === 'locked'
+                    ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400'
+                    : 'bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400'
+                }`}
+              >
+                {systemNoticeModal.variant === 'completed' ? (
+                  <CheckCircle2 className="w-5 h-5" />
+                ) : systemNoticeModal.variant === 'locked' ? (
+                  <ShieldAlert className="w-5 h-5" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                  Pemberitahuan Resmi Sistem CBT
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-0.5">
+                  {systemNoticeModal.title}
+                </h3>
+              </div>
+            </div>
+
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+              {systemNoticeModal.subtitle}
+            </p>
+
+            {systemNoticeModal.scoreText && (
+              <div className="p-3.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
+                <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                  Nilai Akhir Perolehan
+                </span>
+                <span className="text-base font-bold font-mono text-emerald-700 dark:text-emerald-300">
+                  {systemNoticeModal.scoreText}
+                </span>
+              </div>
+            )}
+
+            {systemNoticeModal.variant === 'error' && (
+              <button
+                type="button"
+                onClick={handleDownloadEmergencyBackup}
+                className="min-h-[42px] w-full py-2 px-3 rounded-lg bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation"
+              >
+                <HardDriveDownload className="w-4 h-4 text-slate-500" />
+                <span>Unduh Cadangan Jawaban (.json)</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                const dest = systemNoticeModal.redirectTo;
+                setSystemNoticeModal(null);
+                if (dest) {
+                  router.push(dest);
+                }
+              }}
+              className={`min-h-[44px] w-full py-2.5 px-4 rounded-lg text-white font-semibold text-xs sm:text-sm transition cursor-pointer flex items-center justify-center gap-2 active:scale-[0.99] touch-manipulation ${
+                systemNoticeModal.variant === 'completed'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : systemNoticeModal.variant === 'locked'
+                  ? 'bg-rose-600 hover:bg-rose-700'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              <span>{systemNoticeModal.redirectTo ? 'Kembali ke Halaman Daftar Ujian' : 'Mengerti & Tutup'}</span>
+            </button>
           </div>
         </div>
       )}

@@ -3,8 +3,7 @@ import { getSessionUser, hashPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { runAIProctorAnalysis } from '@/lib/pythonBridge';
 import { getCalibratedServerNow, computeAccurateExamRemainingSeconds } from '@/lib/exam-time';
-import { TipeSoal } from '@/lib/enums';
-import { matchIsianSingkat, matchPGKompleks, matchMenjodohkan } from '@/lib/cbt-scoring';
+import { evaluateExamSubmissionItems } from '@/lib/cbt-scoring';
 
 export async function GET(request: NextRequest) {
   try {
@@ -528,70 +527,39 @@ export async function POST(request: NextRequest) {
         } catch {}
       }
 
-      const jawabanMap = new Map(pesertaUjian.jawabanPeserta.map((j) => [j.soalId, j]));
-      let totalNilaiPG = 0;
-      let maxNilaiObjektif = 0;
-      let totalBobotEsai = 0;
-      let adaSoalEsai = false;
+      const mapel = pesertaUjian.ujian.mataPelajaran;
+      const gradeSummary = evaluateExamSubmissionItems({
+        soalList,
+        jawabanList: pesertaUjian.jawabanPeserta,
+        nilaiMaksimal: mapel.nilaiMaksimal,
+        nilaiMinimal: mapel.nilaiMinimal,
+        preserveManualEssayScores: false,
+      });
 
-      for (const soal of soalList) {
-        const jawaban = jawabanMap.get(soal.id);
-        const bobot = soal.bobot || 1.0;
-
-        if (soal.tipeSoal === TipeSoal.PG || soal.tipeSoal === TipeSoal.BENAR_SALAH) {
-          maxNilaiObjektif += bobot;
-          const opsiBenar = soal.opsiJawaban.find((o) => o.isBenar);
-          const isBenar = Boolean(jawaban && opsiBenar && jawaban.jawabanDipilih === opsiBenar.id);
-          const skor = isBenar ? bobot : 0;
-          if (isBenar) totalNilaiPG += bobot;
-          if (jawaban) {
-            await prisma.jawabanPeserta.update({ where: { id: jawaban.id }, data: { isBenar, skor } });
-          }
-        } else if (soal.tipeSoal === TipeSoal.PG_KOMPLEKS) {
-          maxNilaiObjektif += bobot;
-          let chosenIds: string[] = [];
-          try {
-            if (jawaban?.jawabanDipilih) chosenIds = JSON.parse(jawaban.jawabanDipilih);
-          } catch {}
-          const matchResult = matchPGKompleks(chosenIds, soal.opsiJawaban, bobot);
-          totalNilaiPG += matchResult.skor;
-          if (jawaban) {
-            await prisma.jawabanPeserta.update({
-              where: { id: jawaban.id },
-              data: { isBenar: matchResult.isBenar, skor: matchResult.skor },
-            });
-          }
-        } else if (soal.tipeSoal === TipeSoal.ISIAN) {
-          maxNilaiObjektif += bobot;
-          const isBenar = matchIsianSingkat(jawaban?.jawabanDipilih || '', soal.kunciJawabanTeks || '');
-          const skor = isBenar ? bobot : 0;
-          if (isBenar) totalNilaiPG += bobot;
-          if (jawaban) {
-            await prisma.jawabanPeserta.update({ where: { id: jawaban.id }, data: { isBenar, skor } });
-          }
-        } else if (soal.tipeSoal === TipeSoal.MENJODOHKAN) {
-          maxNilaiObjektif += bobot;
-          const matchResult = matchMenjodohkan(jawaban?.jawabanDipilih || undefined, soal.matchingData || undefined, bobot);
-          totalNilaiPG += matchResult.skor;
-          if (jawaban) {
-            await prisma.jawabanPeserta.update({
-              where: { id: jawaban.id },
-              data: { isBenar: matchResult.isBenar, skor: matchResult.skor },
-            });
-          }
-        } else if (soal.tipeSoal === TipeSoal.ESAI) {
-          adaSoalEsai = true;
-          totalBobotEsai += bobot;
+      for (const item of gradeSummary.updates) {
+        if (item.jawabanId) {
+          await prisma.jawabanPeserta.update({
+            where: { id: item.jawabanId },
+            data: {
+              isBenar: item.isBenar,
+              skor: item.skor,
+              ...(item.catatanKoreksi !== undefined ? { catatanKoreksi: item.catatanKoreksi } : {}),
+            },
+          });
+        } else {
+          await prisma.jawabanPeserta.create({
+            data: {
+              pesertaUjianId,
+              soalId: item.soalId,
+              jawabanDipilih: item.jawabanDipilih || '',
+              raguRagu: false,
+              isBenar: item.isBenar,
+              skor: item.skor,
+              catatanKoreksi: item.catatanKoreksi ?? null,
+            },
+          });
         }
       }
-
-      const mapel = pesertaUjian.ujian.mataPelajaran;
-      const maxNilai = mapel.nilaiMaksimal ?? 100.0;
-      const minNilai = mapel.nilaiMinimal ?? 0.0;
-      const totalBobotAssigned = maxNilaiObjektif + totalBobotEsai;
-      const rawTotalPG =
-        totalBobotAssigned > 0 ? Number(((totalNilaiPG / totalBobotAssigned) * maxNilai).toFixed(2)) : totalNilaiPG;
-      const finalNilaiPG = Math.min(maxNilai, Math.max(minNilai, rawTotalPG));
 
       await prisma.pesertaUjian.update({
         where: { id: pesertaUjianId },
@@ -599,9 +567,10 @@ export async function POST(request: NextRequest) {
           status: 'SELESAI',
           waktuSelesai: new Date(),
           sisaDetik: 0,
-          nilaiPG: finalNilaiPG,
-          nilaiTotal: finalNilaiPG,
-          isKoreksiSelesai: !adaSoalEsai,
+          nilaiPG: gradeSummary.nilaiPG,
+          nilaiEsai: gradeSummary.nilaiEsai,
+          nilaiTotal: gradeSummary.nilaiTotal,
+          isKoreksiSelesai: gradeSummary.isKoreksiSelesai,
         },
       });
 
@@ -610,13 +579,13 @@ export async function POST(request: NextRequest) {
           userId: user.userId,
           pesertaUjianId,
           aktivitas: 'FORCE_FINISH_BY_PROKTOR',
-          detail: `Proktor (${user.name}) menyelesaikan paksa ujian ${pesertaUjian.siswa.name}. Nilai objektif terhitung: ${finalNilaiPG}.`,
+          detail: `Proktor (${user.name}) menyelesaikan paksa ujian ${pesertaUjian.siswa.name}. Nilai PG: ${gradeSummary.nilaiPG}, Isian/Esai: ${gradeSummary.nilaiEsai}, Total: ${gradeSummary.nilaiTotal}.`,
         },
       });
 
       return NextResponse.json({
         success: true,
-        message: `Ujian "${pesertaUjian.siswa.name}" berhasil diselesaikan paksa & dinilai otomatis (Skor: ${finalNilaiPG}).`,
+        message: `Ujian "${pesertaUjian.siswa.name}" berhasil diselesaikan paksa & dinilai otomatis (PG: ${gradeSummary.nilaiPG}, Isian/Esai: ${gradeSummary.nilaiEsai}, Total: ${gradeSummary.nilaiTotal}).`,
       });
     }
 

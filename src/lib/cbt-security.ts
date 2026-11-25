@@ -143,9 +143,49 @@ export const cbtWakeLock = new CBTWakeLockManager();
 class CBTSecurityAudio {
   private audioCtx: AudioContext | null = null;
   private isUnlocked = false;
+  private speechUnlocked = false;
+  private cachedIndonesianVoice: SpeechSynthesisVoice | null = null;
+  private activeUtterance: SpeechSynthesisUtterance | null = null;
 
   /**
-   * Unlock AudioContext untuk iOS Safari & Mobile Auto-play Policy
+   * Memilih suara Bahasa Indonesia paling natural & berwibawa untuk jenjang SMA
+   */
+  private resolveBestIndonesianVoice(): SpeechSynthesisVoice | null {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+    try {
+      const voices = window.speechSynthesis.getVoices() || [];
+      if (voices.length === 0) return this.cachedIndonesianVoice;
+
+      // Urutan prioritas suara Bahasa Indonesia berkualitas tinggi lintas OS (Windows, Android, iOS/macOS, Chrome)
+      const preferredKeywords = ['gadis', 'ardi', 'google bahasa indonesia', 'damayanti', 'indonesia'];
+      for (const kw of preferredKeywords) {
+        const match = voices.find(
+          (v) =>
+            (v.lang.toLowerCase().startsWith('id') || v.lang.toLowerCase().startsWith('in')) &&
+            v.name.toLowerCase().includes(kw)
+        );
+        if (match) {
+          this.cachedIndonesianVoice = match;
+          return match;
+        }
+      }
+
+      const anyIdVoice = voices.find(
+        (v) =>
+          v.lang.toLowerCase().startsWith('id') ||
+          v.lang.toLowerCase().startsWith('in-id') ||
+          v.name.toLowerCase().includes('indonesia')
+      );
+      if (anyIdVoice) {
+        this.cachedIndonesianVoice = anyIdVoice;
+        return anyIdVoice;
+      }
+    } catch {}
+    return this.cachedIndonesianVoice;
+  }
+
+  /**
+   * Unlock AudioContext & Web Speech API pada ketukan pertama peserta (Kompatibel iOS Safari & Chrome Android Autoplay Policy)
    */
   public unlockAudio() {
     if (typeof window === 'undefined') return;
@@ -157,10 +197,10 @@ class CBTSecurityAudio {
       }
 
       if (this.audioCtx && this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume();
+        this.audioCtx.resume().catch(() => {});
       }
 
-      // Mainkan silent oscillator sekejap agar policy iOS/Safari ter-unlock
+      // Mainkan silent oscillator sekejap agar policy Web Audio iOS/Safari/Android ter-unlock
       if (this.audioCtx && !this.isUnlocked) {
         const buffer = this.audioCtx.createBuffer(1, 1, 22050);
         const source = this.audioCtx.createBufferSource();
@@ -170,9 +210,21 @@ class CBTSecurityAudio {
         this.isUnlocked = true;
       }
 
-      // Inisialisasi Web Speech API voices
+      // Inisialisasi & unlock antrean Web Speech API di iOS Safari & Chrome Mobile
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.getVoices();
+        this.resolveBestIndonesianVoice();
+        if (typeof window.speechSynthesis.onvoiceschanged !== 'function') {
+          window.speechSynthesis.onvoiceschanged = () => {
+            this.resolveBestIndonesianVoice();
+          };
+        }
+        if (!this.speechUnlocked) {
+          const primer = new SpeechSynthesisUtterance(' ');
+          primer.volume = 0;
+          primer.lang = 'id-ID';
+          window.speechSynthesis.speak(primer);
+          this.speechUnlocked = true;
+        }
       }
     } catch (e) {
       console.warn('Audio unlock error:', e);
@@ -180,33 +232,36 @@ class CBTSecurityAudio {
   }
 
   /**
-   * Mainkan Suara Alarm Peringatan Berulang (Buzzer Alert Synth Cross-Platform + Getar Haptic HP)
+   * Nada Peringatan Pelanggaran Institusional (Tegas, Jelas, Tidak Bising + Getar Haptic Ponsel)
    */
   public playWarningBuzzer() {
     try {
       if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-        navigator.vibrate([120, 60, 120]);
+        navigator.vibrate([110, 60, 110]);
       }
       this.unlockAudio();
       if (!this.audioCtx) return;
 
       if (this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume();
+        this.audioCtx.resume().catch(() => {});
       }
 
       const now = this.audioCtx.currentTime;
 
-      // Double Beep Frequency Warning Tone (Kompatibel Web Audio di Semua Browser)
-      [0, 0.22].forEach((offset) => {
+      // Dua nada peringatan institusional (A5 -> E5) gelombang triangle yang tegas namun bersih
+      [
+        { offset: 0, freqStart: 880, freqEnd: 659.25 },
+        { offset: 0.2, freqStart: 783.99, freqEnd: 523.25 },
+      ].forEach(({ offset, freqStart, freqEnd }) => {
         const osc = this.audioCtx!.createOscillator();
         const gain = this.audioCtx!.createGain();
 
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(880, now + offset); // A5
-        osc.frequency.exponentialRampToValueAtTime(440, now + offset + 0.16);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freqStart, now + offset);
+        osc.frequency.exponentialRampToValueAtTime(freqEnd, now + offset + 0.16);
 
-        gain.gain.setValueAtTime(0.35, now + offset);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.16);
+        gain.gain.setValueAtTime(0.32, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.17);
 
         osc.connect(gain);
         gain.connect(this.audioCtx!.destination);
@@ -220,67 +275,123 @@ class CBTSecurityAudio {
   }
 
   /**
-   * Suara Peringatan Bahasa Indonesia via Web Speech API
+   * Nada Chime Akademik Saat Ujian Berhasil Dikumpulkan (Harmoni C5 - E5 - G5 - C6)
    */
-  public speakWarning(text = 'Peringatan! Anda terdeteksi meninggalkan halaman ujian!') {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-
+  public playCompletionChime() {
     try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'id-ID';
-      utterance.rate = 1.0;
-      utterance.pitch = 1.05;
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate([60, 40, 90]);
+      }
+      this.unlockAudio();
+      if (!this.audioCtx) return;
 
-      const voices = window.speechSynthesis.getVoices();
-      const idVoice = voices.find(
-        (v) =>
-          v.lang.toLowerCase().startsWith('id') ||
-          v.name.toLowerCase().includes('indonesia') ||
-          v.name.toLowerCase().includes('damayanti')
-      );
-      if (idVoice) {
-        utterance.voice = idVoice;
+      if (this.audioCtx.state === 'suspended') {
+        this.audioCtx.resume().catch(() => {});
       }
 
-      window.speechSynthesis.speak(utterance);
+      const now = this.audioCtx.currentTime;
+      const notes = [
+        { freq: 523.25, offset: 0, dur: 0.16 },
+        { freq: 659.25, offset: 0.12, dur: 0.16 },
+        { freq: 783.99, offset: 0.24, dur: 0.2 },
+        { freq: 1046.5, offset: 0.38, dur: 0.36 },
+      ];
+
+      notes.forEach(({ freq, offset, dur }) => {
+        const osc = this.audioCtx!.createOscillator();
+        const gain = this.audioCtx!.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + offset);
+
+        gain.gain.setValueAtTime(0.001, now + offset);
+        gain.gain.linearRampToValueAtTime(0.24, now + offset + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + dur);
+
+        osc.connect(gain);
+        gain.connect(this.audioCtx!.destination);
+
+        osc.start(now + offset);
+        osc.stop(now + offset + dur + 0.02);
+      });
     } catch (e) {
-      console.warn('Speech warning error:', e);
+      console.warn('Completion chime error:', e);
     }
   }
 
   /**
-   * Suara Notifikasi Sukses / Selesai Ujian Bahasa Indonesia via Web Speech API
+   * Helper internal pengucapan Bahasa Indonesia baku & artikulatif untuk siswa SMA
    */
-  public speakSuccess(text = 'Ujian selesai, terimakasih telah mengerjakan!') {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  private speakUtterance(text: string, rate = 0.96, pitch = 1.0) {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window) || !text) return;
 
     try {
-      window.speechSynthesis.cancel();
+      const synth = window.speechSynthesis;
+      if (synth.speaking || synth.pending) {
+        synth.cancel();
+      }
+      if (synth.paused) {
+        synth.resume();
+      }
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'id-ID';
-      utterance.rate = 1.0;
-      utterance.pitch = 1.1;
+      utterance.rate = rate;
+      utterance.pitch = pitch;
+      utterance.volume = 1.0;
 
-      const voices = window.speechSynthesis.getVoices();
-      const idVoice = voices.find(
-        (v) =>
-          v.lang.toLowerCase().startsWith('id') ||
-          v.name.toLowerCase().includes('indonesia') ||
-          v.name.toLowerCase().includes('damayanti')
-      );
+      const idVoice = this.resolveBestIndonesianVoice();
       if (idVoice) {
         utterance.voice = idVoice;
       }
 
-      window.speechSynthesis.speak(utterance);
+      // Simpan referensi pada properti class agar tidak terhapus Garbage Collector browser di tengah kalimat
+      this.activeUtterance = utterance;
+      utterance.onend = () => {
+        if (this.activeUtterance === utterance) {
+          this.activeUtterance = null;
+        }
+      };
+      utterance.onerror = () => {
+        if (this.activeUtterance === utterance) {
+          this.activeUtterance = null;
+        }
+      };
+
+      // Beri jeda mikro 40ms pasca synth.cancel() agar mesin TTS Android/Windows tidak menelan kata pertama
+      setTimeout(() => {
+        try {
+          window.speechSynthesis.speak(utterance);
+        } catch {}
+      }, 40);
     } catch (e) {
-      console.warn('Speech success error:', e);
+      console.warn('Speech synthesis error:', e);
     }
   }
 
   /**
-   * Peringatan Lengkap (Buzzer + Voice)
+   * Suara Peringatan Pelanggaran Bahasa Indonesia Institusional (Baku, Sopan, Berwibawa untuk Siswa SMA)
+   */
+  public speakWarning(
+    text = 'Perhatian. Sistem mendeteksi Anda meninggalkan lembar ujian. Mohon tetap berada pada halaman ujian demi menjaga integritas akademik.'
+  ) {
+    this.speakUtterance(text, 0.96, 0.98);
+  }
+
+  /**
+   * Suara Konfirmasi Penyelesaian Ujian (Nada Chime + Pesan Suara Apresiatif Institusional)
+   */
+  public speakSuccess(
+    text = 'Pelaksanaan ujian telah selesai dan seluruh jawaban Anda berhasil tersimpan. Terima kasih atas kejujuran dan ketertiban Anda.'
+  ) {
+    this.playCompletionChime();
+    setTimeout(() => {
+      this.speakUtterance(text, 0.95, 1.0);
+    }, 460);
+  }
+
+  /**
+   * Peringatan Lengkap Pelanggaran (Nada Peringatan + Pesan Suara Institusional)
    */
   public triggerFullWarning(pesanVoice?: string) {
     this.playWarningBuzzer();
@@ -439,7 +550,7 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
       }
       e.preventDefault();
       e.stopPropagation();
-      onViolation?.(`Tombol ${e.key} dicegah (Layar Penuh Terkunci)`);
+      onViolation?.(`Penggunaan tombol ${e.key} dibatasi karena sesi ujian berada dalam mode layar penuh terkunci.`);
       return false;
     }
 
@@ -450,7 +561,7 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
     ) {
       e.preventDefault();
       e.stopPropagation();
-      onViolation?.(`Pencegahan keluar tab (${isCmd ? 'Cmd' : 'Ctrl'}+${e.key.toUpperCase()})`);
+      onViolation?.(`Pintasan perpindahan tab (${isCmd ? 'Cmd' : 'Ctrl'}+${e.key.toUpperCase()}) tidak diizinkan selama pelaksanaan ujian.`);
       return false;
     }
 
@@ -458,7 +569,7 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
     if (isAlt && ['ArrowLeft', 'ArrowRight', 'F4', 'Home'].includes(e.key)) {
       e.preventDefault();
       e.stopPropagation();
-      onViolation?.(`Kombinasi Alt+${e.key} dicegah`);
+      onViolation?.(`Kombinasi navigasi sistem (Alt+${e.key}) tidak diizinkan selama ujian berlangsung.`);
       return false;
     }
 
@@ -469,7 +580,7 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
     ) {
       e.preventDefault();
       e.stopPropagation();
-      onViolation?.('Kombinasi Inspect Element / DevTools dicegah');
+      onViolation?.('Akses fitur inspeksi peramban tidak diizinkan selama pelaksanaan ujian.');
       return false;
     }
 
@@ -480,7 +591,7 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
     ) {
       e.preventDefault();
       e.stopPropagation();
-      onViolation?.(`Shortcut ${isCmd ? 'Cmd' : 'Ctrl'}+${e.key.toUpperCase()} dicegah`);
+      onViolation?.(`Pintasan peramban (${isCmd ? 'Cmd' : 'Ctrl'}+${e.key.toUpperCase()}) dinonaktifkan selama sesi ujian.`);
       return false;
     }
 
@@ -499,7 +610,7 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
           navigator.clipboard.writeText('');
         } catch {}
       }
-      onViolation?.('Tangkapan Layar (Screenshot) / Rekam Layar dilarang keras selama ujian!');
+      onViolation?.('Pengambilan tangkapan layar maupun perekaman layar tidak diperkenankan selama ujian berlangsung.');
       return false;
     }
 
@@ -509,19 +620,19 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
       e.stopPropagation();
       const actionName =
         e.key.toLowerCase() === 'a'
-          ? 'Pilih Semua (Select All)'
+          ? 'pilih semua teks'
           : e.key.toLowerCase() === 'c'
-          ? 'Salin (Copy)'
+          ? 'salin teks'
           : e.key.toLowerCase() === 'x'
-          ? 'Potong (Cut)'
-          : 'Tempel (Paste)';
-      onViolation?.(`Fitur ${actionName} diblokir total selama ujian!`);
+          ? 'potong teks'
+          : 'tempel teks';
+      onViolation?.(`Fitur ${actionName} dinonaktifkan demi menjaga kejujuran akademik.`);
       return false;
     }
 
     // 7. Cmd+Tab / Windows Key
     if (e.key === 'Meta' || e.key === 'OS') {
-      onViolation?.('Tombol Menu Sistem ditekan');
+      onViolation?.('Penggunaan tombol menu sistem terdeteksi selama pelaksanaan ujian.');
     }
   };
 
@@ -607,7 +718,7 @@ export function setupAntiScreenshotAndRecording(onViolation?: (detail: string) =
   if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
     originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getDisplayMedia = async () => {
-      onViolation?.('Upaya Perekaman Layar / Screen Share terdeteksi dan diblokir!');
+      onViolation?.('Upaya perekaman atau pembagian layar terdeteksi dan dicegah oleh sistem pengawasan.');
       throw new DOMException('Screen recording and screen capture are strictly forbidden during exam.', 'NotAllowedError');
     };
   }
@@ -621,7 +732,7 @@ export function setupAntiScreenshotAndRecording(onViolation?: (detail: string) =
           navigator.clipboard.writeText('');
         } catch {}
       }
-      onViolation?.('Tangkapan Layar (PrintScreen / Screenshot) diblokir!');
+      onViolation?.('Pengambilan tangkapan layar tidak diperkenankan selama pelaksanaan ujian.');
     }
   };
 

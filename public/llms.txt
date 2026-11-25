@@ -128,3 +128,17 @@ Saat menjadwalkan tes ujian (`action: "CREATE_UJIAN"`):
 - **Validasi Logika Waktu**: Selisih antara `waktuSelesai` dan `waktuMulai` (dalam menit) **WAJIB >= `durasiMenit`**. Contoh: jika `durasiMenit: 90`, maka `waktuSelesai` minimal 90 menit setelah `waktuMulai`.
 - `lockBrowser: true` (default) mengaktifkan fitur **Anti-Cheat Kiosk Layar Penuh** di perangkat peserta (blokir copy/paste/select, peringatan keluar fullscreen maksimal 10x pelanggaran, dan keluar layar penuh otomatis setelah peserta menyelesaikan seluruh soal).
 
+---
+
+## 6. Aturan Penilaian Otomatis Terpadu (PG, Isian Singkat, & Esai)
+Seluruh jawaban peserta dinilai secara otomatis dan proporsional ke rentang nilai topik (`0..100`) begitu peserta menyelesaikan ujian, waktu habis (`isAuto`), diselesaikan paksa Proktor (`FORCE_FINISH`), maupun dievaluasi ulang di menu Evaluasi Tes:
+1. **Isian Singkat (`ISIAN`) — Wajib Exact Match**:
+   - Hanya jawaban yang **persis (exact)** dengan `kunciJawabanTeks` (setelah normalisasi spasi, huruf besar/kecil, desimal `1,5 == 1.5`, atau notasi matematika ekuivalen `2√3 == $2\sqrt{3}$`) yang mendapat **Nilai Penuh (100% bobot)**.
+   - Jawaban yang tidak persis (termasuk salah ketik huruf/angka) mendapat **0**. Gunakan tanda `|` atau `;` pada `kunciJawabanTeks` jika ingin menyediakan alternatif jawaban resmi.
+2. **Uraian / Esai (`ESAI`) — Penilaian Konsep 3 Tingkat**:
+   - Pastikan mengisi `kunciJawabanTeks` (kunci jawaban / poin rubrik utama) saat membuat soal `ESAI`.
+   - **Nilai Penuh (100% bobot)**: Jika detail penjelasan atau maksud jawaban peserta sesuai/mencakup konsep kunci jawaban.
+   - **Nilai Setengah (50% bobot)**: Jika penjelasan peserta hampir mendekati kunci jawaban atau maksudnya mirip sebagian.
+   - **Nilai Nol (0)**: Jika kosong, tidak relevan, atau bertentangan makna (negasi berlawanan) dengan kunci jawaban.
+
+

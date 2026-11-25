@@ -83,7 +83,7 @@ export function SecurityLockModal({
               <span className="truncate">{deviceInfo?.deviceName || 'Perangkat Terdeteksi'}</span>
             </div>
             <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-0.5">
-              Konfirmasi Mode Ujian Terkunci (Kiosk)
+              Tata Tertib &amp; Penguncian Layar Ujian
             </h2>
           </div>
         </div>
@@ -93,9 +93,9 @@ export function SecurityLockModal({
           <div className="flex items-start gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
-              <b className="text-slate-900 dark:text-white">1. Masa Adaptasi Awal (5 Detik):</b>
+              <b className="text-slate-900 dark:text-white">1. Masa Penyesuaian Awal (5 Detik):</b>
               <span className="text-slate-600 dark:text-slate-400 block text-[11px] mt-0.5 leading-relaxed">
-                Tersedia jeda 5 detik saat memasuki layar penuh tanpa dihitung pelanggaran. Layar perangkat dijaga tetap menyala selama ujian.
+                Sistem menyediakan waktu penyesuaian selama 5 detik saat memasuki mode layar penuh tanpa dicatat sebagai pelanggaran. Layar perangkat dijaga tetap menyala selama sesi berlangsung.
               </span>
             </div>
           </div>
@@ -104,14 +104,14 @@ export function SecurityLockModal({
             <Maximize2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
             <div>
               <b className="text-slate-900 dark:text-white">
-                {isMobileOrTablet ? '2. Kunci Layar Penuh Perangkat Mobile:' : '2. Kunci Layar Penuh (Fullscreen Lockdown):'}
+                {isMobileOrTablet ? '2. Ketentuan Mode Layar Penuh Perangkat:' : '2. Ketentuan Penguncian Layar Penuh:'}
               </b>
               <span className="text-slate-600 dark:text-slate-400 block text-[11px] mt-0.5 leading-relaxed">
                 {isApple && isMobileOrTablet
-                  ? 'Tetap berada di halaman ujian Safari. Dilarang berpindah aplikasi, membuka tab baru, atau menggunakan layar belah (Split View).'
+                  ? 'Peserta wajib tetap berada pada halaman ujian Safari. Tidak diperkenankan berpindah aplikasi, membuka tab baru, atau mengaktifkan tampilan layar terbagi (Split View).'
                   : isMobileOrTablet
-                  ? 'Layar dikunci penuh. Dilarang berpindah tab/aplikasi, menekan Home/Recent, atau membuka layar belah (Split-Screen).'
-                  : 'Browser dikunci dalam layar penuh. Dilarang berpindah tab, membuka jendela lain, atau menekan tombol Escape.'}
+                  ? 'Halaman ujian dikunci dalam mode layar penuh. Tidak diperkenankan berpindah aplikasi, menekan tombol navigasi keluar, atau menggunakan tampilan layar terbagi (Split-Screen).'
+                  : 'Peramban dikunci dalam mode layar penuh. Tidak diperkenankan berpindah tab, membuka jendela aplikasi lain, atau keluar dari layar penuh sebelum ujian selesai.'}
               </span>
             </div>
           </div>
@@ -119,9 +119,9 @@ export function SecurityLockModal({
           <div className="flex items-start gap-2.5">
             <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <b className="text-slate-900 dark:text-white">3. Izin Touchscreen, Scroll, Zoom &amp; Cubit Layar:</b>
+              <b className="text-slate-900 dark:text-white">3. Aksesibilitas Layar &amp; Integritas Akademik:</b>
               <span className="text-slate-600 dark:text-slate-400 block text-[11px] mt-0.5 leading-relaxed">
-                Peserta <b>hanya diizinkan melakukan sentuhan layar, gulir (scroll), perbesar tampilan (zoom), dan cubit layar 2 jari</b>. Seleksi teks, salin/tempel, klik kanan, dan tangkapan layar diblokir (maks. <b>10x pelanggaran</b>). Layar penuh keluar otomatis setelah seluruh soal selesai dikumpulkan.
+                Peserta <b>tetap dapat menyentuh layar, menggulir halaman, serta memperbesar tampilan soal dengan dua jari</b>. Fitur salin-tempel, seleksi teks, dan tangkapan layar dinonaktifkan (batas toleransi <b>10 kali pelanggaran</b>). Mode layar penuh berakhir otomatis setelah seluruh soal selesai dikumpulkan.
               </span>
             </div>
           </div>

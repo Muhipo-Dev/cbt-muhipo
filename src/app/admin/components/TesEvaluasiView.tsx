@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { CheckCircle2, FileSpreadsheet, Save, Search, UserCheck, AlertCircle, HelpCircle, Bot, Sparkles } from 'lucide-react'
+import { CheckCircle2, FileSpreadsheet, Save, Search, UserCheck, AlertCircle, HelpCircle, Bot, Sparkles, RefreshCw } from 'lucide-react'
 import { MathRenderer } from '@/components/MathRenderer'
 
 interface TesEvaluasiViewProps {
@@ -21,6 +21,34 @@ export function TesEvaluasiView({
   const [scoreInputs, setScoreInputs] = useState<Record<string, number>>({})
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, any>>({})
   const [aiLoadingId, setAiLoadingId] = useState<string | null>(null)
+  const [autoGradingAll, setAutoGradingAll] = useState(false)
+
+  const handleAutoGradeUjian = async () => {
+    if (!selectedUjianId) return
+    try {
+      setAutoGradingAll(true)
+      const res = await fetch('/api/guru/koreksi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'AUTO_GRADE_UJIAN',
+          ujianId: selectedUjianId,
+        }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        setScoreInputs({})
+        showNotification('Penilaian Otomatis Selesai', json.message || 'Seluruh jawaban peserta berhasil dinilai ulang otomatis.', 'success')
+        fetchKoreksiData(selectedUjianId)
+      } else {
+        showNotification('Gagal', json.message || 'Gagal menjalankan penilaian otomatis', 'error')
+      }
+    } catch (e: any) {
+      showNotification('Error', 'Gagal menjalankan penilaian otomatis: ' + e.message, 'error')
+    } finally {
+      setAutoGradingAll(false)
+    }
+  }
 
   const handleRequestAiScore = async (jawaban: any) => {
     try {
@@ -126,18 +154,29 @@ export function TesEvaluasiView({
             <span>Evaluasi & Koreksi Jawaban Esai Peserta</span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Koreksi butir soal uraian/esai siswa, input skor manual, dan hitung akumulasi nilai total.
+            Isian Singkat dinilai otomatis Exact Match (100% / 0), sedangkan Esai dinilai otomatis Penuh (100%), Setengah (50%), atau 0 berdasarkan kemiripan konsep kunci jawaban.
           </p>
         </div>
 
-        <div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleAutoGradeUjian}
+            disabled={autoGradingAll || !selectedUjianId}
+            className="min-h-[44px] px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+            title="Hitung ulang nilai otomatis seluruh peserta (Isian Exact Match & Esai Penuh/Setengah/0)"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${autoGradingAll ? 'animate-spin' : ''}`} />
+            <span>{autoGradingAll ? 'Menilai Ulang...' : 'Nilai Otomatis Semua'}</span>
+          </button>
           <select
             value={selectedUjianId}
             onChange={(e) => {
               setSelectedUjianId(e.target.value)
               setSelectedPesertaId('')
+              setScoreInputs({})
             }}
-            className="px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+            className="min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
           >
             {ujianList.map((u) => (
               <option key={u.id} value={u.id}>
@@ -252,6 +291,14 @@ export function TesEvaluasiView({
                           </p>
                         </div>
 
+                        {/* Catatan Penilaian Otomatis yang Tersimpan */}
+                        {jawaban.catatanKoreksi && !aiSuggestions[jawaban.id] && (
+                          <div className="p-2.5 rounded-lg bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/70 text-[11px] text-blue-800 dark:text-blue-200 flex items-start gap-2">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                            <span><b>Status Penilaian:</b> {jawaban.catatanKoreksi}</span>
+                          </div>
+                        )}
+
                         {/* Scoring Input & Save Button */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200/60 dark:border-white/5">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -270,9 +317,40 @@ export function TesEvaluasiView({
                                   [jawaban.id]: parseFloat(e.target.value) || 0,
                                 })
                               }
-                              className="w-20 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white text-center focus:outline-none focus:border-blue-500"
+                              className="w-20 min-h-[44px] sm:min-h-0 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-bold text-slate-900 dark:text-white text-center focus:outline-none focus:border-blue-500"
                             />
                             <span className="text-xs text-slate-400">/ {maxBobot} Poin</span>
+
+                            {/* Quick Preset Buttons: 0, Setengah (khusus ESAI), Penuh */}
+                            <button
+                              type="button"
+                              onClick={() => handleSaveScore(jawaban.id, 0, activePeserta.id)}
+                              disabled={saving}
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-200/80 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold transition cursor-pointer"
+                              title="Beri nilai 0"
+                            >
+                              0
+                            </button>
+                            {jawaban.soal?.tipeSoal === 'ESAI' && (
+                              <button
+                                type="button"
+                                onClick={() => handleSaveScore(jawaban.id, Number((maxBobot * 0.5).toFixed(2)), activePeserta.id)}
+                                disabled={saving}
+                                className="px-2.5 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-[11px] font-bold transition cursor-pointer"
+                                title="Beri nilai setengah (50%)"
+                              >
+                                ½ ({Number((maxBobot * 0.5).toFixed(2))})
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleSaveScore(jawaban.id, maxBobot, activePeserta.id)}
+                              disabled={saving}
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 hover:bg-emerald-200 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-[11px] font-bold transition cursor-pointer"
+                              title="Beri nilai penuh (100%)"
+                            >
+                              Penuh ({maxBobot})
+                            </button>
 
                             {/* Tombol Saran AI Studio / Python */}
                             <button
@@ -283,7 +361,7 @@ export function TesEvaluasiView({
                               title="Hitung skor rekomendasi otomatis berbasis AI Studio / AI Engine"
                             >
                               <Bot className={`w-3.5 h-3.5 ${aiLoadingId === jawaban.id ? 'animate-spin' : 'text-indigo-600 dark:text-indigo-400'}`} />
-                              <span>{aiLoadingId === jawaban.id ? 'Menganalisis...' : 'Koreksi AI'}</span>
+                              <span>{aiLoadingId === jawaban.id ? 'Menganalisis...' : 'Koreksi Otomatis'}</span>
                             </button>
                           </div>
 

@@ -115,82 +115,81 @@ def jaccard_similarity(text1: str, text2: str) -> float:
 
 def match_isian_ai(jawaban_siswa: str, kunci_teks: str) -> Dict[str, Any]:
     """
-    Pencocokan AI cerdas untuk isian singkat:
-    - Normalisasi numerik (misal 1/4 sqrt(14) vs 0.25 * sqrt(14))
-    - Multi-kunci fleksibel pemisah | atau ;
-    - Toleransi typo berbobot
+    Pencocokan Isian Singkat — STRICT EXACT MATCH!
+    - Jawaban yang persis (Exact Match teks, angka desimal 1,5 == 1.5, atau ekspresi matematika ekuivalen)
+      mendapat Nilai Penuh (isBenar = True, confidence = 1.0).
+    - Selain itu mendapat 0 (TANPA toleransi typo fuzzy).
     """
     u_raw = str(jawaban_siswa or '').strip()
     k_raw = str(kunci_teks or '').strip()
 
     if not u_raw:
-        return {'isBenar': False, 'confidence': 0.0, 'reason': 'Jawaban siswa kosong'}
+        return {'isBenar': False, 'confidence': 0.0, 'similarity': 0.0, 'reason': 'Jawaban siswa kosong'}
 
-    # Ekstraksi kemungkinan multi-kunci
-    delimiters = r'[|;]'
-    kunci_list = [k.strip() for k in re.split(delimiters, k_raw) if k.strip()]
+    if not k_raw:
+        return {'isBenar': False, 'confidence': 0.0, 'similarity': 0.0, 'reason': 'Kunci jawaban kosong'}
+
+    # Ekstraksi multi-kunci resmi yang dipisah |, ;, atau baris baru
+    kunci_list = [k.strip() for k in re.split(r'[|;\r\n]+', k_raw) if k.strip()]
     if not kunci_list:
         kunci_list = [k_raw]
 
-    best_confidence = 0.0
-    best_match_key = ""
+    pure_num_re = re.compile(r'^[+-]?\d+(?:[.,]\d+)?$')
+    has_math_re = re.compile(r'[0-9√∛∜±×÷≤≥≠^/*+=\\$]|\b(?:sqrt|akar|frac|sin|cos|tan|log)\b', re.I)
 
     u_norm = normalize_text(u_raw)
-    u_math = normalize_math_expression(u_raw)
+    u_is_num = bool(pure_num_re.match(u_norm))
+    u_math = normalize_math_expression(u_raw) if has_math_re.search(u_raw) else ''
 
     for k in kunci_list:
         k_norm = normalize_text(k)
-        k_math = normalize_math_expression(k)
+        if not k_norm:
+            continue
 
-        # 1. Exact match (Text & Math)
-        if u_norm == k_norm or u_math == k_math:
+        # 1. Exact Match Teks
+        if u_norm == k_norm:
             return {
                 'isBenar': True,
                 'confidence': 1.0,
                 'matchedKey': k,
                 'similarity': 1.0,
-                'reason': 'Kecocokan persis (Exact Match)'
+                'reason': 'Exact Match: Jawaban persis sesuai kunci (Nilai Penuh 100%)'
             }
 
-        # 2. Numerik murni
-        try:
-            num_u = float(u_norm.replace(',', '.'))
-            num_k = float(k_norm.replace(',', '.'))
-            if math.isclose(num_u, num_k, rel_tol=1e-4, abs_tol=1e-4):
+        # 2. Exact Match Angka Murni (contoh: 1,5 == 1.5)
+        if u_is_num and pure_num_re.match(k_norm):
+            try:
+                num_u = float(u_norm.replace(',', '.'))
+                num_k = float(k_norm.replace(',', '.'))
+                if math.isclose(num_u, num_k, rel_tol=0.0, abs_tol=1e-9):
+                    return {
+                        'isBenar': True,
+                        'confidence': 1.0,
+                        'matchedKey': k,
+                        'similarity': 1.0,
+                        'reason': 'Exact Match: Nilai numerik persis sesuai kunci (Nilai Penuh 100%)'
+                    }
+            except ValueError:
+                pass
+
+        # 3. Exact Match Ekspresi Matematika
+        if u_math and has_math_re.search(k):
+            k_math = normalize_math_expression(k)
+            if k_math and u_math == k_math:
                 return {
                     'isBenar': True,
                     'confidence': 1.0,
                     'matchedKey': k,
                     'similarity': 1.0,
-                    'reason': 'Kecocokan nilai numerik desimal'
+                    'reason': 'Exact Match: Ekspresi matematika persis ekuivalen dengan kunci (Nilai Penuh 100%)'
                 }
-        except ValueError:
-            pass
-
-        # 3. Levenshtein fuzzy similarity
-        sim_lev = levenshtein_similarity(u_norm, k_norm)
-        # Jika panjang karakter >= 5 dan kemiripan >= 0.82 (toleransi 1 typo)
-        if len(k_norm) >= 5 and sim_lev >= 0.82:
-            if sim_lev > best_confidence:
-                best_confidence = sim_lev
-                best_match_key = k
-
-    # Ambang batas kelulusan isian AI
-    if best_confidence >= 0.82:
-        return {
-            'isBenar': True,
-            'confidence': round(best_confidence, 2),
-            'matchedKey': best_match_key,
-            'similarity': round(best_confidence, 2),
-            'reason': f'Kecocokan AI fuzzy match ({int(best_confidence * 100)}% mirip)'
-        }
 
     return {
         'isBenar': False,
-        'confidence': round(best_confidence, 2),
-        'matchedKey': best_match_key,
-        'similarity': round(best_confidence, 2),
-        'reason': 'Jawaban tidak sesuai dengan kunci'
+        'confidence': 0.0,
+        'matchedKey': '',
+        'similarity': 0.0,
+        'reason': 'Jawaban tidak persis (bukan Exact Match) terhadap kunci jawaban -> Nilai 0'
     }
 
 def call_gemini_ai_studio(prompt: str, api_key: str) -> Optional[str]:
@@ -257,10 +256,13 @@ Informasi Soal:
 Jawaban Siswa:
 "{jawaban_siswa}"
 
-Instruksi Penilaian:
-1. Analisis apakah konsep utama, fakta ilmiah, atau langkah penyelesaian siswa telah sesuai dengan rubrik guru.
-2. Toleransi gaya bahasa siswa yang berbeda asalkan inti pemahamannya benar.
-3. Berikan skor (angka desimal/bulat antara 0.0 sampai {max_bobot}).
+Instruksi Penilaian Wajib (3 Tingkat Skor Baku):
+1. Analisis apakah detail penjelasan, konsep utama, atau maksud jawaban siswa sesuai dengan rubrik kunci jawaban.
+2. Toleransi gaya bahasa siswa yang berbeda asalkan maksud/maknanya sesuai.
+3. Terapkan 3 tingkat skor berikut secara tegas:
+   - NILAI PENUH ({max_bobot}): Jika detail penjelasan sesuai/lengkap atau maksud jawabannya sama dengan kunci jawaban.
+   - NILAI SETENGAH ({round(max_bobot * 0.5, 2)}): Jika detail penjelasannya hampir mendekati kunci jawaban atau maksudnya mirip sebagian dengan kunci jawaban.
+   - NILAI NOL (0): Jika jawaban salah, bertentangan makna, atau tidak relevan dengan kunci jawaban.
 4. Tulis umpan balik (feedback) singkat dan konstruktif dalam 1-2 kalimat bahasa Indonesia.
 
 Keluarkan output HANYA dalam format JSON berikut tanpa teks lain:
@@ -277,16 +279,25 @@ Keluarkan output HANYA dalam format JSON berikut tanpa teks lain:
             cleaned = re.sub(r'^```(?:json)?\s*', '', raw_res.strip())
             cleaned = re.sub(r'\s*```$', '', cleaned).strip()
             parsed = json.loads(cleaned)
-            skor = float(parsed.get('skorUsulan', 0.0))
-            skor = max(0.0, min(max_bobot, skor))
-            persen = float(parsed.get('persentaseKemiripan', (skor / max_bobot) * 100 if max_bobot > 0 else 0))
+            raw_skor = float(parsed.get('skorUsulan', 0.0))
+            ratio_g = (raw_skor / max_bobot) if max_bobot > 0 else 0.0
+            if ratio_g >= 0.72:
+                skor = round(max_bobot, 2)
+                tier_label = "Nilai Penuh (100%)"
+            elif ratio_g >= 0.35:
+                skor = round(max_bobot * 0.5, 2)
+                tier_label = "Nilai Setengah (50%)"
+            else:
+                skor = 0.0
+                tier_label = "Nilai 0"
+            persen = float(parsed.get('persentaseKemiripan', ratio_g * 100))
             feedback = str(parsed.get('feedback', 'Penilaian berhasil dianalisis oleh Google AI Studio.'))
 
             return {
-                'skorUsulan': round(skor, 2),
+                'skorUsulan': skor,
                 'confidence': 0.95,
                 'persentaseKemiripan': round(persen, 1),
-                'feedback': f"[AI Studio] {feedback}",
+                'feedback': f"[AI Studio • {tier_label}] {feedback}",
                 'engine': 'Google AI Studio (Gemini)'
             }
     except Exception as e:
@@ -371,10 +382,20 @@ def evaluate_essay_ai(
         composite_score = min(1.0, composite_score + elaboration_boost)
 
     composite_score = max(0.0, min(1.0, composite_score))
-    skor_usulan = round(max_bobot * composite_score, 2)
     persen = round(composite_score * 100, 1)
 
-    feedback = f"Tingkat kesesuaian rubrik: {persen}% ({keyword_match_count}/{len(k_keywords)} konsep/kata kunci terdeteksi)."
+    # Terapkan aturan 3 tingkat skor baku Esai: Penuh (100%), Setengah (50%), atau Nol (0%)
+    if keyword_ratio >= 0.72 or (composite_score >= 0.68 and keyword_ratio >= 0.60):
+        skor_usulan = round(max_bobot, 2)
+        tier_label = "Nilai Penuh (100%)"
+    elif keyword_ratio >= 0.34 or composite_score >= 0.35:
+        skor_usulan = round(max_bobot * 0.5, 2)
+        tier_label = "Nilai Setengah (50%)"
+    else:
+        skor_usulan = 0.0
+        tier_label = "Nilai 0"
+
+    feedback = f"{tier_label} — Tingkat kesesuaian rubrik: {persen}% ({keyword_match_count}/{len(k_keywords)} konsep kunci terdeteksi)."
 
     return {
         'skorUsulan': skor_usulan,

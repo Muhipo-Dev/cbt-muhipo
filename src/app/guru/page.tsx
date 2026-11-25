@@ -1045,6 +1045,37 @@ export default function GuruDashboardPage() {
     }
   };
 
+  const handleAutoGradeUjianGuru = async () => {
+    const targetUjianId = selectedKoreksiUjianId || koreksiData?.activeUjian?.id;
+    if (!targetUjianId) return;
+    try {
+      setLoading(true);
+      const res = await fetch('/api/guru/koreksi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'AUTO_GRADE_UJIAN',
+          ujianId: targetUjianId,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        showNotification(
+          'Penilaian Otomatis Selesai',
+          json.message || 'Seluruh jawaban peserta berhasil dinilai otomatis (Isian Exact Match & Esai Penuh/Setengah/0).',
+          'success'
+        );
+        fetchKoreksiData(targetUjianId);
+      } else {
+        showNotification('Gagal', json.message || 'Gagal menjalankan penilaian otomatis', 'error');
+      }
+    } catch (e: any) {
+      showNotification('Error', 'Gagal menjalankan penilaian otomatis: ' + e.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRequestAiScoreGuru = async (jawaban: any, pesertaId: string) => {
     try {
       setAiLoadingId(jawaban.id);
@@ -3138,7 +3169,8 @@ export default function GuruDashboardPage() {
 
           {/* TAB: KOREKSI ESSAY & REKAP NILAI GURU */}
           {activeTab === 'koreksi_nilai' && (() => {
-            const currentKkm = Number(koreksiData?.activeUjian?.bankSoal?.kkm ?? 75);
+            const currentKkm = Number(koreksiData?.activeUjian?.mataPelajaran?.kkm ?? koreksiData?.activeUjian?.bankSoal?.kkm ?? 75);
+            const namaMapelAktif = koreksiData?.activeUjian?.mataPelajaran?.nama || koreksiData?.activeUjian?.bankSoal?.mataPelajaran?.nama || '-';
             const totalSiswa = filteredKoreksiPeserta.length;
             const tuntasCount = filteredKoreksiPeserta.filter((p: any) => Number(p.nilaiTotal ?? 0) >= currentKkm).length;
             const remidiCount = totalSiswa - tuntasCount;
@@ -3163,7 +3195,7 @@ export default function GuruDashboardPage() {
                       {koreksiData?.activeUjian?.judul || 'Pilih Jadwal Ujian'}
                     </h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Mapel: <b>{koreksiData?.activeUjian?.bankSoal?.mataPelajaran?.nama || '-'}</b> • KKM Standar: <b className="text-blue-600 dark:text-blue-400">{currentKkm} Poin</b> • Total <b>{filteredKoreksiPeserta.length}</b> siswa {selectedKoreksiKelas !== 'ALL' ? `kelas ${selectedKoreksiKelas}` : 'seluruh kelas'}
+                      Mapel: <b>{namaMapelAktif}</b> • KKM Standar: <b className="text-blue-600 dark:text-blue-400">{currentKkm} Poin</b> • Total <b>{filteredKoreksiPeserta.length}</b> siswa {selectedKoreksiKelas !== 'ALL' ? `kelas ${selectedKoreksiKelas}` : 'seluruh kelas'}
                     </p>
                   </div>
 
@@ -3198,6 +3230,17 @@ export default function GuruDashboardPage() {
                         </option>
                       ))}
                     </select>
+
+                    <button
+                      type="button"
+                      onClick={handleAutoGradeUjianGuru}
+                      disabled={loading || !(selectedKoreksiUjianId || koreksiData?.activeUjian?.id)}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow-md transition cursor-pointer disabled:opacity-50"
+                      title="Hitung ulang nilai otomatis seluruh peserta (Isian Exact Match & Esai Penuh/Setengah/0)"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                      <span>Nilai Otomatis Semua</span>
+                    </button>
 
                     <button
                       onClick={handleExportExcel}
@@ -3581,6 +3624,21 @@ export default function GuruDashboardPage() {
                                                 >
                                                   Simpan
                                                 </button>
+                                                {!isIsian && (
+                                                  <button
+                                                    type="button"
+                                                    title={`Beri nilai setengah (${Number((maxBobot * 0.5).toFixed(2))})`}
+                                                    onClick={() => {
+                                                      const halfVal = Number((maxBobot * 0.5).toFixed(2));
+                                                      const input = document.getElementById(`score-${j.id}`) as HTMLInputElement;
+                                                      if (input) input.value = String(halfVal);
+                                                      handleSimpanNilaiEssay(j.id, halfVal, peserta.id);
+                                                    }}
+                                                    className="px-2 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white font-bold text-[10px] cursor-pointer transition shadow-sm whitespace-nowrap"
+                                                  >
+                                                    ½ ({Number((maxBobot * 0.5).toFixed(2))})
+                                                  </button>
+                                                )}
                                                 <button
                                                   type="button"
                                                   title={`Beri nilai maksimal ${maxBobot}`}
@@ -3613,6 +3671,11 @@ export default function GuruDashboardPage() {
                                                 </b>{' '}
                                                 / {maxBobot}
                                               </span>
+                                              {j.catatanKoreksi && !aiSuggestions[j.id] && (
+                                                <div className="p-1.5 rounded-lg bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900 text-[10px] text-blue-800 dark:text-blue-200 leading-snug">
+                                                  {j.catatanKoreksi}
+                                                </div>
+                                              )}
 
                                               {/* Feedback AI Banner */}
                                               {aiSuggestions[j.id] && (
