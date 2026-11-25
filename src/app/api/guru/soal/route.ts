@@ -102,9 +102,11 @@ export async function GET(request: NextRequest) {
           pembuat: { select: { id: true, name: true, username: true } },
           soalList: {
             include: {
-              opsiJawaban: true,
+              opsiJawaban: {
+                orderBy: { label: 'asc' },
+              },
             },
-            orderBy: { nomorUrut: 'asc' },
+            orderBy: [{ nomorUrut: 'asc' }, { id: 'asc' }],
           },
         },
       });
@@ -569,39 +571,116 @@ export async function POST(request: NextRequest) {
       }
 
       if (soalId) {
-        await prisma.soal.update({
+        const existingSoal = await prisma.soal.findUnique({
           where: { id: soalId },
-          data: {
-            nomorUrut: Number(nomorUrut) || 1,
-            tipeSoal: tipeSoal as TipeSoal,
-            pertanyaan: cleanPertanyaan,
-            bobot: bobot !== undefined && Number(bobot) > 0 ? Number(bobot) : 1.0,
-            mediaGambar: mediaGambar || null,
-            mediaAudio: mediaAudio || null,
-            kunciJawabanTeks: cleanKunciTeks,
-            matchingData: rawMatchingString,
-          },
+          include: { opsiJawaban: true },
         });
 
-        await prisma.opsiJawaban.deleteMany({ where: { soalId } });
-        if (['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal) && opsiJawaban && Array.isArray(opsiJawaban)) {
-          for (const o of opsiJawaban) {
-            await prisma.opsiJawaban.create({
-              data: {
-                soalId,
-                label: o.label,
-                konten: convertEquationToKatex(String(o.konten || '').trim()),
-                isBenar: Boolean(o.isBenar),
-              },
-            });
+        if (!existingSoal) {
+          return NextResponse.json({ success: false, message: 'Butir soal tidak ditemukan' }, { status: 404 });
+        }
+
+        const effectiveMapelId = targetMapelId || existingSoal.mataPelajaranId;
+
+        // Validasi dan sinkronisasi opsiJawaban
+        const isChoiceType = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal);
+        let finalOpsiToSave: { label: string; konten: string; isBenar: boolean }[] | null = null;
+
+        if (isChoiceType) {
+          if (opsiJawaban && Array.isArray(opsiJawaban) && opsiJawaban.length > 0) {
+            // Jika ada perubahan opsi yang dikirim
+            finalOpsiToSave = opsiJawaban.map((o: any, idx: number) => ({
+              label: (o.label || String.fromCharCode(65 + idx)).trim().toUpperCase(),
+              konten: convertEquationToKatex(String(o.konten || '').trim()),
+              isBenar: Boolean(o.isBenar),
+            }));
+          } else if (existingSoal.tipeSoal === tipeSoal && existingSoal.opsiJawaban.length > 0) {
+            // Tetap pertahankan opsi jawaban yang sudah ada jika tidak diubah
+            finalOpsiToSave = existingSoal.opsiJawaban.map((o) => ({
+              label: o.label,
+              konten: o.konten,
+              isBenar: o.isBenar,
+            }));
+          } else {
+            // Default sesuai tipe baru
+            if (tipeSoal === 'BENAR_SALAH') {
+              finalOpsiToSave = [
+                { label: 'A', konten: 'Benar', isBenar: true },
+                { label: 'B', konten: 'Salah', isBenar: false },
+              ];
+            } else {
+              finalOpsiToSave = [
+                { label: 'A', konten: 'Pilihan Jawaban A', isBenar: true },
+                { label: 'B', konten: 'Pilihan Jawaban B', isBenar: false },
+                { label: 'C', konten: 'Pilihan Jawaban C', isBenar: false },
+                { label: 'D', konten: 'Pilihan Jawaban D', isBenar: false },
+                { label: 'E', konten: 'Pilihan Jawaban E', isBenar: false },
+              ];
+            }
+          }
+
+          // Pastikan untuk PG tunggal dan BENAR_SALAH tepat ada 1 kunci jawaban benar
+          if (tipeSoal === 'PG' || tipeSoal === 'BENAR_SALAH') {
+            const hasBenar = finalOpsiToSave.some((o) => o.isBenar);
+            if (!hasBenar && finalOpsiToSave.length > 0) {
+              finalOpsiToSave[0].isBenar = true;
+            } else {
+              let firstFound = false;
+              finalOpsiToSave.forEach((o) => {
+                if (o.isBenar) {
+                  if (!firstFound) firstFound = true;
+                  else o.isBenar = false;
+                }
+              });
+            }
           }
         }
 
-        if (targetMapelId) {
-          await recalculateTopikPoints(targetMapelId);
+        const updatedSoal = await prisma.soal.update({
+          where: { id: soalId },
+          data: {
+            nomorUrut: nomorUrut !== undefined ? Number(nomorUrut) : existingSoal.nomorUrut,
+            tipeSoal: tipeSoal as TipeSoal,
+            pertanyaan: cleanPertanyaan,
+            bobot: bobot !== undefined && Number(bobot) > 0 ? Number(bobot) : existingSoal.bobot,
+            mediaGambar: mediaGambar !== undefined ? mediaGambar : existingSoal.mediaGambar,
+            mediaAudio: mediaAudio !== undefined ? mediaAudio : existingSoal.mediaAudio,
+            kunciJawabanTeks: isChoiceType ? null : cleanKunciTeks,
+            matchingData: tipeSoal === 'MENJODOHKAN' ? rawMatchingString : null,
+          },
+        });
+
+        // Update opsi jawaban secara konsisten
+        await prisma.opsiJawaban.deleteMany({ where: { soalId } });
+        if (isChoiceType && finalOpsiToSave && finalOpsiToSave.length > 0) {
+          await prisma.opsiJawaban.createMany({
+            data: finalOpsiToSave.map((o) => ({
+              soalId,
+              label: o.label,
+              konten: o.konten,
+              isBenar: o.isBenar,
+            })),
+          });
         }
 
-        return NextResponse.json({ success: true, message: 'Butir soal berhasil diperbarui' });
+        if (effectiveMapelId) {
+          await recalculateTopikPoints(effectiveMapelId);
+        }
+
+        const refreshedSoal = await prisma.soal.findUnique({
+          where: { id: soalId },
+          include: {
+            opsiJawaban: {
+              orderBy: { label: 'asc' },
+            },
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          data: refreshedSoal,
+          message: 'Butir soal berhasil diperbarui',
+        });
       } else {
         if (!targetMapelId) {
           return NextResponse.json({ success: false, message: 'Pilih Topik / Mata Pelajaran terlebih dahulu' }, { status: 400 });
@@ -609,6 +688,46 @@ export async function POST(request: NextRequest) {
 
         const isChoiceType = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal);
         const count = await prisma.soal.count({ where: { mataPelajaranId: targetMapelId } });
+
+        let finalOpsiToCreate: { label: string; konten: string; isBenar: boolean }[] | undefined = undefined;
+        if (isChoiceType) {
+          if (opsiJawaban && Array.isArray(opsiJawaban) && opsiJawaban.length > 0) {
+            finalOpsiToCreate = opsiJawaban.map((o: any, idx: number) => ({
+              label: (o.label || String.fromCharCode(65 + idx)).trim().toUpperCase(),
+              konten: convertEquationToKatex(String(o.konten || '').trim()),
+              isBenar: Boolean(o.isBenar),
+            }));
+          } else if (tipeSoal === 'BENAR_SALAH') {
+            finalOpsiToCreate = [
+              { label: 'A', konten: 'Benar', isBenar: true },
+              { label: 'B', konten: 'Salah', isBenar: false },
+            ];
+          } else {
+            finalOpsiToCreate = [
+              { label: 'A', konten: 'Pilihan Jawaban A', isBenar: true },
+              { label: 'B', konten: 'Pilihan Jawaban B', isBenar: false },
+              { label: 'C', konten: 'Pilihan Jawaban C', isBenar: false },
+              { label: 'D', konten: 'Pilihan Jawaban D', isBenar: false },
+              { label: 'E', konten: 'Pilihan Jawaban E', isBenar: false },
+            ];
+          }
+
+          if (tipeSoal === 'PG' || tipeSoal === 'BENAR_SALAH') {
+            const hasBenar = finalOpsiToCreate.some((o) => o.isBenar);
+            if (!hasBenar && finalOpsiToCreate.length > 0) {
+              finalOpsiToCreate[0].isBenar = true;
+            } else {
+              let firstFound = false;
+              finalOpsiToCreate.forEach((o) => {
+                if (o.isBenar) {
+                  if (!firstFound) firstFound = true;
+                  else o.isBenar = false;
+                }
+              });
+            }
+          }
+        }
+
         const newSoal = await prisma.soal.create({
           data: {
             mataPelajaranId: targetMapelId,
@@ -618,17 +737,18 @@ export async function POST(request: NextRequest) {
             bobot: bobot !== undefined && Number(bobot) > 0 ? Number(bobot) : 1.0,
             mediaGambar: mediaGambar || null,
             mediaAudio: mediaAudio || null,
-            kunciJawabanTeks: cleanKunciTeks,
-            matchingData: rawMatchingString,
-            opsiJawaban: isChoiceType
+            kunciJawabanTeks: isChoiceType ? null : cleanKunciTeks,
+            matchingData: tipeSoal === 'MENJODOHKAN' ? rawMatchingString : null,
+            opsiJawaban: isChoiceType && finalOpsiToCreate
               ? {
-                  create: (opsiJawaban || []).map((o: any) => ({
-                    label: o.label,
-                    konten: convertEquationToKatex(String(o.konten || '').trim()),
-                    isBenar: Boolean(o.isBenar),
-                  })),
+                  create: finalOpsiToCreate,
                 }
               : undefined,
+          },
+          include: {
+            opsiJawaban: {
+              orderBy: { label: 'asc' },
+            },
           },
         });
 
@@ -653,6 +773,20 @@ export async function POST(request: NextRequest) {
       await prisma.soal.delete({ where: { id: soalId } });
 
       if (targetMapelId) {
+        // Re-sequence nomorUrut agar selalu urut konsisten 1..N
+        const remainingSoals = await prisma.soal.findMany({
+          where: { mataPelajaranId: targetMapelId },
+          orderBy: [{ nomorUrut: 'asc' }, { id: 'asc' }],
+          select: { id: true },
+        });
+
+        for (let i = 0; i < remainingSoals.length; i++) {
+          await prisma.soal.update({
+            where: { id: remainingSoals[i].id },
+            data: { nomorUrut: i + 1 },
+          });
+        }
+
         await recalculateTopikPoints(targetMapelId);
       }
 

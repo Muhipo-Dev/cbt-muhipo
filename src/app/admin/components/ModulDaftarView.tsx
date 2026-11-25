@@ -78,6 +78,7 @@ export function ModulDaftarView({
 
   // Search & Pagination
   const [searchQuery, setSearchQuery] = useState('')
+  const [filterTipeSoal, setFilterTipeSoal] = useState('SEMUA')
   const [entriesPerPage, setEntriesPerPage] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -333,10 +334,12 @@ export function ModulDaftarView({
   }
 
   // Filter & Pagination
-  const allSoal = mapelData?.soalList || []
-  const filteredSoal = allSoal.filter((s: any) =>
-    s.pertanyaan ? s.pertanyaan.toLowerCase().includes(searchQuery.toLowerCase()) : true
-  )
+  const allSoal = [...(mapelData?.soalList || [])].sort((a: any, b: any) => (a.nomorUrut || 0) - (b.nomorUrut || 0))
+  const filteredSoal = allSoal.filter((s: any) => {
+    const matchesType = filterTipeSoal === 'SEMUA' || s.tipeSoal === filterTipeSoal
+    const matchesSearch = searchQuery ? (s.pertanyaan ? s.pertanyaan.toLowerCase().includes(searchQuery.toLowerCase()) : false) : true
+    return matchesType && matchesSearch
+  })
   const totalPages = Math.max(1, Math.ceil(filteredSoal.length / entriesPerPage))
   const paginatedSoal = filteredSoal.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage)
 
@@ -496,18 +499,40 @@ export function ModulDaftarView({
               <span>entries</span>
             </div>
 
-            <div className="flex items-center gap-1.5 self-end sm:self-auto">
-              <span>Search:</span>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value)
-                  setCurrentPage(1)
-                }}
-                placeholder="Cari teks soal..."
-                className="px-2.5 py-1 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-              />
+            <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
+              <div className="flex items-center gap-1.5">
+                <span>Filter Jenis:</span>
+                <select
+                  value={filterTipeSoal}
+                  onChange={(e) => {
+                    setFilterTipeSoal(e.target.value)
+                    setCurrentPage(1)
+                  }}
+                  className="px-2 py-1 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
+                >
+                  <option value="SEMUA">Semua Jenis ({allSoal.length})</option>
+                  <option value="PG">Pilihan Ganda ({allSoal.filter((s: any) => s.tipeSoal === 'PG').length})</option>
+                  <option value="PG_KOMPLEKS">PG Kompleks ({allSoal.filter((s: any) => s.tipeSoal === 'PG_KOMPLEKS').length})</option>
+                  <option value="BENAR_SALAH">Benar / Salah ({allSoal.filter((s: any) => s.tipeSoal === 'BENAR_SALAH').length})</option>
+                  <option value="MENJODOHKAN">Menjodohkan ({allSoal.filter((s: any) => s.tipeSoal === 'MENJODOHKAN').length})</option>
+                  <option value="ISIAN">Isian Singkat ({allSoal.filter((s: any) => s.tipeSoal === 'ISIAN').length})</option>
+                  <option value="ESAI">Essay / Uraian ({allSoal.filter((s: any) => s.tipeSoal === 'ESAI').length})</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span>Search:</span>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setCurrentPage(1)
+                  }}
+                  placeholder="Cari teks soal..."
+                  className="px-2.5 py-1 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
             </div>
           </div>
 

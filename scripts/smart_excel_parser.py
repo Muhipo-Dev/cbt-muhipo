@@ -299,17 +299,19 @@ def parse_horizontal_zyacbt(rows):
 
         # 4. Cari Kunci Jawaban
         kunci_raw = ""
+        kunci_original_case = ""
         for pattern in ['kunci jawaban (a/b/c/d/e)', 'kunci jawaban', 'kunci', 'jawaban benar', 'answer', 'key']:
             for k, v in r.items():
                 if k.strip().lower() == pattern:
-                    kunci_raw = clean_text(v).upper()
+                    kunci_original_case = clean_text(v)
+                    kunci_raw = kunci_original_case.upper()
                     break
             if kunci_raw:
                 break
 
-        # Normalisasi angka kunci ZyaCBT (misal: 1 -> A, 2 -> B, dst)
+        # Normalisasi angka kunci ZyaCBT (misal: 1 -> A, 2 -> B, dst) HANYA untuk soal pilihan ganda / pilihan
         num_to_letter = {'1': 'A', '2': 'B', '3': 'C', '4': 'D', '5': 'E', '6': 'F'}
-        if kunci_raw in num_to_letter:
+        if tipe_soal in ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'] and kunci_raw in num_to_letter:
             kunci_raw = num_to_letter[kunci_raw]
 
         # 5. Cari Opsi Jawaban (A, B, C, D, E, F)
@@ -352,7 +354,7 @@ def parse_horizontal_zyacbt(rows):
         # Kunci teks untuk essay / isian
         kunci_teks = None
         if tipe_soal in ['ESAI', 'ISIAN']:
-            kunci_teks = normalize_math_katex(kunci_raw)
+            kunci_teks = normalize_math_katex(kunci_original_case or kunci_raw)
 
         # Menjodohkan pasangan format A=B
         matching_data = None

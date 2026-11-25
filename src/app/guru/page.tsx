@@ -122,6 +122,10 @@ export default function GuruDashboardPage() {
     ],
   });
 
+  // Filter Tipe Soal & Pencarian Butir Soal Guru
+  const [filterTipeSoal, setFilterTipeSoal] = useState<string>('SEMUA');
+  const [searchSoalQuery, setSearchSoalQuery] = useState<string>('');
+
   // Modals & Tools Tambahan Guru
   const [editBankModal, setEditBankModal] = useState<any>(null);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -2796,146 +2800,197 @@ export default function GuruDashboardPage() {
 
                     {/* Daftar Butir Soal yang Tersimpan */}
                     <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-xl space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h4 className="font-bold text-base text-slate-900 dark:text-white">
-                          Daftar Butir Soal ({selectedBankSoal.soalList?.length || 0} Butir)
-                        </h4>
-                      </div>
+                      {(() => {
+                        const allSoal = [...(selectedBankSoal.soalList || [])].sort((a: any, b: any) => (a.nomorUrut || 0) - (b.nomorUrut || 0));
+                        const filteredSoal = allSoal.filter((s: any) => {
+                          const matchesType = filterTipeSoal === 'SEMUA' || s.tipeSoal === filterTipeSoal;
+                          const matchesSearch = !searchSoalQuery.trim() || (s.pertanyaan && s.pertanyaan.toLowerCase().includes(searchSoalQuery.toLowerCase()));
+                          return matchesType && matchesSearch;
+                        });
 
-                      <div className="space-y-3">
-                        {(!selectedBankSoal.soalList || selectedBankSoal.soalList.length === 0) ? (
-                          <div className="text-center py-8 text-slate-500 text-xs">
-                            Belum ada butir soal dalam bank ini. Silakan input soal di atas atau klik tombol <b>Import Soal Excel</b>.
-                          </div>
-                        ) : (
-                          selectedBankSoal.soalList.map((s: any, idx: number) => (
-                            <div
-                              key={s.id}
-                              className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-950 border border-slate-200/60 dark:border-white/10 space-y-3 text-xs"
-                            >
-                              <div className="flex justify-between items-start gap-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center shrink-0">
-                                    {idx + 1}
-                                  </span>
-                                  <span className="font-bold text-slate-700 dark:text-slate-300">
-                                    Tipe: {s.tipeSoal} • Bobot: {s.bobot} Poin
-                                  </span>
-                                </div>
+                        return (
+                          <>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/70 dark:border-white/10 pb-3">
+                              <h4 className="font-bold text-base text-slate-900 dark:text-white">
+                                Daftar Butir Soal ({allSoal.length} Butir)
+                              </h4>
+
+                              <div className="flex flex-wrap items-center gap-2">
                                 <div className="flex items-center gap-1.5">
-                                  <button
-                                    onClick={() => {
-                                      let parsedMatching = [
-                                        { left: '', right: '' },
-                                        { left: '', right: '' },
-                                        { left: '', right: '' },
-                                        { left: '', right: '' },
-                                      ];
-                                      if (s.matchingData) {
-                                        try {
-                                          const parsed = JSON.parse(s.matchingData);
-                                          if (Array.isArray(parsed) && parsed.length > 0) parsedMatching = parsed;
-                                        } catch (e) {}
-                                      }
-
-                                      setSoalForm({
-                                        soalId: s.id,
-                                        tipeSoal: s.tipeSoal,
-                                        pertanyaan: s.pertanyaan,
-                                        bobot: s.bobot,
-                                        kunciJawabanTeks: s.kunciJawabanTeks || '',
-                                        matchingPairs: parsedMatching,
-                                        opsiJawaban: s.opsiJawaban?.length
-                                          ? s.opsiJawaban.map((o: any) => ({
-                                              label: o.label,
-                                              konten: o.konten,
-                                              isBenar: o.isBenar,
-                                            }))
-                                          : [
-                                              { label: 'A', konten: '', isBenar: true },
-                                              { label: 'B', konten: '', isBenar: false },
-                                              { label: 'C', konten: '', isBenar: false },
-                                              { label: 'D', konten: '', isBenar: false },
-                                              { label: 'E', konten: '', isBenar: false },
-                                            ],
-                                      });
-                                      window.scrollTo({ top: 400, behavior: 'smooth' });
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-blue-600 dark:text-blue-400 font-bold hover:bg-slate-300 dark:hover:bg-slate-700 cursor-pointer"
+                                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Filter Jenis:</label>
+                                  <select
+                                    value={filterTipeSoal}
+                                    onChange={(e) => setFilterTipeSoal(e.target.value)}
+                                    className="p-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs font-medium cursor-pointer"
                                   >
-                                    Edit
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteSoal(s.id)}
-                                    className="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 font-bold cursor-pointer"
-                                  >
-                                    Hapus
-                                  </button>
+                                    <option value="SEMUA">Semua Jenis ({allSoal.length})</option>
+                                    <option value="PG">Pilihan Ganda ({allSoal.filter((s: any) => s.tipeSoal === 'PG').length})</option>
+                                    <option value="PG_KOMPLEKS">PG Kompleks ({allSoal.filter((s: any) => s.tipeSoal === 'PG_KOMPLEKS').length})</option>
+                                    <option value="BENAR_SALAH">Benar / Salah ({allSoal.filter((s: any) => s.tipeSoal === 'BENAR_SALAH').length})</option>
+                                    <option value="MENJODOHKAN">Menjodohkan ({allSoal.filter((s: any) => s.tipeSoal === 'MENJODOHKAN').length})</option>
+                                    <option value="ISIAN">Isian Singkat ({allSoal.filter((s: any) => s.tipeSoal === 'ISIAN').length})</option>
+                                    <option value="ESAI">Essay / Uraian ({allSoal.filter((s: any) => s.tipeSoal === 'ESAI').length})</option>
+                                  </select>
                                 </div>
-                              </div>
 
-                              <div className="text-slate-900 dark:text-white font-medium pl-8">
-                                <MathRenderer content={s.pertanyaan} />
+                                <input
+                                  type="text"
+                                  value={searchSoalQuery}
+                                  onChange={(e) => setSearchSoalQuery(e.target.value)}
+                                  placeholder="Cari teks butir soal..."
+                                  className="p-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white text-xs min-w-[160px]"
+                                />
                               </div>
+                            </div>
 
-                              {/* Preview Pasangan Menjodohkan */}
-                              {s.tipeSoal === 'MENJODOHKAN' && s.matchingData && (
-                                <div className="pl-8 pt-2 space-y-1.5">
-                                  <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase block">
-                                    Kunci Pasangan Pencocokan:
-                                  </span>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {(() => {
-                                      try {
-                                        const pairs = JSON.parse(s.matchingData);
-                                        return pairs.map((p: any, i: number) => (
-                                          <div key={i} className="p-2 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 flex items-center justify-between text-xs">
-                                            <span className="font-semibold text-slate-800 dark:text-slate-200">{p.left}</span>
-                                            <span className="text-blue-500 font-bold">➔</span>
-                                            <span className="font-bold text-blue-700 dark:text-blue-300">{p.right}</span>
-                                          </div>
-                                        ));
-                                      } catch (e) {
-                                        return null;
-                                      }
-                                    })()}
-                                  </div>
+                            <div className="space-y-3">
+                              {allSoal.length === 0 ? (
+                                <div className="text-center py-8 text-slate-500 text-xs">
+                                  Belum ada butir soal dalam bank ini. Silakan input soal di atas atau klik tombol <b>Import Soal Excel</b>.
                                 </div>
-                              )}
-
-                              {['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(s.tipeSoal) && s.opsiJawaban && s.opsiJawaban.length > 0 && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-8 pt-1">
-                                  {s.opsiJawaban.map((op: any) => (
+                              ) : filteredSoal.length === 0 ? (
+                                <div className="text-center py-8 text-slate-500 text-xs">
+                                  Tidak ada butir soal yang sesuai dengan filter jenis / pencarian Anda.
+                                </div>
+                              ) : (
+                                filteredSoal.map((s: any) => {
+                                  const displayNomor = s.nomorUrut || allSoal.indexOf(s) + 1;
+                                  return (
                                     <div
-                                      key={op.id || op.label}
-                                      className={`p-2 rounded-xl border flex items-center gap-2 ${
-                                        op.isBenar
-                                          ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 font-bold'
-                                          : 'bg-slate-100/60 dark:bg-slate-900 border-slate-200/60 dark:border-white/5 text-slate-700 dark:text-slate-400'
-                                      }`}
+                                      key={s.id}
+                                      className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-950 border border-slate-200/60 dark:border-white/10 space-y-3 text-xs"
                                     >
-                                      <span className="w-5 h-5 rounded-md bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-[10px]">
-                                        {op.label}
-                                      </span>
-                                      <span className="truncate flex-1">{op.konten}</span>
-                                      {op.isBenar && <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">✓ Kunci</span>}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                                      <div className="flex justify-between items-start gap-2">
+                                        <div className="flex items-center gap-2">
+                                          <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center shrink-0">
+                                            {displayNomor}
+                                          </span>
+                                          <span className="font-bold text-slate-700 dark:text-slate-300">
+                                            Tipe: {s.tipeSoal} • Bobot: {s.bobot} Poin
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          <button
+                                            onClick={() => {
+                                              let parsedMatching = [
+                                                { left: '', right: '' },
+                                                { left: '', right: '' },
+                                                { left: '', right: '' },
+                                                { left: '', right: '' },
+                                              ];
+                                              if (s.matchingData) {
+                                                try {
+                                                  const parsed = JSON.parse(s.matchingData);
+                                                  if (Array.isArray(parsed) && parsed.length > 0) parsedMatching = parsed;
+                                                } catch (e) {}
+                                              }
 
-                              {s.kunciJawabanTeks && (
-                                <div className="pl-8 pt-1 text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                                  <span className="font-bold text-amber-600 dark:text-amber-400">
-                                    {s.tipeSoal === 'ISIAN' ? 'Kunci Jawaban Singkat:' : 'Rubrik / Pedoman Nilai Essay:'}
-                                  </span>
-                                  <span className="font-medium">{s.kunciJawabanTeks}</span>
-                                </div>
+                                              setSoalForm({
+                                                soalId: s.id,
+                                                tipeSoal: s.tipeSoal,
+                                                pertanyaan: s.pertanyaan,
+                                                bobot: s.bobot,
+                                                kunciJawabanTeks: s.kunciJawabanTeks || '',
+                                                matchingPairs: parsedMatching,
+                                                opsiJawaban: s.opsiJawaban?.length
+                                                  ? [...s.opsiJawaban]
+                                                      .sort((a: any, b: any) => (a.label || '').localeCompare(b.label || ''))
+                                                      .map((o: any) => ({
+                                                        label: o.label,
+                                                        konten: o.konten,
+                                                        isBenar: o.isBenar,
+                                                      }))
+                                                  : [
+                                                      { label: 'A', konten: '', isBenar: true },
+                                                      { label: 'B', konten: '', isBenar: false },
+                                                      { label: 'C', konten: '', isBenar: false },
+                                                      { label: 'D', konten: '', isBenar: false },
+                                                      { label: 'E', konten: '', isBenar: false },
+                                                    ],
+                                              });
+                                              window.scrollTo({ top: 400, behavior: 'smooth' });
+                                            }}
+                                            className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-blue-600 dark:text-blue-400 font-bold hover:bg-slate-300 dark:hover:bg-slate-700 cursor-pointer"
+                                          >
+                                            Edit
+                                          </button>
+                                          <button
+                                            onClick={() => handleDeleteSoal(s.id)}
+                                            className="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 font-bold cursor-pointer"
+                                          >
+                                            Hapus
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="text-slate-900 dark:text-white font-medium pl-8">
+                                        <MathRenderer content={s.pertanyaan} />
+                                      </div>
+
+                                      {/* Preview Pasangan Menjodohkan */}
+                                      {s.tipeSoal === 'MENJODOHKAN' && s.matchingData && (
+                                        <div className="pl-8 pt-2 space-y-1.5">
+                                          <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase block">
+                                            Kunci Pasangan Pencocokan:
+                                          </span>
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {(() => {
+                                              try {
+                                                const pairs = JSON.parse(s.matchingData);
+                                                return pairs.map((p: any, i: number) => (
+                                                  <div key={i} className="p-2 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 flex items-center justify-between text-xs">
+                                                    <span className="font-semibold text-slate-800 dark:text-slate-200">{p.left}</span>
+                                                    <span className="text-blue-500 font-bold">➔</span>
+                                                    <span className="font-bold text-blue-700 dark:text-blue-300">{p.right}</span>
+                                                  </div>
+                                                ));
+                                              } catch (e) {
+                                                return null;
+                                              }
+                                            })()}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(s.tipeSoal) && s.opsiJawaban && s.opsiJawaban.length > 0 && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-8 pt-1">
+                                          {[...s.opsiJawaban]
+                                            .sort((a: any, b: any) => (a.label || '').localeCompare(b.label || ''))
+                                            .map((op: any) => (
+                                              <div
+                                                key={op.id || op.label}
+                                                className={`p-2 rounded-xl border flex items-center gap-2 ${
+                                                  op.isBenar
+                                                    ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 font-bold'
+                                                    : 'bg-slate-100/60 dark:bg-slate-900 border-slate-200/60 dark:border-white/5 text-slate-700 dark:text-slate-400'
+                                                }`}
+                                              >
+                                                <span className="w-5 h-5 rounded-md bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-[10px]">
+                                                  {op.label}
+                                                </span>
+                                                <span className="truncate flex-1">{op.konten}</span>
+                                                {op.isBenar && <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">✓ Kunci</span>}
+                                              </div>
+                                            ))}
+                                        </div>
+                                      )}
+
+                                      {s.kunciJawabanTeks && (
+                                        <div className="pl-8 pt-1 text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                                          <span className="font-bold text-amber-600 dark:text-amber-400">
+                                            {s.tipeSoal === 'ISIAN' ? 'Kunci Jawaban Singkat:' : 'Rubrik / Pedoman Nilai Essay:'}
+                                          </span>
+                                          <span className="font-medium">{s.kunciJawabanTeks}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })
                               )}
                             </div>
-                          ))
-                        )}
-                      </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 ) : (

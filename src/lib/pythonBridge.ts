@@ -2,6 +2,13 @@ import { spawn } from 'child_process';
 import path from 'path';
 
 /**
+ * Mendapatkan executable Python yang valid di lingkungan host (python3 atau python)
+ */
+function getPythonBinary(): string {
+  return process.env.PYTHON_BIN || 'python3';
+}
+
+/**
  * Jalankan script Python dengan payload JSON via STDIN dan terima output JSON via STDOUT
  */
 export async function runPythonScript<T = any>(
@@ -11,7 +18,9 @@ export async function runPythonScript<T = any>(
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const scriptPath = path.join(process.cwd(), scriptRelativePath);
-    const py = spawn('python', [scriptPath], {
+    const pythonCmd = getPythonBinary();
+
+    const py = spawn(pythonCmd, [scriptPath], {
       windowsHide: true,
       env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
     });
