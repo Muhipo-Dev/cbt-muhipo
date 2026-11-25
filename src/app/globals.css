@@ -623,16 +623,23 @@ header img,
   object-fit: contain !important;
 }
 
-/* Print Optimization */
+/* Print Optimization & Anti-Print/Anti-Capture Override */
 @media print {
   @page {
     size: auto;
-    margin: 8mm 10mm;
+    margin: 0;
   }
 
   *, *::before, *::after {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+
+  /* Saat di halaman ujian (.cbt-exam-lockdown), sembunyikan seluruh isi dokumen agar Print / Save as PDF kosong */
+  body:has(.cbt-exam-lockdown),
+  .cbt-exam-lockdown {
+    display: none !important;
+    visibility: hidden !important;
   }
 
   html, body {
@@ -663,12 +670,13 @@ header img,
 }
 
 /* ==========================================================================
-   CBT EXAM LOCKDOWN INTEGRITY SHIELD
-   Perlindungan kaku anti-cheat:
+   CBT EXAM LOCKDOWN & ANTI-SCREENSHOT INTEGRITY SHIELD
+   Perlindungan kaku anti-cheat & anti-rekam layar:
    - Blokir seleksi teks / Select All
    - Blokir context menu callout di iOS & Android WebView
    - Blokir dragging gambar/soal keluar window
    - Blokir highlight teks
+   - Privacy blackout shield saat window blur / background capture
    - TETAP MENGIZINKAN: scrolling touchscreen lancar dan gesture pinch-to-zoom pada soal/gambar
    ========================================================================== */
 .cbt-exam-lockdown,
@@ -695,4 +703,11 @@ header img,
   user-drag: none !important;
   pointer-events: auto !important;
   touch-action: pan-y pinch-zoom;
+}
+
+/* Privacy Curtain Shield ketika blur / screen recording / app switcher aktif */
+.cbt-privacy-shield-active {
+  filter: blur(28px) grayscale(100%) !important;
+  pointer-events: none !important;
+  user-select: none !important;
 }

@@ -370,6 +370,26 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
       return false;
     }
 
+    // 5b. Anti-Screenshot Shortcuts (PrintScreen, Win+Shift+S, Cmd+Shift+3/4/5)
+    if (
+      e.key === 'PrintScreen' ||
+      e.code === 'PrintScreen' ||
+      e.keyCode === 44 ||
+      ((isCmd || isCtrl) && e.shiftKey && ['3', '4', '5', 's', 'S'].includes(e.key)) ||
+      (isCmd && isCtrl && e.shiftKey && ['3', '4', '5'].includes(e.key))
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      // Segera bersihkan clipboard agar screenshot buffer OS tidak berisi data soal
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          navigator.clipboard.writeText('');
+        } catch (_) {}
+      }
+      onViolation?.('Tangkapan Layar (Screenshot) / Rekam Layar dilarang keras selama ujian!');
+      return false;
+    }
+
     // 6. Clipboard & Selection Protection (Blokir Cut, Copy, Paste, Select All)
     if ((isCtrl || isCmd) && ['c', 'v', 'a', 'x', 'C', 'V', 'A', 'X'].includes(e.key)) {
       e.preventDefault();
@@ -418,5 +438,50 @@ export function setupBrowserNavigationLock(onBackAttempt?: () => void) {
 
   return () => {
     window.removeEventListener('popstate', handlePopState);
+  };
+}
+
+/**
+ * Anti-Screenshot & Screen-Recording Protection Engine
+ * 1. Memblokir Web API Screen Capture (navigator.mediaDevices.getDisplayMedia)
+ * 2. Membersihkan clipboard saat tombol PrintScreen ditekan / dilepas
+ * 3. Menghalangi perekaman layar dari extension pihak ketiga
+ */
+export function setupAntiScreenshotAndRecording(onViolation?: (detail: string) => void) {
+  if (typeof window === 'undefined') return () => {};
+
+  // 1. Monkey patch getDisplayMedia untuk menolak Screen Share / Recording dari Web API
+  let originalGetDisplayMedia: any = null;
+  if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
+    originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getDisplayMedia = async () => {
+      onViolation?.('Upaya Perekaman Layar / Screen Share terdeteksi dan diblokir!');
+      throw new DOMException('Screen recording and screen capture are strictly forbidden during exam.', 'NotAllowedError');
+    };
+  }
+
+  // 2. Intercept PrintScreen keyup/keydown dan bersihkan clipboard buffer seketika
+  const handlePrintScreen = (e: KeyboardEvent) => {
+    if (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          navigator.clipboard.writeText('');
+        } catch (_) {}
+      }
+      onViolation?.('Tangkapan Layar (PrintScreen / Screenshot) diblokir!');
+    }
+  };
+
+  window.addEventListener('keydown', handlePrintScreen, { capture: true });
+  window.addEventListener('keyup', handlePrintScreen, { capture: true });
+
+  return () => {
+    if (originalGetDisplayMedia && navigator.mediaDevices) {
+      navigator.mediaDevices.getDisplayMedia = originalGetDisplayMedia;
+    }
+    window.removeEventListener('keydown', handlePrintScreen, { capture: true });
+    window.removeEventListener('keyup', handlePrintScreen, { capture: true });
   };
 }

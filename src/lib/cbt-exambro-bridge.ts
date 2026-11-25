@@ -315,3 +315,75 @@ export function registerGlobalExambroBridge(callbacks?: {
 
   console.log('[Exambro Bridge] Global JavaScript Hooks (window.cbtExambro*) berhasil diaktifkan.');
 }
+
+/**
+ * Mengaktifkan Kiosk Mode & FLAG_SECURE pada Aplikasi Android CBT Exambro
+ * Memerintahkan native app untuk:
+ * 1. WindowManager.LayoutParams.FLAG_SECURE -> memblokir hardware screenshot & screen recording di Android OS level
+ * 2. Mengaktifkan lock-task mode / kiosk mode (menonaktifkan tombol recent apps, split screen, dan home button jika didukung)
+ */
+export function enforceExambroKioskSecurity(): { isKioskLocked: boolean; method: string } {
+  if (typeof window === 'undefined') return { isKioskLocked: false, method: 'none' };
+
+  const w = window as any;
+  let method = 'web';
+
+  try {
+    // 1. Coba interface window.Exambro (Exambro Native Bridge standar)
+    if (w.Exambro) {
+      if (typeof w.Exambro.setSecureMode === 'function') {
+        w.Exambro.setSecureMode(true);
+        method = 'Exambro.setSecureMode';
+      }
+      if (typeof w.Exambro.setFlagSecure === 'function') {
+        w.Exambro.setFlagSecure(true);
+        method = 'Exambro.setFlagSecure';
+      }
+      if (typeof w.Exambro.setKioskMode === 'function') {
+        w.Exambro.setKioskMode(true);
+      }
+      if (typeof w.Exambro.blockScreenshot === 'function') {
+        w.Exambro.blockScreenshot(true);
+      }
+      if (typeof w.Exambro.lockNavigation === 'function') {
+        w.Exambro.lockNavigation(true);
+      }
+    }
+
+    // 2. Coba interface window.Android
+    if (w.Android) {
+      if (typeof w.Android.setFlagSecure === 'function') {
+        w.Android.setFlagSecure(true);
+        method = 'Android.setFlagSecure';
+      }
+      if (typeof w.Android.enableKioskMode === 'function') {
+        w.Android.enableKioskMode(true);
+      }
+      if (typeof w.Android.blockScreenshot === 'function') {
+        w.Android.blockScreenshot(true);
+      }
+    }
+
+    // 3. Coba interface window.cbtBridge
+    if (w.cbtBridge) {
+      if (typeof w.cbtBridge.setSecureMode === 'function') {
+        w.cbtBridge.setSecureMode(true);
+        method = 'cbtBridge.setSecureMode';
+      }
+      if (typeof w.cbtBridge.setKioskMode === 'function') {
+        w.cbtBridge.setKioskMode(true);
+      }
+    }
+
+    // 4. Safe Exam Browser (SEB) JavaScript API
+    if (w.SafeExamBrowser) {
+      method = 'SafeExamBrowser';
+    }
+
+    console.log(`[Exambro Kiosk] Enforce kiosk security executed: method=${method}`);
+    return { isKioskLocked: method !== 'web', method };
+  } catch (e) {
+    console.warn('[Exambro Kiosk] Gagal mengaktifkan native kiosk secure mode:', e);
+    return { isKioskLocked: false, method: 'error' };
+  }
+}

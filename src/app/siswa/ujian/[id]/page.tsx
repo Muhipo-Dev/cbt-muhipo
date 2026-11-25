@@ -28,6 +28,7 @@ import {
   cbtSecurityAudio,
   setupExamKeyboardLockdown,
   setupBrowserNavigationLock,
+  setupAntiScreenshotAndRecording,
   requestUniversalFullscreen,
   exitUniversalFullscreen,
   isCurrentlyFullscreen,
@@ -48,6 +49,7 @@ import {
   saveAnswerToAndroidExambro,
   fetchAnswersFromAndroidExambro,
   registerGlobalExambroBridge,
+  enforceExambroKioskSecurity,
 } from '@/lib/cbt-exambro-bridge';
 
 interface OpsiJawaban {
@@ -103,6 +105,7 @@ export default function LembarUjianPage({
   const [submitting, setSubmitting] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'offline_saved' | 'error'>('saved');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPrivacyObscured, setIsPrivacyObscured] = useState(false);
   const [cheatWarning, setCheatWarning] = useState<string | null>(null);
   const [isExambro, setIsExambro] = useState(false);
   const [isSEB, setIsSEB] = useState(false);
@@ -423,6 +426,24 @@ export default function LembarUjianPage({
       );
     });
 
+    // Anti-Screenshot & Anti-Screen-Record Protection
+    const cleanupAntiScreenshot = setupAntiScreenshotAndRecording((detail) => {
+      if (isSubmittedRef.current) return;
+      // Langsung tutupi konten dengan privacy shield
+      setIsPrivacyObscured(true);
+      setTimeout(() => {
+        setIsPrivacyObscured(false);
+      }, 1500);
+      dispatchAreaViolation(
+        'KEYBOARD_SHORTCUT_VIOLATION',
+        detail,
+        'Peringatan! Tangkapan layar dan rekam layar dilarang keras selama ujian!'
+      );
+    });
+
+    // Enforce Kiosk mode dan FLAG_SECURE pada Android Exambro native bridge
+    enforceExambroKioskSecurity();
+
     // Mencegah Siswa Menutup Tab atau Refresh (BeforeUnload Trap)
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isSubmittedRef.current) return;
@@ -444,16 +465,25 @@ export default function LembarUjianPage({
     // 1. Visibility Change Listener (Tab Switch)
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        setIsPrivacyObscured(true);
         dispatchAreaViolation(
           'TAB_SWITCH_ALERT',
           'Siswa berpindah tab browser atau meminimalkan browser',
           'Peringatan! Anda terdeteksi meninggalkan halaman ujian!'
         );
+      } else {
+        // Pulihkan perlindungan privasi setelah tab kembali fokus
+        setTimeout(() => {
+          setIsPrivacyObscured(false);
+        }, 500);
       }
     };
 
     // 2. Window Blur Listener (App Switch / Alt+Tab) - Tidak dieksekusi jika tab sudah hidden
     const handleWindowBlur = () => {
+      // Aktifkan tirai privasi sesaat untuk mengaburkan tangkapan layar saat app-switching / snipping tool
+      setIsPrivacyObscured(true);
+
       // Jika dokumen sudah hidden, event sudah ditangani oleh visibilitychange
       if (document.hidden) return;
 
@@ -468,6 +498,10 @@ export default function LembarUjianPage({
         'Siswa berpindah aplikasi lain (Jendela Tidak Fokus)',
         'Peringatan! Dilarang membuka aplikasi lain selama ujian!'
       );
+    };
+
+    const handleWindowFocus = () => {
+      setIsPrivacyObscured(false);
     };
 
     // 3. Page Hide Listener
@@ -576,6 +610,7 @@ export default function LembarUjianPage({
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
     window.addEventListener('pagehide', handlePageHide);
     window.addEventListener('focus', handleWindowFocusChange);
     document.addEventListener('click', handleDocumentClickToFullscreen, { capture: true });
@@ -595,9 +630,11 @@ export default function LembarUjianPage({
       if (pendingViolationTimer) clearTimeout(pendingViolationTimer);
       cleanupHistoryLock();
       cleanupKeyboard();
+      cleanupAntiScreenshot();
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('focus', handleWindowFocusChange);
       document.removeEventListener('click', handleDocumentClickToFullscreen, { capture: true });
@@ -958,9 +995,24 @@ export default function LembarUjianPage({
     <div
       className={`min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between font-sans pb-16 sm:pb-3 ${
         ujianInfo?.lockBrowser ? 'cbt-exam-lockdown select-none' : 'selection:bg-emerald-500 selection:text-white'
-      }`}
+      } ${isPrivacyObscured && ujianInfo?.lockBrowser ? 'cbt-privacy-shield-active' : ''}`}
       style={{ touchAction: 'pan-y pinch-zoom' }}
     >
+      {/* Privacy Shield Blindfold Overlay (Aktif saat tangkapan layar, PrintScreen, Alt+Tab, atau background screenshot) */}
+      {isPrivacyObscured && ujianInfo?.lockBrowser && !isSubmittedRef.current && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center select-none backdrop-blur-xl">
+          <div className="w-16 h-16 rounded-full bg-rose-500/20 border-2 border-rose-500 flex items-center justify-center mb-4 text-rose-500 animate-pulse">
+            <ShieldAlert className="w-9 h-9" />
+          </div>
+          <h3 className="text-xl font-bold text-white tracking-wide">
+            Layar Soal Disamarkan (Privacy Guard)
+          </h3>
+          <p className="text-sm text-slate-400 mt-2 max-w-sm">
+            Tangkapan layar, rekam layar, dan perpindahan jendela diblokir demi keamanan ujian.
+          </p>
+        </div>
+      )}
+
       {/* Modal Aktivasi Keamanan & Screen Recording */}
       {ujianInfo?.lockBrowser && (
         <SecurityLockModal
