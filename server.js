@@ -1,3 +1,7 @@
+if (!process.env.UV_THREADPOOL_SIZE) {
+  process.env.UV_THREADPOOL_SIZE = '16';
+}
+
 const http = require('http');
 const os = require('os');
 const next = require('next');
@@ -28,6 +32,12 @@ app.prepare().then(() => {
   const httpServer = http.createServer((req, res) => {
     handle(req, res);
   });
+
+  // Optimasi untuk 800+ pengguna bersamaan (high concurrency)
+  httpServer.keepAliveTimeout = 65000;
+  httpServer.headersTimeout = 66000;
+  httpServer.requestTimeout = 30000;
+  httpServer.maxConnections = 0;
 
   httpServer.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {

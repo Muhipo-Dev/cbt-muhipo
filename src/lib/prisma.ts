@@ -15,10 +15,10 @@ function getOptimizedDatabaseUrl(): string | undefined {
   try {
     const url = new URL(rawUrl);
     if (!url.searchParams.has('connection_limit')) {
-      url.searchParams.set('connection_limit', '25');
+      url.searchParams.set('connection_limit', process.env.PRISMA_CONNECTION_LIMIT || '100');
     }
     if (!url.searchParams.has('pool_timeout')) {
-      url.searchParams.set('pool_timeout', '20');
+      url.searchParams.set('pool_timeout', process.env.PRISMA_POOL_TIMEOUT || '30');
     }
     return url.toString();
   } catch {
