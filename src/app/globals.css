@@ -739,14 +739,30 @@ header img,
 
 /* ==========================================================================
    CBT EXAM LOCKDOWN & ANTI-SCREENSHOT INTEGRITY SHIELD
-   Perlindungan kaku anti-cheat & anti-rekam layar:
-   - Blokir seleksi teks / Select All
+   Perlindungan kaku anti-cheat & anti-rekam layar yang 100% selaras dengan
+   kenyamanan Touchscreen, Momentum Scroll (Vertikal & Horizontal), serta
+   Zoom / Cubit Layar 2 Jari (Pinch-to-Zoom) di dalam Mode Kiosk Fullscreen:
+   - Blokir seleksi teks / Select All / Copy / Cut / Paste
    - Blokir context menu callout di iOS & Android WebView
-   - Blokir dragging gambar/soal keluar window
-   - Blokir highlight teks
-   - Privacy blackout shield saat window blur / background capture
-   - TETAP MENGIZINKAN: scrolling touchscreen lancar dan gesture pinch-to-zoom pada soal/gambar
+   - Blokir dragging gambar/soal keluar window & swipe-back tepi layar
+   - WAJIB MENGIZINKAN: Touchscreen, Scroll lancar, Zoom, dan Cubit Layar (Pinch-Zoom)
    ========================================================================== */
+html:fullscreen,
+html:-webkit-full-screen,
+:fullscreen body,
+:-webkit-full-screen body,
+html:has(.cbt-exam-lockdown),
+body:has(.cbt-exam-lockdown) {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: auto !important;
+  min-height: 100dvh !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-x: none !important;
+  overscroll-behavior-y: contain !important;
+  touch-action: pan-x pan-y pinch-zoom !important;
+}
+
 .cbt-exam-lockdown,
 .cbt-exam-lockdown * {
   -webkit-user-select: none !important;
@@ -754,7 +770,7 @@ header img,
   -ms-user-select: none !important;
   user-select: none !important;
   -webkit-touch-callout: none !important;
-  touch-action: pan-y pinch-zoom;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 .cbt-exam-lockdown button,
@@ -771,7 +787,7 @@ header img,
   -ms-user-select: none !important;
   user-select: none !important;
   -webkit-touch-callout: none !important;
-  touch-action: manipulation !important;
+  touch-action: pan-x pan-y pinch-zoom !important;
 }
 
 .cbt-exam-lockdown ::selection {
@@ -783,7 +799,7 @@ header img,
   -webkit-user-drag: none !important;
   user-drag: none !important;
   pointer-events: auto !important;
-  touch-action: pan-y pinch-zoom;
+  touch-action: pan-x pan-y pinch-zoom !important;
 }
 
 /* Privacy Curtain Shield ketika blur / screen recording / app switcher aktif */

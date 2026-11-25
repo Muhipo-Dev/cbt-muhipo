@@ -419,6 +419,11 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
     const isCtrl = e.ctrlKey;
     const isAlt = e.altKey;
 
+    // 0. Izinkan eksplisit navigasi Scroll & Zoom standar (Panah Atas/Bawah, PageUp/Down, Ctrl + +/-/0 untuk Zoom)
+    if ((isCtrl || isCmd) && ['+', '-', '=', '_', '0'].includes(e.key)) {
+      return;
+    }
+
     // 1. F12 (Inspect Element), F11 (Fullscreen override), F5 (Reload), Escape
     if (
       e.key === 'F12' ||
@@ -567,17 +572,24 @@ export function isMobileSplitScreenDetected(): boolean {
     return false;
   }
 
+  // PENTING: Jangan pernah salah menganggap gesture Cubit Layar / Pinch-to-Zoom (visualViewport.scale > 1) sebagai Split-Screen!
+  const vv = window.visualViewport;
+  const zoomScale = vv?.scale || 1;
+  if (zoomScale > 1.04) {
+    return false;
+  }
+
   const screenW = window.screen.availWidth || window.screen.width || 0;
   const screenH = window.screen.availHeight || window.screen.height || 0;
   if (!screenW || !screenH) return false;
 
-  const winW = window.outerWidth || window.innerWidth;
-  const winH = window.innerHeight;
+  const effectiveWinW = vv ? vv.width * zoomScale : window.outerWidth || window.innerWidth;
+  const effectiveWinH = vv ? vv.height * zoomScale : window.innerHeight;
 
   // Di ponsel portrait: jika lebar jendela menyusut drastis (< 72% lebar fisik layar) -> Floating Window / Pop-up View
-  // Di ponsel portrait tanpa keyboard aktif: jika tinggi viewport menyusut drastis (< 52% tinggi layar) -> Split Screen atas-bawah
-  const widthRatio = winW / screenW;
-  const heightRatio = winH / screenH;
+  // Di ponsel portrait tanpa keyboard aktif: jika tinggi viewport menyusut drastis (< 50% tinggi layar) -> Split Screen atas-bawah
+  const widthRatio = effectiveWinW / screenW;
+  const heightRatio = effectiveWinH / screenH;
 
   if (widthRatio < 0.72) return true;
   if (dev.isMobile && heightRatio < 0.50) return true;

@@ -21,6 +21,8 @@ import {
   HardDriveDownload,
   Type,
   ZoomIn,
+  ZoomOut,
+  RotateCcw,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -118,6 +120,15 @@ export default function LembarUjianPage({
   const [isExambro, setIsExambro] = useState(false);
   const [isSEB, setIsSEB] = useState(false);
   const [isKeyboardTyping, setIsKeyboardTyping] = useState(false);
+  const [wasExitedForKeyboard, setWasExitedForKeyboard] = useState(false);
+
+  // Kiosk 2-Finger Pinch-to-Zoom ("Cubit Layar") State — memastikan cubit layar & zoom tetap berfungsi 100%
+  // meskipun Chromium Fullscreen API mengunci visualViewport.scale bawaan browser di mode layar penuh!
+  const [examZoomScale, setExamZoomScale] = useState<number>(1);
+  const questionStageRef = useRef<HTMLDivElement | null>(null);
+  const pinchStartDistRef = useRef<number | null>(null);
+  const pinchStartScaleRef = useRef<number>(1);
+  const isMultiTouchPinchingRef = useRef<boolean>(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -168,14 +179,39 @@ export default function LembarUjianPage({
     handleChangeFontSize(order[nextIdx]);
   };
 
+  const clampExamZoom = (val: number) => Math.min(3.0, Math.max(1.0, Math.round(val * 100) / 100));
+
+  const adjustExamZoom = (delta: number) => {
+    setExamZoomScale((prev) => clampExamZoom(prev + delta));
+  };
+
+  const resetExamZoom = () => {
+    setExamZoomScale(1);
+  };
+
+  // Pulihkan Kiosk Fullscreen secara mulus pada sentuhan tombol berikutnya jika sempat keluar akibat keyboard virtual Android
+  const ensureKioskFullscreenOnGesture = useCallback(() => {
+    if (isSubmittedRef.current || ujianInfoRef.current?.lockBrowser === false) return;
+    const dev = detectDeviceSecurityInfo();
+    if (dev.hasFullscreen && !isCurrentlyFullscreen() && !isEditableExamInput(document.activeElement)) {
+      requestUniversalFullscreen(document.documentElement)
+        .then(() => {
+          setIsFullscreen(isCurrentlyFullscreen());
+          setWasExitedForKeyboard(false);
+        })
+        .catch(() => {});
+    }
+  }, []);
+
   // Navigasi ke nomor soal tertentu + Smooth Scroll ke atas kartu soal
   const navigateToQuestion = useCallback((targetIndex: number) => {
+    ensureKioskFullscreenOnGesture();
     const bounded = Math.max(0, Math.min(soalList.length - 1, targetIndex));
     setCurrentIndex(bounded);
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [soalList.length]);
+  }, [soalList.length, ensureKioskFullscreenOnGesture]);
 
   // 1. Inisialisasi Android Exambro Native Bridge & Fetch Soal dengan Dukungan Fallback IndexedDB
   useEffect(() => {
@@ -648,6 +684,77 @@ export default function LembarUjianPage({
     };
   }, []);
 
+  // Mesin Cubit Layar 2 Jari (Kiosk Pinch-to-Zoom) & Trackpad Pinch di Halaman Ujian:
+  // Saat browser berada di Fullscreen API (Chrome Android / Tablet / Desktop), Chromium mematikan zoom bawaan visualViewport.
+  // Listener ini memastikan gesture cubit 2 jari ("cubit layar") tetap memperbesar/memperkecil soal & opsi (100% - 300%)
+  // tanpa mengganggu scroll 1 jari maupun ketukan tombol touchscreen!
+  useEffect(() => {
+    const stageEl = questionStageRef.current;
+    if (!stageEl || loading) return;
+
+    const getTouchDistance = (t1: Touch, t2: Touch) =>
+      Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        isMultiTouchPinchingRef.current = true;
+        // Jika sedang Fullscreen API (di mana native visualViewport zoom dikunci oleh browser), aktifkan Kiosk Pinch-Zoom
+        if (isCurrentlyFullscreen()) {
+          pinchStartDistRef.current = getTouchDistance(e.touches[0], e.touches[1]);
+          pinchStartScaleRef.current = examZoomScale;
+        }
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length >= 2 && pinchStartDistRef.current && isCurrentlyFullscreen()) {
+        // Cegah gesture browser lain hanya saat 2 jari sedang mencubit di mode Fullscreen API;
+        // sentuhan 1 jari (scroll vertikal/horizontal & tap jawaban) tetap 100% native!
+        if (e.cancelable) e.preventDefault();
+        const currentDist = getTouchDistance(e.touches[0], e.touches[1]);
+        if (pinchStartDistRef.current > 10) {
+          const ratio = currentDist / pinchStartDistRef.current;
+          const nextScale = Math.min(3.0, Math.max(1.0, Math.round(pinchStartScaleRef.current * ratio * 100) / 100));
+          setExamZoomScale(nextScale);
+        }
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        pinchStartDistRef.current = null;
+        setTimeout(() => {
+          isMultiTouchPinchingRef.current = false;
+        }, 250);
+      }
+    };
+
+    const onWheelZoom = (e: WheelEvent) => {
+      // Dukung cubit trackpad 2 jari / Ctrl + Scroll untuk memperbesar/memperkecil tampilan soal di dalam Kiosk Fullscreen
+      if (e.ctrlKey || e.metaKey) {
+        if (isCurrentlyFullscreen()) {
+          e.preventDefault();
+          const delta = e.deltaY < 0 ? 0.12 : -0.12;
+          setExamZoomScale((prev) => Math.min(3.0, Math.max(1.0, Math.round((prev + delta) * 100) / 100)));
+        }
+      }
+    };
+
+    stageEl.addEventListener('touchstart', onTouchStart, { passive: true });
+    stageEl.addEventListener('touchmove', onTouchMove, { passive: false });
+    stageEl.addEventListener('touchend', onTouchEnd, { passive: true });
+    stageEl.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    stageEl.addEventListener('wheel', onWheelZoom, { passive: false });
+
+    return () => {
+      stageEl.removeEventListener('touchstart', onTouchStart);
+      stageEl.removeEventListener('touchmove', onTouchMove);
+      stageEl.removeEventListener('touchend', onTouchEnd);
+      stageEl.removeEventListener('touchcancel', onTouchEnd);
+      stageEl.removeEventListener('wheel', onWheelZoom);
+    };
+  }, [loading, examZoomScale]);
+
   // 3. Anti-Cheat Engine Lintas Platform & Pengawasan Area Terkoordinasi (Chrome Ponsel, Safari iOS, Exambro, Desktop)
   useEffect(() => {
     if (!isSecurityUnlocked || ujianInfo?.lockBrowser === false) return;
@@ -813,6 +920,9 @@ export default function LembarUjianPage({
     const handleFullscreenChange = () => {
       const inFullscreen = isCurrentlyFullscreen();
       setIsFullscreen(inFullscreen);
+      if (inFullscreen) {
+        setWasExitedForKeyboard(false);
+      }
       if (isSubmittedRef.current) return;
 
       const devInfo = detectDeviceSecurityInfo();
@@ -820,9 +930,11 @@ export default function LembarUjianPage({
       // untuk menampilkan keyboard on-screen. Jangan hukum siswa atas perilaku bawaan OS Android ini!
       if (!inFullscreen && devInfo.hasFullscreen) {
         if ((devInfo.isMobile || devInfo.isTablet) && isEditableExamInput(document.activeElement)) {
+          setWasExitedForKeyboard(true);
           return;
         }
 
+        setWasExitedForKeyboard(false);
         dispatchAreaViolation(
           'FULLSCREEN_EXIT',
           'Peserta keluar dari mode layar penuh (Fullscreen Lockdown)',
@@ -831,10 +943,10 @@ export default function LembarUjianPage({
       }
     };
 
-    // 6. Deteksi Split-Screen / Multi-Window / Pop-up View di Android Chrome & iPadOS Safari
+    // 6. Deteksi Split-Screen / Multi-Window / Pop-up View di Android Chrome & iPadOS Safari (Aman terhadap Pinch-Zoom!)
     let resizeCheckTimer: NodeJS.Timeout | null = null;
     const handleResizeSplitCheck = () => {
-      if (isSubmittedRef.current) return;
+      if (isSubmittedRef.current || isMultiTouchPinchingRef.current) return;
       if (resizeCheckTimer) clearTimeout(resizeCheckTimer);
       resizeCheckTimer = setTimeout(() => {
         const splitDetected = isMobileSplitScreenDetected();
@@ -849,11 +961,22 @@ export default function LembarUjianPage({
       }, 400);
     };
 
-    // 7. Context Menu, Copy, Cut, Paste, Drag & Selection Prevention (BLOKIR TOTAL Termasuk di Kolom Input!)
+    // 7. Context Menu, Copy, Cut, Paste, Drag & Selection Prevention (BLOKIR TOTAL Termasuk di Kolom Input, Tanpa Mengganggu Cubit Layar & Scroll!)
     const handleContextMenu = (e: MouseEvent | TouchEvent) => {
       e.preventDefault();
-      cbtSecurityAudio.playWarningBuzzer();
-      setCheatWarning('Peringatan: Klik kanan / menu tahan-sentuh diblokir selama ujian!');
+      e.stopPropagation();
+      // Jika event berasal dari klik kanan mouse desktop, bunyikan peringatan;
+      // jika berasal dari tahan-sentuh / cubit 2 jari touchscreen, cukup blokir menu konteks secara senyap agar scroll & zoom nyaman!
+      const pType = (e as any).pointerType;
+      const isTouchContext =
+        isMultiTouchPinchingRef.current ||
+        pType === 'touch' ||
+        pType === 'pen' ||
+        (pType === undefined && typeof window !== 'undefined' && 'ontouchstart' in window);
+      if (!isTouchContext) {
+        cbtSecurityAudio.playWarningBuzzer();
+        setCheatWarning('Peringatan: Klik kanan diblokir selama ujian!');
+      }
     };
 
     const handleCopyCutPaste = (e: ClipboardEvent) => {
@@ -1040,14 +1163,16 @@ export default function LembarUjianPage({
   };
 
   const handleSelectOpsi = (soalId: string, opsiId: string) => {
-    if (submitting || isSubmittedRef.current) return;
+    if (submitting || isSubmittedRef.current || isMultiTouchPinchingRef.current) return;
+    ensureKioskFullscreenOnGesture();
     const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
     const nextVal = curr.jawabanDipilih === opsiId ? '' : opsiId;
     saveJawaban(soalId, nextVal, curr.raguRagu, true);
   };
 
   const handleSelectOpsiKompleks = (soalId: string, opsiId: string) => {
-    if (submitting || isSubmittedRef.current) return;
+    if (submitting || isSubmittedRef.current || isMultiTouchPinchingRef.current) return;
+    ensureKioskFullscreenOnGesture();
     const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
     let currentIds: string[] = [];
     try {
@@ -1067,6 +1192,7 @@ export default function LembarUjianPage({
 
   const handleToggleRagu = () => {
     if (submitting || isSubmittedRef.current) return;
+    ensureKioskFullscreenOnGesture();
     const currentSoal = soalList[currentIndex];
     if (!currentSoal) return;
     const curr = jawabanMap[currentSoal.id] || { jawabanDipilih: '', raguRagu: false };
@@ -1206,7 +1332,7 @@ export default function LembarUjianPage({
       className={`min-h-screen min-h-[100dvh] bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between font-sans overflow-x-hidden ${
         ujianInfo?.lockBrowser !== false ? 'cbt-exam-lockdown select-none' : 'selection:bg-emerald-500 selection:text-white'
       } ${isPrivacyObscured && ujianInfo?.lockBrowser !== false ? 'cbt-privacy-shield-active' : ''}`}
-      style={{ touchAction: 'pan-y pinch-zoom' }}
+      style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
     >
       {/* Privacy Shield Blindfold Overlay */}
       {isPrivacyObscured && ujianInfo?.lockBrowser !== false && !isSubmittedRef.current && (
@@ -1249,19 +1375,43 @@ export default function LembarUjianPage({
       {/* Force Fullscreen Lockdown Overlay */}
       {shouldShowFullscreenLockOverlay && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl space-y-5 animate-in zoom-in duration-200">
-            <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-rose-600 flex items-center justify-center mx-auto shadow-md">
-              <ShieldAlert className="w-10 h-10 animate-bounce" />
+          <div
+            className={`bg-white dark:bg-slate-900 border-2 ${
+              wasExitedForKeyboard ? 'border-emerald-500' : 'border-rose-500'
+            } rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl space-y-5 animate-in zoom-in duration-200`}
+          >
+            <div
+              className={`w-16 h-16 rounded-2xl border flex items-center justify-center mx-auto shadow-md ${
+                wasExitedForKeyboard
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-600'
+                  : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-600'
+              }`}
+            >
+              {wasExitedForKeyboard ? (
+                <Maximize2 className="w-9 h-9" />
+              ) : (
+                <ShieldAlert className="w-10 h-10 animate-bounce" />
+              )}
             </div>
             <div>
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-rose-600 bg-rose-100 dark:bg-rose-950/80 px-3 py-1 rounded-full border border-rose-200 dark:border-rose-800 inline-block">
-                Layar Ujian Terkunci ({violationCount}/10 Pelanggaran)
+              <span
+                className={`text-[11px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full border inline-block ${
+                  wasExitedForKeyboard
+                    ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 border-emerald-200 dark:border-emerald-800'
+                    : 'text-rose-600 bg-rose-100 dark:bg-rose-950/80 border-rose-200 dark:border-rose-800'
+                }`}
+              >
+                {wasExitedForKeyboard
+                  ? 'Keyboard Ditutup • Tanpa Sanksi Pelanggaran'
+                  : `Layar Ujian Terkunci (${violationCount}/10 Pelanggaran)`}
               </span>
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-2">
                 Kembali ke Mode Layar Penuh!
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
-                Anda keluar dari mode layar penuh. Ketuk tombol di bawah untuk mengembalikan layar penuh dan melanjutkan ujian.
+                {wasExitedForKeyboard
+                  ? 'Ketuk tombol di bawah untuk mengunci kembali layar penuh dan melanjutkan pengerjaan soal dengan nyaman.'
+                  : 'Anda keluar dari mode layar penuh. Ketuk tombol di bawah untuk mengembalikan layar penuh dan melanjutkan ujian.'}
               </p>
             </div>
 
@@ -1272,11 +1422,16 @@ export default function LembarUjianPage({
                 cbtWakeLock.requestWakeLock().catch(() => {});
                 await requestUniversalFullscreen(document.documentElement);
                 setIsFullscreen(isCurrentlyFullscreen());
+                setWasExitedForKeyboard(false);
               }}
-              className="min-h-[48px] w-full py-3.5 px-6 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-sm shadow-lg shadow-rose-600/30 transition flex items-center justify-center gap-2 cursor-pointer touch-manipulation"
+              className={`min-h-[48px] w-full py-3.5 px-6 rounded-2xl active:scale-95 text-white font-extrabold text-sm shadow-lg transition flex items-center justify-center gap-2 cursor-pointer touch-manipulation ${
+                wasExitedForKeyboard
+                  ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30'
+                  : 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/30'
+              }`}
             >
               <Maximize2 className="w-4 h-4" />
-              <span>Buka Kunci & Masuk Layar Penuh</span>
+              <span>Buka Kunci &amp; Masuk Layar Penuh</span>
             </button>
           </div>
         </div>
@@ -1479,19 +1634,74 @@ export default function LembarUjianPage({
         </div>
       )}
 
-      {/* Main Content Area: Momentum Scroll Lancar & Ruang Aman untuk Bottom Navigation di Ponsel */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-2.5 sm:px-5 lg:px-6 pt-3 sm:pt-5 pb-28 sm:pb-8 flex flex-col justify-between overscroll-contain">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-2xl sm:rounded-3xl p-3.5 xs:p-4 sm:p-7 shadow-xs dark:shadow-xl space-y-4 sm:space-y-6">
-          {/* Bar Info Tipe Soal & Bobot Ringkas */}
-          <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100 dark:border-white/10 text-[11px] text-slate-500 dark:text-slate-400">
-            <span className="font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded-lg border border-emerald-200/70 dark:border-emerald-800/60">
-              Butir Soal #{currentIndex + 1} • {currentSoal.tipeSoal.replace('_', ' ')}
-            </span>
-            {currentJawaban.raguRagu && (
-              <span className="font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-800">
-                Ditandai Ragu-Ragu
+      {/* Main Content Area: Momentum Scroll Lancar, Cubit Layar (Pinch-Zoom), & Ruang Aman untuk Bottom Navigation di Ponsel */}
+      <main
+        ref={questionStageRef}
+        id="cbt-question-zoom-stage"
+        className="flex-1 max-w-5xl w-full mx-auto px-2.5 sm:px-5 lg:px-6 pt-3 sm:pt-5 pb-28 sm:pb-8 flex flex-col justify-between overscroll-contain"
+        style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
+      >
+        <div className="w-full overflow-x-auto custom-scrollbar rounded-2xl sm:rounded-3xl">
+          <div
+            id="cbt-question-zoom-surface"
+            style={examZoomScale > 1.01 ? ({ zoom: examZoomScale } as React.CSSProperties) : undefined}
+            className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-2xl sm:rounded-3xl p-3.5 xs:p-4 sm:p-7 shadow-xs dark:shadow-xl space-y-4 sm:space-y-6"
+          >
+          {/* Bar Info Tipe Soal, Kontrol Zoom Cepat & Indikator Cubit Layar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100 dark:border-white/10 text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded-lg border border-emerald-200/70 dark:border-emerald-800/60">
+                Butir Soal #{currentIndex + 1} • {currentSoal.tipeSoal.replace('_', ' ')}
               </span>
-            )}
+              {currentJawaban.raguRagu && (
+                <span className="font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-800">
+                  Ditandai Ragu-Ragu
+                </span>
+              )}
+            </div>
+
+            {/* Kontrol Zoom Lembar Soal (Mendukung Cubit Layar 2 Jari + Tombol - / % / +) */}
+            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-1.5 py-0.5">
+              <button
+                type="button"
+                aria-label="Perkecil tampilan soal"
+                disabled={examZoomScale <= 1}
+                onClick={() => adjustExamZoom(-0.25)}
+                className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg hover:bg-slate-200/70 dark:hover:bg-slate-800 disabled:opacity-35 text-slate-700 dark:text-slate-200 cursor-pointer touch-manipulation"
+                title="Perkecil Tampilan Soal"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={resetExamZoom}
+                className="min-h-[32px] px-1.5 font-mono font-extrabold text-[11px] text-emerald-700 dark:text-emerald-400 cursor-pointer touch-manipulation"
+                title="Cubit layar 2 jari untuk zoom, ketuk angka ini untuk reset ke 100%"
+              >
+                {Math.round(examZoomScale * 100)}%
+              </button>
+              <button
+                type="button"
+                aria-label="Perbesar tampilan soal"
+                disabled={examZoomScale >= 3}
+                onClick={() => adjustExamZoom(0.25)}
+                className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg hover:bg-slate-200/70 dark:hover:bg-slate-800 disabled:opacity-35 text-slate-700 dark:text-slate-200 cursor-pointer touch-manipulation"
+                title="Perbesar Tampilan Soal"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+              {examZoomScale > 1.01 && (
+                <button
+                  type="button"
+                  aria-label="Reset zoom ke 100%"
+                  onClick={resetExamZoom}
+                  className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 cursor-pointer touch-manipulation"
+                  title="Reset Zoom 100%"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Question Audio Player */}
@@ -1770,6 +1980,7 @@ export default function LembarUjianPage({
               />
             </div>
           )}
+          </div>
         </div>
 
         {/* Bottom Navigation Toolbar (44px+ Touch Target Ergonomis di Smartphone Android & iOS Safari) */}

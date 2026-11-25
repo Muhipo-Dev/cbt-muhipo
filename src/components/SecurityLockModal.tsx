@@ -121,9 +121,9 @@ export function SecurityLockModal({
           <div className="flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <b className="text-slate-900 dark:text-white text-xs">3. Blokir Copy-Paste-Select & Syarat Keluar Layar Penuh:</b>
+              <b className="text-slate-900 dark:text-white text-xs">3. Hanya Izin Touchscreen, Scroll, Zoom &amp; Cubit Layar:</b>
               <span className="text-slate-500 dark:text-slate-400 block text-[11px] mt-0.5 leading-relaxed">
-                Fitur pilih teks (Select), salin (Copy), potong (Cut), tempel (Paste), & klik kanan <b>diblokir total</b>. Keluar dari layar penuh atau pindah tab akan memicu alarm & pelanggaran (maks. <b>10x pelanggaran</b> sebelum terkunci otomatis). Mode layar penuh akan <b>keluar otomatis setelah seluruh soal diisi dan ujian diselesaikan</b>.
+                Selama ujian berlangsung, peserta <b>hanya diizinkan melakukan sentuhan layar (touchscreen), gulir halaman (scroll), perbesar tampilan (zoom), dan cubit layar 2 jari (pinch-to-zoom)</b>. Fitur pilih teks (Select), salin (Copy), tempel (Paste), klik kanan, &amp; tangkapan layar <b>diblokir total</b> (maks. <b>10x pelanggaran</b> sebelum terkunci otomatis). Layar penuh keluar otomatis setelah seluruh soal selesai diisi.
               </span>
             </div>
           </div>
