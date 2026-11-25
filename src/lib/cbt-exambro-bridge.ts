@@ -387,3 +387,33 @@ export function enforceExambroKioskSecurity(): { isKioskLocked: boolean; method:
     return { isKioskLocked: false, method: 'error' };
   }
 }
+
+/**
+ * Melepaskan Kiosk Mode & FLAG_SECURE pada Aplikasi Android CBT Exambro saat ujian selesai
+ */
+export function releaseExambroKioskSecurity(): void {
+  if (typeof window === 'undefined') return;
+
+  const w = window as any;
+  try {
+    if (w.Exambro) {
+      if (typeof w.Exambro.setSecureMode === 'function') w.Exambro.setSecureMode(false);
+      if (typeof w.Exambro.setFlagSecure === 'function') w.Exambro.setFlagSecure(false);
+      if (typeof w.Exambro.setKioskMode === 'function') w.Exambro.setKioskMode(false);
+      if (typeof w.Exambro.blockScreenshot === 'function') w.Exambro.blockScreenshot(false);
+      if (typeof w.Exambro.lockNavigation === 'function') w.Exambro.lockNavigation(false);
+    }
+    if (w.Android) {
+      if (typeof w.Android.setFlagSecure === 'function') w.Android.setFlagSecure(false);
+      if (typeof w.Android.enableKioskMode === 'function') w.Android.enableKioskMode(false);
+      if (typeof w.Android.blockScreenshot === 'function') w.Android.blockScreenshot(false);
+    }
+    if (w.cbtBridge) {
+      if (typeof w.cbtBridge.setSecureMode === 'function') w.cbtBridge.setSecureMode(false);
+      if (typeof w.cbtBridge.setKioskMode === 'function') w.cbtBridge.setKioskMode(false);
+    }
+    console.log('[Exambro Kiosk] Kiosk security released.');
+  } catch (e) {
+    console.warn('[Exambro Kiosk] Gagal melepaskan kiosk mode:', e);
+  }
+}

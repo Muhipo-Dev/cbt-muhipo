@@ -11,7 +11,14 @@ import {
   Laptop,
   CheckCircle2,
 } from 'lucide-react';
-import { detectDeviceSecurityInfo, DeviceSecurityInfo } from '@/lib/cbt-security';
+import { enforceExambroKioskSecurity, detectExambroApp } from '@/lib/cbt-exambro-bridge';
+import {
+  detectDeviceSecurityInfo,
+  DeviceSecurityInfo,
+  requestUniversalFullscreen,
+  enableChromeKeyboardLock,
+  cbtSecurityAudio,
+} from '@/lib/cbt-security';
 
 interface SecurityLockModalProps {
   isOpen: boolean;
@@ -38,6 +45,19 @@ export function SecurityLockModal({
     setActivating(true);
     setErrorMsg(null);
     try {
+      // LAYER 1 (Web View CBT DOM Security): Fullscreen, Audio unlock, Keyboard Lock
+      cbtSecurityAudio.unlockAudio();
+      const devInfo = detectDeviceSecurityInfo();
+      if (devInfo.hasFullscreen) {
+        const rootElem = document.getElementById('cbt-exam-root') || document.documentElement;
+        await requestUniversalFullscreen(rootElem as HTMLElement).catch(() => {});
+        await enableChromeKeyboardLock().catch(() => {});
+      }
+
+      // LAYER 2 (Native Android Exambro APK & Kiosk Mode): FLAG_SECURE & Hardware Lock
+      enforceExambroKioskSecurity();
+
+      // Jalankan aktivasi keamanan lembar ujian
       await onActivateSecurity();
     } catch (e: any) {
       console.warn('Modal security start warning:', e);

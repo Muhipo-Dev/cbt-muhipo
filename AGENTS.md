@@ -50,3 +50,15 @@ Setiap pengembang maupun AI Agent yang melakukan perubahan kode, penambahan fitu
 ### 5. Kompresi & Performa Media Maksimal 300 MB
 - Semua media gambar yang diunggah ke sistem harus dikompresi otomatis tanpa memotong resolusi (*width/height* asli terjaga), dengan batas maksimal file **300 MB**.
 - Hindari penyimpanan gambar format base64 panjang di dalam database — selalu ubah menjadi tautan file di `/uploads/` yang sudah terkompresi.
+
+---
+
+### 6. Standar Wajib SAST & Linting (Code Integrity & Security)
+- **Zero Syntax & Lint Errors**: Setiap kali menyelesaikan tugas, perbaikan bug, atau penambahan fitur, **WAJIB** menjalankan pengecekan integritas linting (
+pm run lint) dan build (
+pm run build) tanpa error sintaksis.
+- **Static Application Security Testing (SAST)**:
+  - Wajib memperhatikan aspek keamanan kode dari serangan umum OWASP: sanitasi input formulir/SQL query, validasi hak akses role (ADMIN, GURU, SISWA), pencegahan prototype pollution, dan sanitasi payload upload file.
+  - Dependencies harus secara berkala diperiksa via 
+pm audit untuk memastikan tidak ada celah keamanan kritis/high pada pustaka produksi.
+  - Setiap API Route di /api/ wajib memverifikasi otentikasi sesi melalui getSessionUser() sebelum memproses manipulasi database.

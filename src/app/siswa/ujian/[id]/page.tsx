@@ -33,6 +33,8 @@ import {
   exitUniversalFullscreen,
   isCurrentlyFullscreen,
   detectDeviceSecurityInfo,
+  enableChromeKeyboardLock,
+  unlockChromeKeyboardLock,
 } from '@/lib/cbt-security';
 import { SecurityLockModal } from '@/components/SecurityLockModal';
 import {
@@ -50,6 +52,7 @@ import {
   fetchAnswersFromAndroidExambro,
   registerGlobalExambroBridge,
   enforceExambroKioskSecurity,
+  releaseExambroKioskSecurity,
 } from '@/lib/cbt-exambro-bridge';
 
 interface OpsiJawaban {
@@ -207,11 +210,13 @@ export default function LembarUjianPage({
       setSoalList(data.data.soalList);
       setSisaDetik(data.data.ujian.sisaWaktuDetik || 0);
 
-      // Jika ujian tidak memerlukan proteksi browser terkunci (lockBrowser === false),
-      // otomatis buka lembar ujian langsung tanpa modal dan tanpa lockdown
-      if (!data.data.ujian.lockBrowser) {
+      // Fitur Anti-Cheat & Lockdown Sistem:
+      // Selalu WAJIB aktif (lockBrowser !== false). Hanya ujian tanpa proteksi eksplisit (lockBrowser === false) yang di-bypass.
+      if (data.data.ujian.lockBrowser === false) {
         setIsSecurityUnlocked(true);
         setIsFullscreen(true);
+      } else {
+        setIsSecurityUnlocked(false);
       }
       await saveExamSessionToIndexedDB(ujianId, {
         pesertaUjianId: data.data.pesertaUjianId,
@@ -279,9 +284,11 @@ export default function LembarUjianPage({
       const cachedSession = await getExamSessionFromIndexedDB(ujianId);
       if (cachedSession && cachedSession.soalList?.length) {
         setUjianInfo(cachedSession.ujianInfo);
-        if (!cachedSession.ujianInfo?.lockBrowser) {
+        if (cachedSession.ujianInfo?.lockBrowser === false) {
           setIsSecurityUnlocked(true);
           setIsFullscreen(true);
+        } else {
+          setIsSecurityUnlocked(false);
         }
         setPesertaUjianId(cachedSession.pesertaUjianId || null);
         setSoalList(cachedSession.soalList);
@@ -327,6 +334,9 @@ export default function LembarUjianPage({
         // iPhone / iOS Safari: Diizinkan langsung berjalan lancar dalam mode viewport mobile
         setIsFullscreen(true);
       }
+
+      // LAYER 2: Enforce Kiosk mode dan FLAG_SECURE pada Android Exambro native bridge
+      enforceExambroKioskSecurity();
 
       // 2. Buka lembar ujian dan aktifkan grace period 5 detik bebas pelanggaran
       securityUnlockedAtRef.current = Date.now();
@@ -383,7 +393,7 @@ export default function LembarUjianPage({
   // Hanya aktif jika fitur lockBrowser dinyalakan oleh guru/admin pada paket ujian terkait.
   // Di luar fitur Anti-Cheat Lockdown (ujian biasa / latihan), peserta bebas melakukan scroll, sentuh, dan klik secara normal.
   useEffect(() => {
-    if (!isSecurityUnlocked || !ujianInfo?.lockBrowser) return;
+    if (!isSecurityUnlocked || ujianInfo?.lockBrowser === false) return;
 
     // Mutex & Debounce Ref untuk mencegah tabrakan event serentak
     let isHandlingViolation = false;
@@ -479,28 +489,32 @@ export default function LembarUjianPage({
       }
     };
 
-    // 2. Window Blur Listener (App Switch / Alt+Tab) - Tidak dieksekusi jika tab sudah hidden
+    // 2. Window Blur Listener (App Switch / Alt+Tab) - dengan debounce halus agar tidak false positive
+    let blurTimeout: NodeJS.Timeout | null = null;
     const handleWindowBlur = () => {
-      // Aktifkan tirai privasi sesaat untuk mengaburkan tangkapan layar saat app-switching / snipping tool
-      setIsPrivacyObscured(true);
-
       // Jika dokumen sudah hidden, event sudah ditangani oleh visibilitychange
       if (document.hidden) return;
 
       // Di smartphone mobile (Android / iOS), window blur sering terpicu secara false-positive
       // ketika memunculkan keyboard virtual on-screen, dropdown/select, atau address bar autohide.
-      // Deteksi tab switch pada mobile cukup diandalkan via visibilitychange dan pagehide.
       const devInfo = detectDeviceSecurityInfo();
       if (devInfo.isMobile) return;
 
-      dispatchAreaViolation(
-        'APP_SWITCH_ALERT',
-        'Siswa berpindah aplikasi lain (Jendela Tidak Fokus)',
-        'Peringatan! Dilarang membuka aplikasi lain selama ujian!'
-      );
+      if (blurTimeout) clearTimeout(blurTimeout);
+      blurTimeout = setTimeout(() => {
+        if (!document.hasFocus() && !document.hidden && !isSubmittedRef.current) {
+          setIsPrivacyObscured(true);
+          dispatchAreaViolation(
+            'APP_SWITCH_ALERT',
+            'Siswa berpindah aplikasi lain (Jendela Tidak Fokus)',
+            'Peringatan! Dilarang membuka aplikasi lain selama ujian!'
+          );
+        }
+      }, 350);
     };
 
     const handleWindowFocus = () => {
+      if (blurTimeout) clearTimeout(blurTimeout);
       setIsPrivacyObscured(false);
     };
 
@@ -540,8 +554,12 @@ export default function LembarUjianPage({
         );
 
         // Otomatis kembalikan ke layar penuh jika diizinkan browser
-        requestUniversalFullscreen().then((success) => {
-          if (success) setIsFullscreen(true);
+        const rootElem = document.getElementById('cbt-exam-root') || document.documentElement;
+        requestUniversalFullscreen(rootElem as HTMLElement).then((success) => {
+          if (success) {
+            enableChromeKeyboardLock();
+            setIsFullscreen(true);
+          }
         }).catch(() => {});
       }
     };
@@ -552,8 +570,12 @@ export default function LembarUjianPage({
       if (!isCurrentlyFullscreen()) {
         const devInfo = detectDeviceSecurityInfo();
         if (devInfo.hasFullscreen && !devInfo.isMobile && !devInfo.isTablet) {
-          requestUniversalFullscreen().then((success) => {
-            if (success) setIsFullscreen(true);
+          const rootElem = document.getElementById('cbt-exam-root') || document.documentElement;
+          requestUniversalFullscreen(rootElem as HTMLElement).then((success) => {
+            if (success) {
+              enableChromeKeyboardLock();
+              setIsFullscreen(true);
+            }
           }).catch(() => {});
         }
       }
@@ -904,10 +926,11 @@ export default function LembarUjianPage({
         return;
       }
 
-      // Keluar dari layar penuh secara otomatis dan lepaskan seluruh kunci keamanan
+      // Keluar dari layar penuh secara otomatis dan lepaskan seluruh kunci keamanan (Layer 1 & Layer 2)
       setIsSecurityUnlocked(false);
       await exitUniversalFullscreen();
       setIsFullscreen(false);
+      releaseExambroKioskSecurity();
 
       // Mainkan suara ucapan selesai ujian yang ramah
       cbtSecurityAudio.speakSuccess('Ujian selesai, terimakasih telah mengerjakan');
@@ -962,13 +985,17 @@ export default function LembarUjianPage({
   };
 
   // Toggle Fullscreen Browser
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
+  const toggleFullscreen = async () => {
+    try {
+      if (!isCurrentlyFullscreen()) {
+        await requestUniversalFullscreen();
+        setIsFullscreen(isCurrentlyFullscreen());
+      } else {
+        await exitUniversalFullscreen();
+        setIsFullscreen(isCurrentlyFullscreen());
+      }
+    } catch (_) {
+      setIsFullscreen(isCurrentlyFullscreen());
     }
   };
 
@@ -991,13 +1018,15 @@ export default function LembarUjianPage({
 
   return (
     <div
+      id="cbt-exam-root"
+
       className={`min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between font-sans pb-16 sm:pb-3 ${
-        ujianInfo?.lockBrowser ? 'cbt-exam-lockdown select-none' : 'selection:bg-emerald-500 selection:text-white'
-      } ${isPrivacyObscured && ujianInfo?.lockBrowser ? 'cbt-privacy-shield-active' : ''}`}
+        ujianInfo?.lockBrowser !== false ? 'cbt-exam-lockdown select-none' : 'selection:bg-emerald-500 selection:text-white'
+      } ${isPrivacyObscured && ujianInfo?.lockBrowser !== false ? 'cbt-privacy-shield-active' : ''}`}
       style={{ touchAction: 'pan-y pinch-zoom' }}
     >
       {/* Privacy Shield Blindfold Overlay (Aktif saat tangkapan layar, PrintScreen, Alt+Tab, atau background screenshot) */}
-      {isPrivacyObscured && ujianInfo?.lockBrowser && !isSubmittedRef.current && (
+      {isPrivacyObscured && ujianInfo?.lockBrowser !== false && !isSubmittedRef.current && (
         <div className="fixed inset-0 z-[100] bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center select-none backdrop-blur-xl">
           <div className="w-16 h-16 rounded-full bg-rose-500/20 border-2 border-rose-500 flex items-center justify-center mb-4 text-rose-500 animate-pulse">
             <ShieldAlert className="w-9 h-9" />
@@ -1012,7 +1041,7 @@ export default function LembarUjianPage({
       )}
 
       {/* Modal Aktivasi Keamanan & Screen Recording */}
-      {ujianInfo?.lockBrowser && (
+      {ujianInfo?.lockBrowser !== false && (
         <SecurityLockModal
           isOpen={!isSecurityUnlocked}
           onActivateSecurity={handleActivateSecurity}
@@ -1021,7 +1050,7 @@ export default function LembarUjianPage({
       )}
 
       {/* Force Fullscreen Lockdown Overlay: Mencegah interaksi & mengunci layar jika keluar dari Fullscreen selama ujian aktif (hanya pada perangkat yang mendukung Fullscreen API) */}
-      {isSecurityUnlocked && !isFullscreen && ujianInfo?.lockBrowser && cooldownRemaining === 0 && !isSubmittedRef.current && (typeof window !== 'undefined' && detectDeviceSecurityInfo().hasFullscreen) && (
+      {isSecurityUnlocked && !isFullscreen && ujianInfo?.lockBrowser !== false && cooldownRemaining === 0 && !isSubmittedRef.current && (typeof window !== 'undefined' && detectDeviceSecurityInfo().hasFullscreen) && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl shadow-rose-900/40 space-y-5 animate-in zoom-in duration-200">
             <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-rose-600 flex items-center justify-center mx-auto shadow-md">

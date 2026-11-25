@@ -51,9 +51,8 @@ export function detectDeviceSecurityInfo(): DeviceSecurityInfo {
   const hasDisplayMedia = Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function');
   
   // Deteksi Fullscreen API:
-  // Catatan: Pada smartphone mobile (Android phone & iPhone), Fullscreen DOM Element API sangat tidak stabil,
-  // sering memicu resize jitter, keyboard virtual menutup fullscreen otomatis, serta statusbar browser memicu status false.
-  // Hanya desktop PC/laptop dan tablet (iPadOS/Android Tablet) yang memberlakukan mode Fullscreen API kaku.
+  // Catatan: Pada desktop PC/laptop dan tablet (iPadOS/Android Tablet) serta Android Chrome modern,
+  // Fullscreen API didukung. Kita cek ketersediaan native API.
   const doc: any = typeof document !== 'undefined' ? document : {};
   const hasNativeFullscreen = Boolean(
     doc.fullscreenEnabled ||
@@ -61,8 +60,9 @@ export function detectDeviceSecurityInfo(): DeviceSecurityInfo {
     doc.mozFullScreenEnabled ||
     doc.msFullscreenEnabled
   );
-  // Fullscreen ketat hanya diaktifkan untuk perangkat non-mobile (Desktop/Laptop dan Tablet)
-  const hasFullscreen = Boolean(hasNativeFullscreen && !isMobile);
+  // Di iPhone (iOS Safari), Apple tidak menyediakan requestFullscreen pada HTML body/document element.
+  // Di Android dan Desktop, Fullscreen API berfungsi penuh.
+  const hasFullscreen = Boolean(hasNativeFullscreen && !isIOS);
 
   let deviceName = 'Desktop PC / Laptop';
   if (isIOS) {
@@ -241,6 +241,7 @@ export const cbtSecurityAudio = new CBTSecurityAudio();
 
 /**
  * Helper Universal Request Fullscreen Cross-Browser (Safari webkit, Firefox moz, Chrome/Edge)
+ * Menggunakan element atau document.documentElement
  */
 export async function requestUniversalFullscreen(element?: HTMLElement): Promise<boolean> {
   if (typeof document === 'undefined') return false;
@@ -248,7 +249,11 @@ export async function requestUniversalFullscreen(element?: HTMLElement): Promise
 
   try {
     if (target.requestFullscreen) {
-      await target.requestFullscreen();
+      await target.requestFullscreen({ navigationUI: 'hide' } as any).catch(async () => {
+        await target.requestFullscreen();
+      });
+      // Aktifkan juga Chrome Keyboard Lock API jika tersedia
+      enableChromeKeyboardLock();
       return true;
     } else if (target.webkitRequestFullscreen) {
       await target.webkitRequestFullscreen();
@@ -267,9 +272,44 @@ export async function requestUniversalFullscreen(element?: HTMLElement): Promise
 }
 
 /**
+ * Mengunci tombol-tombol sistem (Escape, Fullscreen exit, dll) menggunakan Chrome Keyboard Lock API
+ * Sangat efektif di Google Chrome & Edge untuk mencegah siswa keluar dari fullscreen via tombol Escape.
+ */
+export async function enableChromeKeyboardLock(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    const nav: any = navigator;
+    if (nav.keyboard && typeof nav.keyboard.lock === 'function') {
+      // Kunci tombol Escape dan kombinasi navigasi
+      await nav.keyboard.lock(['Escape', 'F11', 'Tab', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']);
+      return true;
+    }
+  } catch (e) {
+    console.warn('Keyboard lock API not permitted or unsupported:', e);
+  }
+  return false;
+}
+
+/**
+ * Melepaskan Chrome Keyboard Lock
+ */
+export function unlockChromeKeyboardLock(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const nav: any = navigator;
+    if (nav.keyboard && typeof nav.keyboard.unlock === 'function') {
+      nav.keyboard.unlock();
+    }
+  } catch (e) {
+    // silent
+  }
+}
+
+/**
  * Helper Universal Exit Fullscreen
  */
 export async function exitUniversalFullscreen(): Promise<void> {
+  unlockChromeKeyboardLock();
   if (typeof document === 'undefined') return;
   const doc: any = document;
 

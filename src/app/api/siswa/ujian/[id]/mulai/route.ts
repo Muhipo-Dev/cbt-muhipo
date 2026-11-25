@@ -275,7 +275,7 @@ export async function POST(
           durasiMenit: ujian.durasiMenit,
           minJawaban: (ujian as any).minJawaban ?? null,
           sisaWaktuDetik: currentSisaDetik,
-          lockBrowser: ujian.lockBrowser,
+          lockBrowser: ujian.lockBrowser !== false,
           mapel: ujian.mataPelajaran.nama,
           guruPengampu: guruPengampuNama,
         },
