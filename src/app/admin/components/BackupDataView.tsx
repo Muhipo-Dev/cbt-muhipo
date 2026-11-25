@@ -534,7 +534,6 @@ export function BackupDataView({
         'Nomor Peserta': s.nomorPeserta || s.username,
         'Group / Kelas': s.kelas?.nama || 'Umum',
         'Ruang Ujian': s.ruangUjian || 'Ruang 1',
-        'Sesi Ujian': s.sesiUjian || 1,
         'Jenis Kelamin': s.jenisKelamin === 'P' ? 'Perempuan' : 'Laki-laki',
       }))
 
@@ -1337,7 +1336,7 @@ export function BackupDataView({
                 Ekspor Database Peserta Siswa (Excel)
               </h4>
               <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Unduh seluruh data peserta aktif beserta nomor peserta, group kelas, dan sesi ujian dalam format spreadsheet.
+                Unduh seluruh data peserta aktif beserta nomor peserta dan group kelas dalam format spreadsheet.
               </p>
             </div>
             <button
