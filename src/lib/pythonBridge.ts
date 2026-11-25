@@ -1,29 +1,96 @@
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import path from 'path';
+import fs from 'fs';
+
+let cachedPythonBinary: string | null = null;
+let pythonChecked = false;
 
 /**
- * Mendapatkan executable Python yang valid di lingkungan host (python3 atau python)
+ * Mendapatkan executable Python yang valid di lingkungan host.
+ * Menghindari Microsoft Store app execution alias (python3.exe 0-byte shim)
+ * yang menyebabkan spam popup instalasi dan looping error EACCES.
  */
-function getPythonBinary(): string {
-  return process.env.PYTHON_BIN || 'python3';
+export function getPythonBinary(): string | null {
+  if (pythonChecked) {
+    return cachedPythonBinary;
+  }
+
+  // 1. Cek jika disetel eksplisit di env
+  if (process.env.PYTHON_BIN) {
+    try {
+      execSync(`"${process.env.PYTHON_BIN}" --version`, { stdio: 'ignore', windowsHide: true });
+      cachedPythonBinary = process.env.PYTHON_BIN;
+      pythonChecked = true;
+      return cachedPythonBinary;
+    } catch {}
+  }
+
+  // 2. Daftar direktori instalasi Python standar di Windows
+  const standardWindowsPaths = [
+    path.join(process.env.LOCALAPPDATA || 'C:\\Users\\Administrator\\AppData\\Local', 'Programs', 'Python', 'Python311', 'python.exe'),
+    'C:\\Python315\\python.exe',
+    'C:\\Python312\\python.exe',
+    'C:\\Python311\\python.exe',
+    'C:\\Program Files\\Python311\\python.exe',
+    'C:\\Program Files\\Python312\\python.exe',
+  ];
+
+  for (const exePath of standardWindowsPaths) {
+    if (fs.existsSync(exePath)) {
+      try {
+        execSync(`"${exePath}" --version`, { stdio: 'ignore', windowsHide: true });
+        cachedPythonBinary = exePath;
+        pythonChecked = true;
+        return cachedPythonBinary;
+      } catch {}
+    }
+  }
+
+  // 3. Coba perintah generic 'python' atau 'py' (BUKAN 'python3' karena memicu Windows Store stub)
+  const candidateCommands = process.platform === 'win32' ? ['python', 'py'] : ['python3', 'python'];
+  for (const cmd of candidateCommands) {
+    try {
+      execSync(`${cmd} --version`, { stdio: 'ignore', windowsHide: true });
+      cachedPythonBinary = cmd;
+      pythonChecked = true;
+      return cachedPythonBinary;
+    } catch {}
+  }
+
+  // Python tidak tersedia
+  cachedPythonBinary = null;
+  pythonChecked = true;
+  return null;
 }
 
 /**
- * Jalankan script Python dengan payload JSON via STDIN dan terima output JSON via STDOUT
+ * Jalankan script Python dengan payload JSON via STDIN dan terima output JSON via STDOUT.
+ * Menjamin graceful fallback jika Python tidak terpasang di host server.
  */
 export async function runPythonScript<T = any>(
   scriptRelativePath: string,
   payload: any,
   timeoutMs: number = 8000
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const scriptPath = path.join(process.cwd(), scriptRelativePath);
-    const pythonCmd = getPythonBinary();
+): Promise<T | null> {
+  const pythonCmd = getPythonBinary();
+  if (!pythonCmd) {
+    // Tidak ada runtime Python yang valid, batalkan proses tanpa spam error
+    return null;
+  }
 
-    const py = spawn(pythonCmd, [scriptPath], {
-      windowsHide: true,
-      env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
-    });
+  return new Promise((resolve) => {
+    const scriptPath = path.join(process.cwd(), scriptRelativePath);
+
+    let py;
+    try {
+      py = spawn(pythonCmd, [scriptPath], {
+        windowsHide: true,
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+      });
+    } catch (spawnErr) {
+      resolve(null);
+      return;
+    }
 
     let stdoutData = '';
     let stderrData = '';
@@ -32,8 +99,8 @@ export async function runPythonScript<T = any>(
     const timer = setTimeout(() => {
       if (!isFinished) {
         isFinished = true;
-        py.kill();
-        reject(new Error(`Python script execution timeout (${timeoutMs}ms): ${scriptRelativePath}`));
+        try { py.kill(); } catch {}
+        resolve(null);
       }
     }, timeoutMs);
 
@@ -45,11 +112,11 @@ export async function runPythonScript<T = any>(
       stderrData += data.toString('utf-8');
     });
 
-    py.on('error', (err) => {
+    py.on('error', () => {
       if (!isFinished) {
         isFinished = true;
         clearTimeout(timer);
-        reject(err);
+        resolve(null);
       }
     });
 
@@ -59,15 +126,15 @@ export async function runPythonScript<T = any>(
       clearTimeout(timer);
 
       if (code !== 0 && !stdoutData.trim()) {
-        reject(new Error(`Python process exited with code ${code}. Stderr: ${stderrData}`));
+        resolve(null);
         return;
       }
 
       try {
         const parsed = JSON.parse(stdoutData.trim());
         resolve(parsed);
-      } catch (err: any) {
-        reject(new Error(`Failed to parse Python JSON output: ${err.message}. Raw output: ${stdoutData}`));
+      } catch {
+        resolve(null);
       }
     });
 
@@ -75,11 +142,11 @@ export async function runPythonScript<T = any>(
     try {
       py.stdin.write(JSON.stringify(payload));
       py.stdin.end();
-    } catch (err) {
+    } catch {
       if (!isFinished) {
         isFinished = true;
         clearTimeout(timer);
-        reject(err);
+        resolve(null);
       }
     }
   });
