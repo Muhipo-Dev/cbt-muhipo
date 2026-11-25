@@ -2182,54 +2182,88 @@ export default function GuruDashboardPage() {
                               <label className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-2xs">
                                 <ImageIcon className="w-3.5 h-3.5" />
                                 <span>+ Gambar</span>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      const reader = new FileReader();
-                                      reader.onload = () => {
-                                        const base64 = reader.result as string;
-                                        setSoalForm((prev: any) => ({
-                                          ...prev,
-                                          pertanyaan: prev.pertanyaan
-                                            ? `${prev.pertanyaan}\n<img src="${base64}" alt="Ilustrasi Soal" class="my-2 rounded-xl max-h-60 mx-auto border" />`
-                                            : `<img src="${base64}" alt="Ilustrasi Soal" class="my-2 rounded-xl max-h-60 mx-auto border" />`,
-                                        }));
-                                      };
-                                      reader.readAsDataURL(file);
-                                    }
-                                  }}
-                                />
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        if (file.size > 300 * 1024 * 1024) {
+                                          showNotification('Ukuran Terlalu Besar', `Ukuran file gambar (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas 300 MB.`, 'error');
+                                          e.target.value = '';
+                                          return;
+                                        }
+                                        try {
+                                          showNotification('Mengunggah', `Sedang mengunggah dan mengompresi ${file.name}...`, 'info');
+                                          const formData = new FormData();
+                                          formData.append('files', file);
+                                          const res = await fetch('/api/admin/files', { method: 'POST', body: formData });
+                                          const json = await res.json();
+                                          if (res.ok && json.success && json.data?.[0]?.url) {
+                                            const url = json.data[0].url;
+                                            setSoalForm((prev: any) => ({
+                                              ...prev,
+                                              pertanyaan: prev.pertanyaan
+                                                ? `${prev.pertanyaan}\n<img src="${url}" alt="Ilustrasi Soal" class="my-2 rounded-xl max-h-60 mx-auto border" />`
+                                                : `<img src="${url}" alt="Ilustrasi Soal" class="my-2 rounded-xl max-h-60 mx-auto border" />`,
+                                            }));
+                                            showNotification('Berhasil', `Gambar ${file.name} berhasil diunggah & dikompresi!`, 'success');
+                                          } else {
+                                            throw new Error(json.message || 'Gagal upload gambar');
+                                          }
+                                        } catch (err: any) {
+                                          showNotification('Error', 'Gagal upload gambar: ' + err.message, 'error');
+                                        } finally {
+                                          e.target.value = '';
+                                        }
+                                      }
+                                    }}
+                                  />
                               </label>
 
                               {/* Sisipkan Audio Suara */}
                               <label className="px-2 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-2xs">
                                 <Music className="w-3.5 h-3.5" />
                                 <span>+ Suara</span>
-                                <input
-                                  type="file"
-                                  accept="audio/*"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      const reader = new FileReader();
-                                      reader.onload = () => {
-                                        const base64 = reader.result as string;
-                                        setSoalForm((prev: any) => ({
-                                          ...prev,
-                                          pertanyaan: prev.pertanyaan
-                                            ? `${prev.pertanyaan}\n<audio controls src="${base64}" class="my-2 w-full"></audio>`
-                                            : `<audio controls src="${base64}" class="my-2 w-full"></audio>`,
-                                        }));
-                                      };
-                                      reader.readAsDataURL(file);
-                                    }
-                                  }}
-                                />
+                                  <input
+                                    type="file"
+                                    accept="audio/*"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        if (file.size > 300 * 1024 * 1024) {
+                                          showNotification('Ukuran Terlalu Besar', `Ukuran audio (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas 300 MB.`, 'error');
+                                          e.target.value = '';
+                                          return;
+                                        }
+                                        try {
+                                          showNotification('Mengunggah', `Sedang mengunggah audio ${file.name}...`, 'info');
+                                          const formData = new FormData();
+                                          formData.append('files', file);
+                                          const res = await fetch('/api/admin/files', { method: 'POST', body: formData });
+                                          const json = await res.json();
+                                          if (res.ok && json.success && json.data?.[0]?.url) {
+                                            const url = json.data[0].url;
+                                            setSoalForm((prev: any) => ({
+                                              ...prev,
+                                              pertanyaan: prev.pertanyaan
+                                                ? `${prev.pertanyaan}\n<audio controls src="${url}" class="my-2 w-full"></audio>`
+                                                : `<audio controls src="${url}" class="my-2 w-full"></audio>`,
+                                            }));
+                                            showNotification('Berhasil', `Audio ${file.name} berhasil diunggah!`, 'success');
+                                          } else {
+                                            throw new Error(json.message || 'Gagal upload audio');
+                                          }
+                                        } catch (err: any) {
+                                          showNotification('Error', 'Gagal upload audio: ' + err.message, 'error');
+                                        } finally {
+                                          e.target.value = '';
+                                        }
+                                      }
+                                    }}
+                                  />
                               </label>
 
                               {/* Sisipkan Video / YouTube */}
@@ -2451,19 +2485,34 @@ export default function GuruDashboardPage() {
                                       type="file"
                                       accept="image/*"
                                       className="hidden"
-                                      onChange={(e) => {
+                                      onChange={async (e) => {
                                         const file = e.target.files?.[0];
                                         if (file) {
-                                          const reader = new FileReader();
-                                          reader.onload = () => {
-                                            const base64 = reader.result as string;
-                                            const next = [...soalForm.opsiJawaban];
-                                            next[idx].konten = next[idx].konten
-                                              ? `${next[idx].konten} ![${file.name}](${base64})`
-                                              : `![${file.name}](${base64})`;
-                                            setSoalForm({ ...soalForm, opsiJawaban: next });
-                                          };
-                                          reader.readAsDataURL(file);
+                                          if (file.size > 300 * 1024 * 1024) {
+                                            showNotification('Ukuran Terlalu Besar', `Ukuran file gambar (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas 300 MB.`, 'error');
+                                            e.target.value = '';
+                                            return;
+                                          }
+                                          try {
+                                            showNotification('Mengunggah', `Sedang memproses ${file.name}...`, 'info');
+                                            const formData = new FormData();
+                                            formData.append('files', file);
+                                            const res = await fetch('/api/admin/files', { method: 'POST', body: formData });
+                                            const json = await res.json();
+                                            if (res.ok && json.success && json.data?.[0]?.url) {
+                                              const url = json.data[0].url;
+                                              const next = [...soalForm.opsiJawaban];
+                                              next[idx].konten = next[idx].konten ? `${next[idx].konten} ![${file.name}](${url})` : `![${file.name}](${url})`;
+                                              setSoalForm({ ...soalForm, opsiJawaban: next });
+                                              showNotification('Berhasil', `Gambar ${file.name} berhasil diunggah & dikompresi!`, 'success');
+                                            } else {
+                                              throw new Error(json.message || 'Gagal upload file');
+                                            }
+                                          } catch (err: any) {
+                                            showNotification('Error', 'Gagal upload: ' + err.message, 'error');
+                                          } finally {
+                                            e.target.value = '';
+                                          }
                                         }
                                       }}
                                     />
@@ -2479,19 +2528,36 @@ export default function GuruDashboardPage() {
                                       type="file"
                                       accept="audio/*"
                                       className="hidden"
-                                      onChange={(e) => {
+                                      onChange={async (e) => {
                                         const file = e.target.files?.[0];
                                         if (file) {
-                                          const reader = new FileReader();
-                                          reader.onload = () => {
-                                            const base64 = reader.result as string;
-                                            const next = [...soalForm.opsiJawaban];
-                                            next[idx].konten = next[idx].konten
-                                              ? `${next[idx].konten} <audio controls src="${base64}" class="inline-block w-48 h-8 align-middle"></audio>`
-                                              : `<audio controls src="${base64}" class="inline-block w-48 h-8 align-middle"></audio>`;
-                                            setSoalForm({ ...soalForm, opsiJawaban: next });
-                                          };
-                                          reader.readAsDataURL(file);
+                                          if (file.size > 300 * 1024 * 1024) {
+                                            showNotification('Ukuran Terlalu Besar', `Ukuran audio (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas 300 MB.`, 'error');
+                                            e.target.value = '';
+                                            return;
+                                          }
+                                          try {
+                                            showNotification('Mengunggah', `Sedang memproses audio ${file.name}...`, 'info');
+                                            const formData = new FormData();
+                                            formData.append('files', file);
+                                            const res = await fetch('/api/admin/files', { method: 'POST', body: formData });
+                                            const json = await res.json();
+                                            if (res.ok && json.success && json.data?.[0]?.url) {
+                                              const url = json.data[0].url;
+                                              const next = [...soalForm.opsiJawaban];
+                                              next[idx].konten = next[idx].konten
+                                                ? `${next[idx].konten} <audio controls src="${url}" class="inline-block w-48 h-8 align-middle"></audio>`
+                                                : `<audio controls src="${url}" class="inline-block w-48 h-8 align-middle"></audio>`;
+                                              setSoalForm({ ...soalForm, opsiJawaban: next });
+                                              showNotification('Berhasil', `Audio ${file.name} berhasil diunggah!`, 'success');
+                                            } else {
+                                              throw new Error(json.message || 'Gagal upload file');
+                                            }
+                                          } catch (err: any) {
+                                            showNotification('Error', 'Gagal upload audio: ' + err.message, 'error');
+                                          } finally {
+                                            e.target.value = '';
+                                          }
                                         }
                                       }}
                                     />
@@ -2693,24 +2759,38 @@ export default function GuruDashboardPage() {
                                           </button>
                                           <label className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold cursor-pointer">
                                             Gambar
-                                            <input
-                                              type="file"
-                                              accept="image/*"
-                                              className="hidden"
-                                              onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) {
-                                                  const reader = new FileReader();
-                                                  reader.onload = () => {
-                                                    const base64 = reader.result as string;
-                                                    const next = [...(soalForm.matchingPairs || [])];
-                                                    next[pIdx].left = next[pIdx].left ? `${next[pIdx].left} ![${file.name}](${base64})` : `![${file.name}](${base64})`;
-                                                    setSoalForm({ ...soalForm, matchingPairs: next });
-                                                  };
-                                                  reader.readAsDataURL(file);
-                                                }
-                                              }}
-                                            />
+                                              <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={async (e) => {
+                                                  const file = e.target.files?.[0];
+                                                  if (file) {
+                                                    if (file.size > 300 * 1024 * 1024) {
+                                                      showNotification('Ukuran Terlalu Besar', `Ukuran file gambar (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas 300 MB.`, 'error');
+                                                      e.target.value = '';
+                                                      return;
+                                                    }
+                                                    try {
+                                                      const formData = new FormData();
+                                                      formData.append('files', file);
+                                                      const res = await fetch('/api/admin/files', { method: 'POST', body: formData });
+                                                      const json = await res.json();
+                                                      if (res.ok && json.success && json.data?.[0]?.url) {
+                                                        const url = json.data[0].url;
+                                                        const next = [...(soalForm.matchingPairs || [])];
+                                                        next[pIdx].left = next[pIdx].left ? `${next[pIdx].left} ![${file.name}](${url})` : `![${file.name}](${url})`;
+                                                        setSoalForm({ ...soalForm, matchingPairs: next });
+                                                        showNotification('Berhasil', `Gambar ${file.name} berhasil diunggah & dikompresi!`, 'success');
+                                                      }
+                                                    } catch (err: any) {
+                                                      showNotification('Error', 'Gagal upload: ' + err.message, 'error');
+                                                    } finally {
+                                                      e.target.value = '';
+                                                    }
+                                                  }
+                                                }}
+                                              />
                                           </label>
                                         </div>
                                       </div>
@@ -2753,24 +2833,38 @@ export default function GuruDashboardPage() {
                                           </button>
                                           <label className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold cursor-pointer">
                                             Gambar
-                                            <input
-                                              type="file"
-                                              accept="image/*"
-                                              className="hidden"
-                                              onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) {
-                                                  const reader = new FileReader();
-                                                  reader.onload = () => {
-                                                    const base64 = reader.result as string;
-                                                    const next = [...(soalForm.matchingPairs || [])];
-                                                    next[pIdx].right = next[pIdx].right ? `${next[pIdx].right} ![${file.name}](${base64})` : `![${file.name}](${base64})`;
-                                                    setSoalForm({ ...soalForm, matchingPairs: next });
-                                                  };
-                                                  reader.readAsDataURL(file);
-                                                }
-                                              }}
-                                            />
+                                              <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={async (e) => {
+                                                  const file = e.target.files?.[0];
+                                                  if (file) {
+                                                    if (file.size > 300 * 1024 * 1024) {
+                                                      showNotification('Ukuran Terlalu Besar', `Ukuran file gambar (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas 300 MB.`, 'error');
+                                                      e.target.value = '';
+                                                      return;
+                                                    }
+                                                    try {
+                                                      const formData = new FormData();
+                                                      formData.append('files', file);
+                                                      const res = await fetch('/api/admin/files', { method: 'POST', body: formData });
+                                                      const json = await res.json();
+                                                      if (res.ok && json.success && json.data?.[0]?.url) {
+                                                        const url = json.data[0].url;
+                                                        const next = [...(soalForm.matchingPairs || [])];
+                                                        next[pIdx].right = next[pIdx].right ? `${next[pIdx].right} ![${file.name}](${url})` : `![${file.name}](${url})`;
+                                                        setSoalForm({ ...soalForm, matchingPairs: next });
+                                                        showNotification('Berhasil', `Gambar ${file.name} berhasil diunggah & dikompresi!`, 'success');
+                                                      }
+                                                    } catch (err: any) {
+                                                      showNotification('Error', 'Gagal upload: ' + err.message, 'error');
+                                                    } finally {
+                                                      e.target.value = '';
+                                                    }
+                                                  }
+                                                }}
+                                              />
                                           </label>
                                         </div>
                                       </div>

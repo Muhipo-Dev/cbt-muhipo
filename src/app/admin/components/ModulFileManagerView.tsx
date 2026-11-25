@@ -56,6 +56,20 @@ export function ModulFileManagerView({
     const selectedFiles = e.target.files
     if (!selectedFiles || selectedFiles.length === 0) return
 
+    // Cek batas ukuran maksimal 300MB per file
+    const MAX_SIZE_MB = 300
+    for (let i = 0; i < selectedFiles.length; i++) {
+      if (selectedFiles[i].size > MAX_SIZE_MB * 1024 * 1024) {
+        showNotification(
+          'Ukuran Terlalu Besar',
+          `File "${selectedFiles[i].name}" (${(selectedFiles[i].size / (1024 * 1024)).toFixed(1)} MB) melebihi batas maksimal ${MAX_SIZE_MB} MB.`,
+          'error'
+        )
+        e.target.value = ''
+        return
+      }
+    }
+
     const formData = new FormData()
     for (let i = 0; i < selectedFiles.length; i++) {
       formData.append('files', selectedFiles[i])
@@ -69,7 +83,7 @@ export function ModulFileManagerView({
       })
       const json = await res.json()
       if (json.success) {
-        showNotification('Berhasil', json.message || 'File berhasil diunggah!', 'success')
+        showNotification('Berhasil', json.message || 'File berhasil diunggah & dikompresi!', 'success')
         fetchFiles()
       } else {
         showNotification('Gagal', json.message || 'Gagal mengunggah file.', 'error')

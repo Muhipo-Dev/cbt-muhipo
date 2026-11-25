@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import WaitingRoomProvider from "@/components/waiting-room/WaitingRoomProvider";
+import { ImageZoomModal } from "@/components/ImageZoomModal";
 
 export const metadata: Metadata = {
   title: "CBT v2 SMA Muhipo — SMA Muhammadiyah 1 Ponorogo",
@@ -112,6 +113,7 @@ export default function RootLayout({
         >
           <WaitingRoomProvider>
             {children}
+            <ImageZoomModal />
           </WaitingRoomProvider>
         </ThemeProvider>
       </body>

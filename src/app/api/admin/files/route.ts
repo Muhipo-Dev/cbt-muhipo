@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import fs from 'fs';
 import path from 'path';
+import { compressImageBuffer, MAX_MEDIA_FILE_SIZE } from '@/lib/mediaCompression';
 
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
 
@@ -90,29 +91,57 @@ export async function POST(request: NextRequest) {
     const savedFiles: any[] = [];
 
     for (const file of files) {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const originalName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      if (file.size > MAX_MEDIA_FILE_SIZE) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Ukuran file "${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas maksimal 300 MB.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      let buffer = Buffer.from(await file.arrayBuffer());
+      const originalExt = path.extname(file.name).toLowerCase();
+      const rawBaseName = path.basename(file.name, originalExt).replace(/[^a-zA-Z0-9._-]/g, '_');
       const timestamp = Date.now();
-      const uniqueName = `${timestamp}_${originalName}`;
+
+      let type: 'image' | 'audio' | 'video' | 'doc' | 'other' = 'other';
+      if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'].includes(originalExt)) {
+        type = 'image';
+      } else if (['.mp3', '.wav', '.ogg', '.m4a', '.aac'].includes(originalExt)) {
+        type = 'audio';
+      } else if (['.mp4', '.webm', '.ogg'].includes(originalExt)) {
+        type = 'video';
+      } else if (['.pdf', '.doc', '.docx', '.xls', '.xlsx'].includes(originalExt)) {
+        type = 'doc';
+      }
+
+      let finalExt = originalExt;
+      let finalBuffer: Buffer = buffer;
+      let isCompressed = false;
+      const originalSize = buffer.length;
+
+      // Kompresi otomatis untuk gambar (tetap mempertahankan resolusi maksimal)
+      if (type === 'image' && ['.jpg', '.jpeg', '.png', '.webp'].includes(originalExt)) {
+        const compResult = await compressImageBuffer(buffer, originalExt);
+        finalBuffer = compResult.buffer as Buffer;
+        finalExt = compResult.ext;
+        isCompressed = compResult.isCompressed;
+      }
+
+      const uniqueName = `${timestamp}_${rawBaseName}${finalExt}`;
       const filePath = path.join(UPLOAD_DIR, uniqueName);
 
-      fs.writeFileSync(filePath, buffer);
-
-      const ext = path.extname(uniqueName).toLowerCase();
-      let type: 'image' | 'audio' | 'video' | 'doc' | 'other' = 'other';
-      if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'].includes(ext)) {
-        type = 'image';
-      } else if (['.mp3', '.wav', '.ogg', '.m4a', '.aac'].includes(ext)) {
-        type = 'audio';
-      } else if (['.mp4', '.webm', '.ogg'].includes(ext)) {
-        type = 'video';
-      }
+      fs.writeFileSync(filePath, finalBuffer);
 
       savedFiles.push({
         name: uniqueName,
         url: `/uploads/${encodeURIComponent(uniqueName)}`,
-        size: buffer.length,
-        sizeFormatted: (buffer.length / 1024).toFixed(1) + ' KB',
+        size: finalBuffer.length,
+        originalSize,
+        sizeFormatted: (finalBuffer.length / 1024).toFixed(1) + ' KB',
+        isCompressed,
         type,
       });
     }

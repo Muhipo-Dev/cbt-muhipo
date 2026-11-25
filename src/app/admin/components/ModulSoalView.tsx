@@ -334,18 +334,31 @@ export function ModulSoalView({
     const file = e.target.files?.[0]
     if (!file || !uploadingTarget) return
 
+    // Cek batas ukuran maksimal 300MB
+    const MAX_SIZE_MB = 300
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      showNotification('Ukuran Terlalu Besar', `Ukuran file (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas maksimal ${MAX_SIZE_MB} MB.`, 'error')
+      if (mediaUploadInputRef.current) mediaUploadInputRef.current.value = ''
+      setUploadingTarget(null)
+      return
+    }
+
     const formData = new FormData()
     formData.append('files', file)
 
     try {
-      showNotification('Mengunggah', `Sedang mengunggah ${file.name}...`, 'info')
+      showNotification('Mengunggah & Mengompresi', `Sedang mengunggah dan memproses ${file.name}...`, 'info')
       const res = await fetch('/api/admin/files', {
         method: 'POST',
         body: formData,
       })
       const json = await res.json()
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || 'Gagal mengunggah file')
+      }
+
       let fileUrl = ''
-      if (json.success && json.data?.[0]?.url) {
+      if (json.data?.[0]?.url) {
         fileUrl = json.data[0].url
       } else if (json.uploadedFiles?.[0]?.url) {
         fileUrl = json.uploadedFiles[0].url
@@ -355,14 +368,29 @@ export function ModulSoalView({
 
       const isImg = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name)
       const isAudio = /\.(mp3|wav|ogg|m4a|aac)$/i.test(file.name)
-      const snippet = isImg
-        ? `![${file.name}](${fileUrl}) `
-        : isAudio
-        ? `[Audio: ${file.name}](${fileUrl}) `
-        : `[File: ${file.name}](${fileUrl}) `
+      const isVideo = /\.(mp4|webm|ogg)$/i.test(file.name)
+
+      let snippet = ''
+      if (uploadingTarget.type === 'pertanyaan') {
+        if (isImg) {
+          snippet = `<img src="${fileUrl}" alt="Media Soal" style="max-width:100%; height:auto; margin:8px 0; border-radius:4px;" />`
+        } else if (isAudio) {
+          snippet = `<audio controls src="${fileUrl}" class="my-2 w-full"></audio>`
+        } else if (isVideo) {
+          snippet = `<video controls src="${fileUrl}" class="my-2 w-full max-h-80 rounded-lg"></video>`
+        } else {
+          snippet = `[File: ${file.name}](${fileUrl}) `
+        }
+      } else {
+        snippet = isImg
+          ? `![${file.name}](${fileUrl}) `
+          : isAudio
+          ? `[Audio: ${file.name}](${fileUrl}) `
+          : `[File: ${file.name}](${fileUrl}) `
+      }
 
       insertTextToTarget(snippet, uploadingTarget)
-      showNotification('Berhasil', `Media ${file.name} berhasil diunggah dan disisipkan!`, 'success')
+      showNotification('Berhasil', `Media ${file.name} berhasil diunggah, dikompresi, dan disisipkan!`, 'success')
     } catch (err: any) {
       showNotification('Error', 'Gagal mengunggah media: ' + err.message, 'error')
     } finally {
@@ -509,6 +537,12 @@ export function ModulSoalView({
     const file = e.target.files?.[0]
     if (!file) return
 
+    if (file.size > 300 * 1024 * 1024) {
+      showNotification('Ukuran Terlalu Besar', `Ukuran file audio (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas maksimal 300 MB.`, 'error')
+      if (audioInputRef.current) audioInputRef.current.value = ''
+      return
+    }
+
     const formData = new FormData()
     formData.append('files', file)
 
@@ -519,7 +553,10 @@ export function ModulSoalView({
         body: formData,
       })
       const json = await res.json()
-      if (json.success && json.uploadedFiles?.[0]?.url) {
+      if (json.success && json.data?.[0]?.url) {
+        setMediaAudio(json.data[0].url)
+        showNotification('Berhasil', 'File audio berhasil diunggah!', 'success')
+      } else if (json.success && json.uploadedFiles?.[0]?.url) {
         setMediaAudio(json.uploadedFiles[0].url)
         showNotification('Berhasil', 'File audio berhasil diunggah!', 'success')
       } else {
@@ -971,19 +1008,29 @@ export function ModulSoalView({
                 <div className="w-[1px] h-5 bg-slate-300 dark:bg-slate-600 mx-0.5" />
 
                 {/* Inserts: Table, Image, Math KaTeX Dialog, Omega */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const imgUrl = prompt('Masukkan URL Gambar (atau path dari File Manager /uploads/...):')
-                    if (imgUrl) {
-                      insertTextAtCursor(`<img src="${imgUrl}" alt="Gambar Soal" style="max-width:100%; height:auto; margin:8px 0; border-radius:4px;" />`)
-                    }
-                  }}
-                  className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
-                  title="Sisipkan Gambar (URL/Upload)"
-                >
-                  <ImageIcon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                </button>
+                <div className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => triggerMediaUpload({ type: 'pertanyaan' })}
+                    className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-blue-600 dark:text-blue-400 font-bold"
+                    title="Upload & Kompres Gambar/Media ke Pertanyaan (Maks 300MB)"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const imgUrl = prompt('Masukkan URL Gambar (atau path dari File Manager /uploads/...):')
+                      if (imgUrl) {
+                        insertTextAtCursor(`<img src="${imgUrl}" alt="Gambar Soal" style="max-width:100%; height:auto; margin:8px 0; border-radius:4px;" />`)
+                      }
+                    }}
+                    className="p-1 rounded text-[10px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                    title="Sisipkan Gambar dari URL"
+                  >
+                    URL
+                  </button>
+                </div>
 
                 {/* KaTeX Math Assistant Button */}
                 <button

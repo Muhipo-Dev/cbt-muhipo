@@ -3,6 +3,7 @@ import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { TipeSoal } from '@/lib/enums';
 import { convertEquationToKatex } from '@/lib/katexConverter';
+import { extractAndCompressBase64Media } from '@/lib/mediaCompression';
 
 // Helper untuk kalkulasi otomatis poin butir soal secara seimbang dan proporsional dalam sebuah Topik / Mata Pelajaran
 async function recalculateTopikPoints(mataPelajaranId: string) {
@@ -395,11 +396,15 @@ export async function POST(request: NextRequest) {
 
       for (const item of soalItems) {
         const tipe = (item.tipeSoal || 'PG').toUpperCase();
-        const pertanyaan = convertEquationToKatex(String(item.pertanyaan || '').trim());
+        let pertanyaan = convertEquationToKatex(String(item.pertanyaan || '').trim());
+        pertanyaan = await extractAndCompressBase64Media(pertanyaan);
         if (!pertanyaan) continue;
 
         const bobot = Number(item.bobot) || 1.0;
-        const kunciTeks = item.kunciJawabanTeks ? convertEquationToKatex(String(item.kunciJawabanTeks)) : null;
+        let kunciTeks = item.kunciJawabanTeks ? convertEquationToKatex(String(item.kunciJawabanTeks)) : null;
+        if (kunciTeks) {
+          kunciTeks = await extractAndCompressBase64Media(kunciTeks);
+        }
 
         const opsiList: { label: string; konten: string; isBenar: boolean }[] = [];
         if (tipe === 'PG' || tipe === 'PG_KOMPLEKS' || tipe === 'BENAR_SALAH') {
@@ -407,9 +412,11 @@ export async function POST(request: NextRequest) {
           if (Array.isArray(rawOpsi)) {
             for (const o of rawOpsi) {
               if (o.konten && String(o.konten).trim()) {
+                let convertedKonten = convertEquationToKatex(String(o.konten).trim());
+                convertedKonten = await extractAndCompressBase64Media(convertedKonten);
                 opsiList.push({
                   label: String(o.label || '').toUpperCase(),
-                  konten: convertEquationToKatex(String(o.konten).trim()),
+                  konten: convertedKonten,
                   isBenar: Boolean(o.isBenar),
                 });
               }
@@ -422,10 +429,12 @@ export async function POST(request: NextRequest) {
           try {
             const parsed = typeof item.matchingData === 'string' ? JSON.parse(item.matchingData) : item.matchingData;
             if (Array.isArray(parsed)) {
-              const convertedPairs = parsed.map((p: any) => ({
-                left: convertEquationToKatex(String(p.left || '')),
-                right: convertEquationToKatex(String(p.right || '')),
-              }));
+              const convertedPairs = [];
+              for (const p of parsed) {
+                const leftConverted = await extractAndCompressBase64Media(convertEquationToKatex(String(p.left || '')));
+                const rightConverted = await extractAndCompressBase64Media(convertEquationToKatex(String(p.right || '')));
+                convertedPairs.push({ left: leftConverted, right: rightConverted });
+              }
               rawMatching = JSON.stringify(convertedPairs);
             } else {
               rawMatching = typeof item.matchingData === 'string' ? item.matchingData : JSON.stringify(item.matchingData);
@@ -571,18 +580,25 @@ export async function POST(request: NextRequest) {
       const { mataPelajaranId, topikId, bankSoalId, soalId, nomorUrut, tipeSoal, pertanyaan, bobot, opsiJawaban, kunciJawabanTeks, matchingData, mediaGambar, mediaAudio } = body;
       const targetMapelId = mataPelajaranId || topikId || bankSoalId;
 
-      const cleanPertanyaan = convertEquationToKatex(String(pertanyaan || '').trim());
-      const cleanKunciTeks = kunciJawabanTeks ? convertEquationToKatex(String(kunciJawabanTeks)) : null;
+      let cleanPertanyaan = convertEquationToKatex(String(pertanyaan || '').trim());
+      cleanPertanyaan = await extractAndCompressBase64Media(cleanPertanyaan);
+
+      let cleanKunciTeks = kunciJawabanTeks ? convertEquationToKatex(String(kunciJawabanTeks)) : null;
+      if (cleanKunciTeks) {
+        cleanKunciTeks = await extractAndCompressBase64Media(cleanKunciTeks);
+      }
 
       let rawMatchingString: string | null = null;
       if (matchingData) {
         try {
           const parsed = typeof matchingData === 'string' ? JSON.parse(matchingData) : matchingData;
           if (Array.isArray(parsed)) {
-            const convertedPairs = parsed.map((p: any) => ({
-              left: convertEquationToKatex(String(p.left || '')),
-              right: convertEquationToKatex(String(p.right || '')),
-            }));
+            const convertedPairs = [];
+            for (const p of parsed) {
+              const leftConverted = await extractAndCompressBase64Media(convertEquationToKatex(String(p.left || '')));
+              const rightConverted = await extractAndCompressBase64Media(convertEquationToKatex(String(p.right || '')));
+              convertedPairs.push({ left: leftConverted, right: rightConverted });
+            }
             rawMatchingString = JSON.stringify(convertedPairs);
           } else {
             rawMatchingString = typeof matchingData === 'string' ? matchingData : JSON.stringify(matchingData);
@@ -611,11 +627,17 @@ export async function POST(request: NextRequest) {
         if (isChoiceType) {
           if (opsiJawaban && Array.isArray(opsiJawaban) && opsiJawaban.length > 0) {
             // Jika ada perubahan opsi yang dikirim
-            finalOpsiToSave = opsiJawaban.map((o: any, idx: number) => ({
-              label: (o.label || String.fromCharCode(65 + idx)).trim().toUpperCase(),
-              konten: convertEquationToKatex(String(o.konten || '').trim()),
-              isBenar: Boolean(o.isBenar),
-            }));
+            finalOpsiToSave = [];
+            for (let idx = 0; idx < opsiJawaban.length; idx++) {
+              const o = opsiJawaban[idx];
+              let kontenConv = convertEquationToKatex(String(o.konten || '').trim());
+              kontenConv = await extractAndCompressBase64Media(kontenConv);
+              finalOpsiToSave.push({
+                label: (o.label || String.fromCharCode(65 + idx)).trim().toUpperCase(),
+                konten: kontenConv,
+                isBenar: Boolean(o.isBenar),
+              });
+            }
           } else if (existingSoal.tipeSoal === tipeSoal && existingSoal.opsiJawaban.length > 0) {
             // Tetap pertahankan opsi jawaban yang sudah ada jika tidak diubah
             finalOpsiToSave = existingSoal.opsiJawaban.map((o) => ({
@@ -714,11 +736,17 @@ export async function POST(request: NextRequest) {
         let finalOpsiToCreate: { label: string; konten: string; isBenar: boolean }[] | undefined = undefined;
         if (isChoiceType) {
           if (opsiJawaban && Array.isArray(opsiJawaban) && opsiJawaban.length > 0) {
-            finalOpsiToCreate = opsiJawaban.map((o: any, idx: number) => ({
-              label: (o.label || String.fromCharCode(65 + idx)).trim().toUpperCase(),
-              konten: convertEquationToKatex(String(o.konten || '').trim()),
-              isBenar: Boolean(o.isBenar),
-            }));
+            finalOpsiToCreate = [];
+            for (let idx = 0; idx < opsiJawaban.length; idx++) {
+              const o = opsiJawaban[idx];
+              let kontenConv = convertEquationToKatex(String(o.konten || '').trim());
+              kontenConv = await extractAndCompressBase64Media(kontenConv);
+              finalOpsiToCreate.push({
+                label: (o.label || String.fromCharCode(65 + idx)).trim().toUpperCase(),
+                konten: kontenConv,
+                isBenar: Boolean(o.isBenar),
+              });
+            }
           } else if (tipeSoal === 'BENAR_SALAH') {
             finalOpsiToCreate = [
               { label: 'A', konten: 'Benar', isBenar: true },
