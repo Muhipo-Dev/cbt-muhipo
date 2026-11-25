@@ -454,30 +454,9 @@ export default function ProktorPage() {
   const activeBg = settings.backgroundUrl || '/muhipo-log.jpg';
 
   return (
-    <div className="min-h-screen relative text-slate-900 dark:text-slate-100 flex flex-col justify-between selection:bg-cyan-500 selection:text-white transition-colors duration-300 overflow-x-hidden">
-      {/* 1. Background Wallpaper */}
-      <div className="fixed inset-0 -z-30 w-full h-full overflow-hidden pointer-events-none">
-        {activeBg.startsWith('http') || activeBg.startsWith('data:') ? (
-          <img
-            src={activeBg}
-            alt="Latar Belakang SMA MUHIPO"
-            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
-          />
-        ) : (
-          <NextImage
-            src={activeBg}
-            alt="Latar Belakang SMA MUHIPO"
-            fill
-            priority
-            unoptimized
-            sizes="100vw"
-            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
-          />
-        )}
-      </div>
-
-      {/* 2. Glassmorphism Backdrop */}
-      <div className="fixed inset-0 bg-slate-100/80 dark:bg-slate-950/65 dark:bg-gradient-to-b dark:from-slate-950/75 dark:via-slate-900/60 dark:to-slate-950/80 backdrop-blur-[2px] -z-20 pointer-events-none transition-colors duration-300" />
+    <div className="min-h-screen relative text-slate-900 dark:text-slate-100 flex flex-col justify-between bg-slate-100 dark:bg-slate-950 selection:bg-cyan-500 selection:text-white transition-colors duration-300 overflow-x-hidden">
+      {/* Background Flat Kontras Tinggi (Ultra Cepat & Ringan) */}
+      <div className="fixed inset-0 -z-30 w-full h-full bg-slate-100 dark:bg-slate-950 pointer-events-none" />
 
       {/* Proktor Topbar */}
       <header className="px-6 py-4 bg-white/95 dark:bg-slate-900/90 border-b border-slate-200/90 dark:border-slate-800 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between">

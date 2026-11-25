@@ -113,14 +113,12 @@
     padding-left: max(0.875rem, env(safe-area-inset-left, 0px));
     padding-right: max(0.875rem, env(safe-area-inset-right, 0px));
     padding-bottom: 0.625rem;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: rgba(255, 255, 255, 0.98);
     border-bottom: 1px solid var(--border);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
   .dark .mobile-appbar {
-    background: rgba(15, 23, 42, 0.92);
+    background: rgba(15, 23, 42, 0.98);
   }
 
   /* 2. Mobile Inset Grouped List (iOS / Android Modern Setting Style) */

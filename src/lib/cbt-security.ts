@@ -370,14 +370,19 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
       return false;
     }
 
-    // 6. Clipboard Protection (kecuali di input/textarea jawaban esai/isian)
+    // 6. Clipboard & Selection Protection (Blokir Cut, Copy, Paste, Select All)
     if ((isCtrl || isCmd) && ['c', 'v', 'a', 'x', 'C', 'V', 'A', 'X'].includes(e.key)) {
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-        return true;
-      }
       e.preventDefault();
       e.stopPropagation();
+      const actionName =
+        e.key.toLowerCase() === 'a'
+          ? 'Pilih Semua (Select All)'
+          : e.key.toLowerCase() === 'c'
+          ? 'Salin (Copy)'
+          : e.key.toLowerCase() === 'x'
+          ? 'Potong (Cut)'
+          : 'Tempel (Paste)';
+      onViolation?.(`Fitur ${actionName} dilarang selama ujian!`);
       return false;
     }
 

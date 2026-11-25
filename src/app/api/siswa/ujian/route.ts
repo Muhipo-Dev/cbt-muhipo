@@ -79,18 +79,14 @@ export async function GET(request: NextRequest) {
       const scheduledEnd = u.waktuSelesai ? new Date(u.waktuSelesai) : null;
 
       const statusPeserta = p?.status || 'BELUM_MULAI';
-      let realSisaDetik = p?.sisaDetik ?? u.durasiMenit * 60;
+      const totalMaxDetik = u.durasiMenit * 60;
+      let realSisaDetik = p?.sisaDetik ?? totalMaxDetik;
 
-      if (statusPeserta !== 'SELESAI' && scheduledStart) {
-        const totalMaxDetik = u.durasiMenit * 60;
-        const scheduledEndFromDuration = new Date(scheduledStart.getTime() + totalMaxDetik * 1000);
-        let absoluteEnd = scheduledEndFromDuration;
-        if (scheduledEnd && scheduledEnd < absoluteEnd) {
-          absoluteEnd = scheduledEnd;
-        }
-
-        const diffSec = Math.floor((absoluteEnd.getTime() - now.getTime()) / 1000);
-        realSisaDetik = Math.max(0, Math.min(totalMaxDetik, diffSec));
+      if (statusPeserta === 'SEDANG_MENGERJAKAN' && p?.waktuMulai) {
+        const elapsed = Math.floor((now.getTime() - new Date(p.waktuMulai).getTime()) / 1000);
+        realSisaDetik = Math.max(0, totalMaxDetik - elapsed);
+      } else if (statusPeserta === 'BELUM_MULAI') {
+        realSisaDetik = totalMaxDetik;
       }
 
       const guruPengampuNama =
@@ -116,16 +112,6 @@ export async function GET(request: NextRequest) {
       const isStarted = scheduledStart ? now >= scheduledStart : true;
       const isEnded = scheduledEnd ? now > scheduledEnd : false;
 
-      // Cek apakah sudah lewat toleransi kompensasi 15 menit untuk siswa yang belum mulai
-      const batasKompensasiMs = 15 * 60 * 1000;
-      const batasAkhirMasuk = scheduledStart ? new Date(scheduledStart.getTime() + batasKompensasiMs) : null;
-      const isLewatKompensasi = Boolean(
-        scheduledStart &&
-        batasAkhirMasuk &&
-        statusPeserta === 'BELUM_MULAI' &&
-        now > batasAkhirMasuk
-      );
-
       // Status waktu & kesiapan
       const isMulaiHariIni = scheduledStart ? scheduledStart >= startOfToday && scheduledStart <= endOfToday : false;
       const isSedangBerlangsungHariIni = scheduledStart && scheduledEnd
@@ -136,7 +122,7 @@ export async function GET(request: NextRequest) {
       const isFuture = scheduledStart ? scheduledStart > now : false;
       const isPast = (scheduledEnd ? now > scheduledEnd : false) || isArchived;
       
-      const isReady = isStarted && !isEnded && !isArchived && !isLewatKompensasi && statusPeserta !== 'SELESAI';
+      const isReady = isStarted && !isEnded && !isArchived && statusPeserta !== 'SELESAI';
       const isWorking = statusPeserta === 'SEDANG_MENGERJAKAN';
       const isFinished = statusPeserta === 'SELESAI';
       const isArsip = isArchived || isPast || (isFinished && isPast);
@@ -164,7 +150,6 @@ export async function GET(request: NextRequest) {
         waktuSelesai: u.waktuSelesai,
         statusUjian: u.status,
         statusPeserta,
-        isLewatKompensasi,
         nilaiPG: p?.nilaiPG != null ? Number(Number(p.nilaiPG).toFixed(2)) : null,
         nilaiEsai: p?.nilaiEsai != null ? Number(Number(p.nilaiEsai).toFixed(2)) : null,
         nilaiTotal: p?.nilaiTotal != null ? Number(Number(p.nilaiTotal).toFixed(2)) : null,

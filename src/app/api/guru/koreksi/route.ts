@@ -91,14 +91,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { action, jawabanPesertaId, skor, catatanKoreksi, pesertaUjianId } = body;
 
-    // FITUR REKOMENDASI KOREKSI AI PYTHON UNTUK ESAI & ISIAN
+    // FITUR REKOMENDASI KOREKSI AI (GOOGLE AI STUDIO & PYTHON ENGINE) UNTUK ESAI & ISIAN
     if (action === 'AI_EVALUATE_ANSWER') {
-      const { jawabanSiswa, rubrikKunci, tipeSoal, bobot } = body;
+      const { jawabanSiswa, rubrikKunci, tipeSoal, bobot, pertanyaan, geminiApiKey } = body;
       if (tipeSoal === 'ISIAN') {
         const aiRes = await runAIMathIsianMatch(jawabanSiswa || '', rubrikKunci || '');
         return NextResponse.json({ success: true, aiEvaluation: aiRes });
       } else {
-        const aiRes = await runAIEssayEvaluation(jawabanSiswa || '', rubrikKunci || '', Number(bobot || 10));
+        const aiRes = await runAIEssayEvaluation(
+          jawabanSiswa || '',
+          rubrikKunci || '',
+          Number(bobot || 10),
+          pertanyaan || '',
+          geminiApiKey || ''
+        );
         return NextResponse.json({ success: true, aiEvaluation: aiRes });
       }
     }

@@ -429,14 +429,110 @@ bdi,
   color: #e2e8f0;
 }
 
-/* Low Spec GPU optimization: meringankan composite beban backdrop-blur */
+/* Low Spec GPU optimization: meringankan composite beban backdrop-blur & animasi */
+.backdrop-blur-sm,
+.backdrop-blur,
 .backdrop-blur-md,
+.backdrop-blur-lg,
 .backdrop-blur-xl,
 .backdrop-blur-2xl,
 .backdrop-blur-3xl {
   transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
-  will-change: transform;
+}
+
+/* Fallback solid background jika browser/WebView Android lawas tidak support backdrop-filter */
+@supports not (backdrop-filter: blur(1px)) {
+  .backdrop-blur-sm,
+  .backdrop-blur,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-3xl {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* Ultra-lightweight rendering untuk perangkat berspesifikasi kecil / Android WebView */
+.low-end-webview *,
+.low-end-webview *::before,
+.low-end-webview *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* Pertahankan spinner loading agar user tetap tahu proses berjalan */
+.low-end-webview .animate-spin {
+  animation: spin 1s linear infinite !important;
+  animation-duration: 1s !important;
+}
+
+.low-end-webview .backdrop-blur-none,
+.low-end-webview .backdrop-blur-xs,
+.low-end-webview .backdrop-blur-sm,
+.low-end-webview .backdrop-blur,
+.low-end-webview .backdrop-blur-md,
+.low-end-webview .backdrop-blur-lg,
+.low-end-webview .backdrop-blur-xl,
+.low-end-webview .backdrop-blur-2xl,
+.low-end-webview .backdrop-blur-3xl {
+  background-color: var(--color-background, #f8fafc) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.low-end-webview.dark .backdrop-blur-none,
+.low-end-webview.dark .backdrop-blur-xs,
+.low-end-webview.dark .backdrop-blur-sm,
+.low-end-webview.dark .backdrop-blur,
+.low-end-webview.dark .backdrop-blur-md,
+.low-end-webview.dark .backdrop-blur-lg,
+.low-end-webview.dark .backdrop-blur-xl,
+.low-end-webview.dark .backdrop-blur-2xl,
+.low-end-webview.dark .backdrop-blur-3xl {
+  background-color: var(--color-background, #090d16) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Matikan backdrop blur & efek berat di layar mobile (<768px) pada card dan header agar rendering 60 FPS lancar */
+@media screen and (max-width: 768px) {
+  header,
+  .mobile-appbar,
+  .simas-tactile-card,
+  .ion-card,
+  .cbt-card,
+  .backdrop-blur-sm,
+  .backdrop-blur,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-3xl {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* GPU compositing & scroll optimizations untuk perangkat spek rendah */
+  html, body {
+    text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Kurangi animasi non-esensial di mobile */
+  .animate-pulse {
+    animation-duration: 2.5s !important;
+  }
 }
 
 /* Universal Anti-Offset & Containment Bounds */
@@ -455,18 +551,29 @@ img, video, canvas, audio, iframe, embed, object, svg:not(.katex *):not([preserv
   max-width: 100%;
 }
 
-/* Ensure images maintain object-fit and respect explicit height utilities */
+/* Ensure images maintain object-fit, respect explicit height utilities, and decode asynchronously */
 img {
   height: auto;
   display: block;
+  content-visibility: auto;
+}
+
+/* CSS Content Visibility & Containment untuk render hemat CPU/GPU di perangkat entry-level */
+.prose img,
+.prose table,
+.cbt-card,
+.simas-soft-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 120px;
 }
 
 /* ==========================================================================
-   ANDROID & MOBILE WEBVIEW OPTIMIZATION
+   MOBILE & TABLET OPTIMIZATION (Android WebView & iOS Safari / Chrome iOS)
    - Mencegah double tap zoom delay
+   - Mencegah elastic overscroll / pull-to-refresh reload tak sengaja di iOS Safari
    - Mengizinkan gesture sentuh dan scroll normal di layar sentuh
-   - Mencegah callout menu teks context tak sengaja saat sentuh tombol di WebView
-   - Mencegah visual jitter pada scroll dan form focus di Android
+   - Mencegah callout menu teks context tak sengaja saat sentuh tombol di WebView & iOS
+   - Mencegah visual jitter pada scroll dan form focus di Android & iOS
    ========================================================================== */
 @media screen and (max-width: 768px) {
   html, body {
@@ -475,6 +582,7 @@ img {
     -webkit-text-size-adjust: 100%;
     touch-action: pan-y pinch-zoom;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: none;
     overflow-y: auto;
   }
 
@@ -552,4 +660,35 @@ header img,
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
+}
+
+/* ==========================================================================
+   CBT EXAM LOCKDOWN INTEGRITY SHIELD
+   Perlindungan kaku anti-cheat:
+   - Blokir seleksi teks / Select All
+   - Blokir context menu callout di iOS & Android WebView
+   - Blokir dragging gambar/soal keluar window
+   - Blokir highlight teks
+   ========================================================================== */
+.cbt-exam-lockdown,
+.cbt-exam-lockdown * {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+.cbt-exam-lockdown input,
+.cbt-exam-lockdown textarea {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+}
+
+.cbt-exam-lockdown img {
+  -webkit-user-drag: none !important;
+  user-drag: none !important;
+  pointer-events: none;
 }

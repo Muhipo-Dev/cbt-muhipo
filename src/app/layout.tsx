@@ -51,7 +51,32 @@ export default function RootLayout({
         <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
         <meta httpEquiv="Pragma" content="no-cache" />
         <meta httpEquiv="Expires" content="0" />
-        <link rel="stylesheet" href="/katex/katex.min.css" />
+        <meta name="renderer" content="webkit" />
+        <meta name="force-rendering" content="webkit" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var ua = navigator.userAgent || '';
+                  var isAndroid = /Android/i.test(ua);
+                  var isOldWebView = isAndroid && (/wv|Version\\/[0-9.]+/i.test(ua) || !/Chrome\\/[0-9]+/i.test(ua));
+                  var chromeMatch = ua.match(/Chrome\\/([0-9]+)/);
+                  var isOldChrome = chromeMatch && parseInt(chromeMatch[1], 10) < 88;
+                  
+                  // Deteksi perangkat dengan spek RAM kecil / CPU core terbatas
+                  var lowRam = typeof navigator.deviceMemory === 'number' && navigator.deviceMemory <= 3;
+                  var lowCpu = typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
+                  var isLowPowerMobile = isAndroid || /iPhone|iPad|iPod/i.test(ua);
+                  
+                  if (isOldWebView || isOldChrome || lowRam || (isLowPowerMobile && lowCpu)) {
+                    document.documentElement.classList.add('low-end-webview');
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `

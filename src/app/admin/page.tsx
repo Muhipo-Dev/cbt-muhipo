@@ -492,30 +492,9 @@ export default function ComprehensiveAdminDashboard() {
   const activeBg = settingsForm.backgroundUrl || '/muhipo-log.jpg'
 
   return (
-    <div className="min-h-screen relative flex flex-col justify-between selection:bg-blue-600 selection:text-white transition-colors duration-300 overflow-x-hidden print:overflow-visible print:bg-white print:text-black">
-      {/* Background Wallpaper */}
-      <div className="print:hidden fixed inset-0 -z-30 w-full h-full overflow-hidden pointer-events-none">
-        {activeBg.startsWith('http') || activeBg.startsWith('data:') ? (
-          <img
-            src={activeBg}
-            alt="Latar Belakang SMA MUHIPO"
-            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
-          />
-        ) : (
-          <NextImage
-            src={activeBg}
-            alt="Latar Belakang SMA MUHIPO"
-            fill
-            priority
-            unoptimized
-            sizes="100vw"
-            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
-          />
-        )}
-      </div>
-
-      {/* Glassmorphism Backdrop Overlay */}
-      <div className="print:hidden fixed inset-0 bg-slate-100/80 dark:bg-slate-950/65 dark:bg-gradient-to-b dark:from-slate-950/75 dark:via-slate-950/60 dark:to-slate-950/80 backdrop-blur-[2px] -z-20 pointer-events-none transition-colors duration-300" />
+    <div className="min-h-screen relative flex flex-col justify-between bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white transition-colors duration-300 overflow-x-hidden print:overflow-visible print:bg-white print:text-black">
+      {/* Background Flat Kontras Tinggi (Ultra Cepat & Ringan) */}
+      <div className="print:hidden fixed inset-0 -z-30 w-full h-full bg-slate-100 dark:bg-slate-950 pointer-events-none" />
 
       {/* Sidebar Navigation */}
       <AppSidebar

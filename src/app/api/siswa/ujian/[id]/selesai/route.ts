@@ -50,11 +50,56 @@ export async function POST(
     }
 
     let isAuto = false;
+    let clientJawabanMap: Record<string, { jawabanDipilih?: string; raguRagu?: boolean }> | null = null;
     try {
       const body = await request.json();
-      if (body && body.isAuto) isAuto = true;
+      if (body) {
+        if (body.isAuto) isAuto = true;
+        if (body.jawabanMap && typeof body.jawabanMap === 'object') {
+          clientJawabanMap = body.jawabanMap;
+        }
+      }
     } catch (e) {
       // no body or non-json
+    }
+
+    // Jika client mengirim payload jawabanMap lengkap saat submit (termasuk soal terakhir yang baru saja dijawab),
+    // simpan / upsert seketika ke database sebelum penilaian agar tidak ada soal yang tertinggal!
+    if (clientJawabanMap && Object.keys(clientJawabanMap).length > 0) {
+      const existingDbJawaban = new Map(pesertaUjian.jawabanPeserta.map((j) => [j.soalId, j]));
+      for (const [soalId, item] of Object.entries(clientJawabanMap)) {
+        if (!soalId || !item) continue;
+        const chosenVal = item.jawabanDipilih !== undefined ? String(item.jawabanDipilih) : '';
+        const raguVal = Boolean(item.raguRagu);
+
+        const existing = existingDbJawaban.get(soalId);
+        if (existing) {
+          // Update jika berbeda atau belum terisi di DB
+          if (existing.jawabanDipilih !== chosenVal || existing.raguRagu !== raguVal) {
+            await prisma.jawabanPeserta.update({
+              where: { id: existing.id },
+              data: {
+                jawabanDipilih: chosenVal,
+                raguRagu: raguVal,
+              },
+            });
+            existing.jawabanDipilih = chosenVal;
+            existing.raguRagu = raguVal;
+          }
+        } else {
+          // Buat record baru jika belum ada di DB
+          const created = await prisma.jawabanPeserta.create({
+            data: {
+              pesertaUjianId: pesertaUjian.id,
+              soalId,
+              jawabanDipilih: chosenVal,
+              raguRagu: raguVal,
+            },
+          });
+          existingDbJawaban.set(soalId, created as any);
+          pesertaUjian.jawabanPeserta.push(created as any);
+        }
+      }
     }
 
     // Auto-Grading Soal Objektif & Isian Langsung dari Topik / Mata Pelajaran

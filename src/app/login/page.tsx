@@ -89,19 +89,12 @@ export default function SingleSignInLoginPage() {
   };
 
   return (
-    <div className="min-h-screen min-h-[100dvh] relative flex flex-col justify-between text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white overflow-x-hidden overflow-y-auto bg-slate-950 transition-colors duration-300">
-      {/* Background Wallpaper Master dari Pengaturan Sistem */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0 transform scale-100 transition-transform duration-1000 opacity-90 dark:opacity-80 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] pointer-events-none"
-        style={{
-          backgroundImage: `url('${settings.backgroundUrl || '/muhipo-log.jpg'}')`,
-        }}
-      />
-      {/* Overlay Transparan Halus */}
-      <div className="absolute inset-0 bg-slate-100/75 dark:bg-slate-950/65 dark:bg-gradient-to-b dark:from-slate-950/75 dark:via-slate-900/60 dark:to-slate-950/80 backdrop-blur-[2px] z-0 pointer-events-none" />
+    <div className="min-h-screen min-h-[100dvh] relative flex flex-col justify-between text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white overflow-x-hidden overflow-y-auto bg-slate-100 dark:bg-slate-950 transition-colors duration-300">
+      {/* Background Flat Kontras Tinggi (Ringan & Cepat Tanpa Beban Gambar) */}
+      <div className="fixed inset-0 bg-slate-100 dark:bg-slate-950 -z-10 pointer-events-none" />
 
       {/* Top Header Navbar */}
-      <header className="w-full px-3 sm:px-6 lg:px-10 py-1.5 sm:py-2.5 border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md flex items-center justify-between z-10 shadow-xs shrink-0">
+      <header className="w-full px-3 sm:px-6 lg:px-10 py-1.5 sm:py-2.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between z-10 shadow-xs shrink-0">
         <SchoolBrandHeader
           subtitle="Portal Ujian SMA Muhammadiyah 1 Ponorogo"
           logoUrl={settings.logoUrl}

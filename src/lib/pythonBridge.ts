@@ -110,11 +110,14 @@ export async function runAIProctorAnalysis(pesertaList: any[]): Promise<any> {
 
 /**
  * Panggil AI Question Matcher untuk koreksi esai / isian singkat
+ * Mendukung integrasi Google AI Studio (Gemini) dengan fallback cerdas ke Local AI Semantic Matcher
  */
 export async function runAIEssayEvaluation(
   jawabanSiswa: string,
   rubrikKunci: string,
-  maxBobot: number = 10.0
+  maxBobot: number = 10.0,
+  pertanyaan: string = '',
+  geminiApiKey: string = ''
 ): Promise<any> {
   try {
     const res = await runPythonScript<{ success: boolean; result: any }>(
@@ -123,9 +126,11 @@ export async function runAIEssayEvaluation(
         action: 'EVALUATE_ESSAY',
         jawabanSiswa,
         rubrikKunci,
+        pertanyaan,
         maxBobot,
+        geminiApiKey: geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '',
       },
-      5000
+      8000
     );
     if (res && res.success) {
       return res.result;

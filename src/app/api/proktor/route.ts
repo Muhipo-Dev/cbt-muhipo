@@ -111,7 +111,11 @@ export async function GET(request: NextRequest) {
             waktuSelesai: targetPeserta.waktuSelesai,
             ipAddress: targetPeserta.ipAddress,
             totalSoal: orderedSoals.length,
-            totalDijawab: targetPeserta.jawabanPeserta.filter((j) => j.jawabanDipilih).length,
+            totalDijawab: targetPeserta.jawabanPeserta.filter((j) => {
+              if (!j || !j.jawabanDipilih) return false;
+              const val = j.jawabanDipilih.trim();
+              return Boolean(val && val !== '[]' && val !== '{}');
+            }).length,
           },
           ujian: {
             id: targetPeserta.ujian.id,
@@ -182,7 +186,11 @@ export async function GET(request: NextRequest) {
         where: { ujianId: activeUjian.id },
         include: {
           siswa: { include: { kelas: true } },
-          _count: { select: { jawabanPeserta: true } },
+          jawabanPeserta: {
+            select: {
+              jawabanDipilih: true,
+            },
+          },
           logs: {
             take: 20,
             orderBy: { createdAt: 'desc' },
@@ -204,6 +212,12 @@ export async function GET(request: NextRequest) {
           ].includes(l.aktivitas)
         );
 
+        const validAnswerCount = p.jawabanPeserta.filter((j) => {
+          if (!j || !j.jawabanDipilih) return false;
+          const val = j.jawabanDipilih.trim();
+          return Boolean(val && val !== '[]' && val !== '{}');
+        }).length;
+
         return {
           pesertaUjianId: p.id,
           siswaId: p.siswa.id,
@@ -213,7 +227,7 @@ export async function GET(request: NextRequest) {
           plainPassword: p.siswa.plainPassword || '123456',
           kelas: p.siswa.kelas?.nama || '-',
           status: p.status,
-          jumlahJawaban: p._count.jawabanPeserta,
+          jumlahJawaban: validAnswerCount,
           sisaDetik: p.sisaDetik,
           ipAddress: p.ipAddress || '-',
           logsTerakhir: p.logs,

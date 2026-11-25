@@ -11,9 +11,12 @@ Menyediakan komputasi kecerdasan buatan berbasis Python untuk:
 
 import sys
 import json
+import os
 import re
 import math
-from typing import Dict, List, Any, Tuple
+import urllib.request
+import urllib.error
+from typing import Dict, List, Any, Tuple, Optional
 
 def normalize_text(text: str) -> str:
     """Normalisasi teks jawaban: case-folding, whitespace collapse, punctuation cleaning."""
@@ -178,32 +181,150 @@ def match_isian_ai(jawaban_siswa: str, kunci_teks: str) -> Dict[str, Any]:
         'reason': 'Jawaban tidak sesuai dengan kunci'
     }
 
-def evaluate_essay_ai(jawaban_siswa: str, rubrik_kunci: str, max_bobot: float) -> Dict[str, Any]:
+def call_gemini_ai_studio(prompt: str, api_key: str) -> Optional[str]:
+    """
+    Memanggil Google AI Studio Gemini API endpoint (gemini-1.5-flash / gemini-2.0-flash / gemini-2.5-flash)
+    menggunakan HTTP REST standar Python tanpa dependensi pihak ketiga.
+    """
+    if not api_key:
+        return None
+
+    # Daftar model Gemini dari Google AI Studio dengan urutan prioritas
+    models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+    for model in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        payload = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 800,
+            }
+        }
+        data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=6) as response:
+                if response.status == 200:
+                    res_body = json.loads(response.read().decode('utf-8'))
+                    candidates = res_body.get('candidates', [])
+                    if candidates:
+                        text_part = candidates[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+                        if text_part:
+                            return text_part
+        except Exception as e:
+            # Jika model pertama gagal atau rate limited, coba model berikutnya
+            continue
+    return None
+
+def evaluate_essay_with_gemini(
+    jawaban_siswa: str,
+    rubrik_kunci: str,
+    pertanyaan: str,
+    max_bobot: float,
+    api_key: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Evaluasi esai cerdas berbasis Google AI Studio (Gemini).
+    Mengembalikan skor objektif (0.0 - max_bobot) dan feedback penjelasan analitis.
+    """
+    prompt = f"""Anda adalah asisten penilai ujian guru profesional SMA.
+Tugas Anda: Berikan penilaian objektif terhadap jawaban esai/uraian siswa berdasarkan pertanyaan dan rubrik kunci jawaban.
+
+Informasi Soal:
+- Pertanyaan Soal: {pertanyaan if pertanyaan else '(Uraian Soal)'}
+- Rubrik / Kunci Jawaban Guru: {rubrik_kunci}
+- Bobot Maksimal: {max_bobot}
+
+Jawaban Siswa:
+"{jawaban_siswa}"
+
+Instruksi Penilaian:
+1. Analisis apakah konsep utama, fakta ilmiah, atau langkah penyelesaian siswa telah sesuai dengan rubrik guru.
+2. Toleransi gaya bahasa siswa yang berbeda asalkan inti pemahamannya benar.
+3. Berikan skor (angka desimal/bulat antara 0.0 sampai {max_bobot}).
+4. Tulis umpan balik (feedback) singkat dan konstruktif dalam 1-2 kalimat bahasa Indonesia.
+
+Keluarkan output HANYA dalam format JSON berikut tanpa teks lain:
+{{
+  "skorUsulan": <angka_skor>,
+  "persentaseKemiripan": <angka_0_sampai_100>,
+  "feedback": "<komentar_evaluasi>"
+}}
+"""
+    try:
+        raw_res = call_gemini_ai_studio(prompt, api_key)
+        if raw_res:
+            # Bersihkan markdown formatting ```json ... ```
+            cleaned = re.sub(r'^```(?:json)?\s*', '', raw_res.strip())
+            cleaned = re.sub(r'\s*```$', '', cleaned).strip()
+            parsed = json.loads(cleaned)
+            skor = float(parsed.get('skorUsulan', 0.0))
+            skor = max(0.0, min(max_bobot, skor))
+            persen = float(parsed.get('persentaseKemiripan', (skor / max_bobot) * 100 if max_bobot > 0 else 0))
+            feedback = str(parsed.get('feedback', 'Penilaian berhasil dianalisis oleh Google AI Studio.'))
+
+            return {
+                'skorUsulan': round(skor, 2),
+                'confidence': 0.95,
+                'persentaseKemiripan': round(persen, 1),
+                'feedback': f"[AI Studio] {feedback}",
+                'engine': 'Google AI Studio (Gemini)'
+            }
+    except Exception as e:
+        pass
+    return None
+
+def evaluate_essay_ai(
+    jawaban_siswa: str,
+    rubrik_kunci: str,
+    max_bobot: float,
+    pertanyaan: str = "",
+    gemini_api_key: str = ""
+) -> Dict[str, Any]:
     """
     Evaluasi AI untuk Jawaban Esai:
-    Membandingkan kesamaan semantik kata kunci, panjang elaborasi, dan substansi jawaban.
-    Menghasilkan skor usulan rekomendasi (AI Recommended Score) yang mempermudah koreksi guru.
+    1. Coba evaluasi berbasis Google AI Studio (Gemini) jika API Key tersedia.
+    2. Fallback otomatis ke Natural Language Processing lokal (Token overlap, semantic similarity, keyword matching).
     """
-    u_text = normalize_text(jawaban_siswa)
-    k_text = normalize_text(rubrik_kunci)
+    u_text_raw = str(jawaban_siswa or '').strip()
+    k_text_raw = str(rubrik_kunci or '').strip()
 
-    if not u_text:
+    if not u_text_raw:
         return {
             'skorUsulan': 0.0,
             'confidence': 1.0,
             'persentaseKemiripan': 0.0,
-            'feedback': 'Siswa tidak mengisi jawaban esai.'
+            'feedback': 'Siswa tidak mengisi jawaban esai.',
+            'engine': 'System Validator'
         }
 
+    # 1. Gunakan Google AI Studio (Gemini) jika api_key tersedia
+    api_key = gemini_api_key or os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or ''
+    if api_key:
+        gemini_result = evaluate_essay_with_gemini(u_text_raw, k_text_raw, pertanyaan, max_bobot, api_key)
+        if gemini_result:
+            return gemini_result
+
+    # 2. Local NLP Semantic Matcher (Toleran sinonim, kemiripan kata, elaborasi kalimat)
+    u_text = normalize_text(u_text_raw)
+    k_text = normalize_text(k_text_raw)
+
     if not k_text:
-        # Tanpa rubrik, beri default nilai proporsional berbasis panjang penjelasan
         word_count = len(re.findall(r'\b\w+\b', u_text))
         ratio = min(1.0, word_count / 30.0)
         return {
             'skorUsulan': round(max_bobot * ratio, 2),
             'confidence': 0.5,
             'persentaseKemiripan': round(ratio * 100, 1),
-            'feedback': f'Evaluasi berdasarkan kelengkapan uraian ({word_count} kata).'
+            'feedback': f'Evaluasi berdasarkan kelengkapan uraian ({word_count} kata).',
+            'engine': 'Local NLP Engine'
         }
 
     # Hitung Jaccard similarity (kesamaan kata kunci)
@@ -211,26 +332,37 @@ def evaluate_essay_ai(jawaban_siswa: str, rubrik_kunci: str, max_bobot: float) -
     # Hitung Levenshtein similarity
     lev = levenshtein_similarity(u_text, k_text)
 
-    # Kata kunci substansial (kata panjang >= 4 huruf)
-    k_keywords = [w for w in set(re.findall(r'\b\w+\b', k_text)) if len(w) >= 4]
+    # Kata kunci substansial (kata panjang >= 3 huruf)
+    k_keywords = [w for w in set(re.findall(r'\b\w+\b', k_text)) if len(w) >= 3]
     u_words = set(re.findall(r'\b\w+\b', u_text))
     
-    keyword_match_count = sum(1 for kw in k_keywords if any(kw in uw or levenshtein_similarity(kw, uw) >= 0.8 for uw in u_words))
+    # Matching kata kunci fleksibel: exact, substring, atau kemiripan Levenshtein >= 0.78
+    keyword_match_count = 0
+    for kw in k_keywords:
+        matched = False
+        for uw in u_words:
+            if kw == uw or (len(kw) >= 4 and (kw in uw or uw in kw)) or levenshtein_similarity(kw, uw) >= 0.78:
+                matched = True
+                break
+        if matched:
+            keyword_match_count += 1
+
     keyword_ratio = (keyword_match_count / len(k_keywords)) if k_keywords else jaccard
 
-    # Skor gabungan: 50% keyword, 30% Jaccard, 20% Levenshtein
-    composite_score = (keyword_ratio * 0.50) + (jaccard * 0.30) + (lev * 0.20)
-    composite_score = max(0.0, min(1.0, composite_score))
+    # Skor gabungan: 55% keyword matching, 25% Jaccard overlap, 20% Levenshtein
+    composite_score = (keyword_ratio * 0.55) + (jaccard * 0.25) + (lev * 0.20)
 
-    # Bonus elaborasi jika siswa menjelaskan dengan runut (minimal 25 kata)
+    # Bonus kelengkapan elaborasi penjelasan (jika siswa menulis penjelasan komprehensif)
     words_student = len(re.findall(r'\b\w+\b', u_text))
-    if words_student >= 25 and composite_score > 0.2:
-        composite_score = min(1.0, composite_score * 1.15)
+    if words_student >= 15 and composite_score >= 0.15:
+        elaboration_boost = min(0.20, (words_student / 40.0) * 0.20)
+        composite_score = min(1.0, composite_score + elaboration_boost)
 
+    composite_score = max(0.0, min(1.0, composite_score))
     skor_usulan = round(max_bobot * composite_score, 2)
     persen = round(composite_score * 100, 1)
 
-    feedback = f"Tingkat kesesuaian rubrik: {persen}% ({keyword_match_count}/{len(k_keywords)} kata kunci esensial terdeteksi)."
+    feedback = f"Tingkat kesesuaian rubrik: {persen}% ({keyword_match_count}/{len(k_keywords)} konsep/kata kunci terdeteksi)."
 
     return {
         'skorUsulan': skor_usulan,
@@ -238,7 +370,8 @@ def evaluate_essay_ai(jawaban_siswa: str, rubrik_kunci: str, max_bobot: float) -
         'persentaseKemiripan': persen,
         'keywordMatched': keyword_match_count,
         'totalKeywords': len(k_keywords),
-        'feedback': feedback
+        'feedback': feedback,
+        'engine': 'Local AI Semantic Matcher'
     }
 
 def main():
@@ -260,7 +393,9 @@ def main():
             res = evaluate_essay_ai(
                 payload.get('jawabanSiswa', ''),
                 payload.get('rubrikKunci', ''),
-                float(payload.get('maxBobot', 10.0))
+                float(payload.get('maxBobot', 10.0)),
+                pertanyaan=payload.get('pertanyaan', ''),
+                gemini_api_key=payload.get('geminiApiKey', '')
             )
             print(json.dumps({'success': True, 'result': res}, ensure_ascii=False))
 

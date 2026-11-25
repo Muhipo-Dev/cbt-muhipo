@@ -38,6 +38,7 @@ import {
   Monitor,
   Users,
   Eye,
+  Bot,
   RotateCcw,
   Lock,
   Unlock,
@@ -165,6 +166,8 @@ export default function GuruDashboardPage() {
   const [selectedKoreksiKelas, setSelectedKoreksiKelas] = useState('ALL');
   const [koreksiSubTab, setKoreksiSubTab] = useState<'rekap' | 'koreksi_esai'>('rekap');
   const [koreksiData, setKoreksiData] = useState<any>(null);
+  const [aiLoadingId, setAiLoadingId] = useState<string | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, any>>({});
 
   // Panduan Guru Interaktif Modal State
   const [showGuideModal, setShowGuideModal] = useState(false);
@@ -1042,6 +1045,49 @@ export default function GuruDashboardPage() {
     }
   };
 
+  const handleRequestAiScoreGuru = async (jawaban: any, pesertaId: string) => {
+    try {
+      setAiLoadingId(jawaban.id);
+      const res = await fetch('/api/guru/koreksi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'AI_EVALUATE_ANSWER',
+          pertanyaan: jawaban.soal?.pertanyaan || '',
+          jawabanSiswa: jawaban.jawabanDipilih || '',
+          rubrikKunci: jawaban.soal?.kunciJawabanTeks || '',
+          tipeSoal: jawaban.soal?.tipeSoal || 'ESAI',
+          bobot: jawaban.soal?.bobot || 10.0,
+        }),
+      });
+      const json = await res.json();
+      if (json.success && json.aiEvaluation) {
+        setAiSuggestions((prev) => ({
+          ...prev,
+          [jawaban.id]: json.aiEvaluation,
+        }));
+        const proposedScore = json.aiEvaluation.skorUsulan !== undefined
+          ? json.aiEvaluation.skorUsulan
+          : (json.aiEvaluation.isBenar ? (Number(jawaban.soal?.bobot) || 1.0) : 0);
+        
+        const inputElem = document.getElementById(`score-${jawaban.id}`) as HTMLInputElement;
+        if (inputElem) {
+          inputElem.value = String(proposedScore);
+        }
+        const engineLabel = json.aiEvaluation.engine || 'AI Studio / Python';
+        showNotification(
+          'Saran Skor AI Diterapkan',
+          `Rekomendasi ${engineLabel}: ${proposedScore} poin (${json.aiEvaluation.feedback || 'Kesesuaian rubrik teranalisis'})`,
+          'success'
+        );
+      }
+    } catch (e: any) {
+      showNotification('Gagal', 'Gagal memanggil AI Scorer: ' + e.message, 'error');
+    } finally {
+      setAiLoadingId(null);
+    }
+  };
+
   // 5. Monitoring Live Pengerjaan Peserta (Pengawas Ujian Kelas & Jadwal Hari Yang Sama)
   const fetchProktorData = async (ujianId?: string, filterHariParam?: string) => {
     try {
@@ -1286,30 +1332,9 @@ export default function GuruDashboardPage() {
   const totalSiswaTerkoreksi = koreksiData?.hasilList?.length || 0;
 
   return (
-    <div className="min-h-screen relative flex flex-col justify-between selection:bg-blue-600 selection:text-white transition-colors duration-300 overflow-x-hidden">
-      {/* 1. Latar Belakang Wallpaper Sekolah Terpadu (Persis Admin / SIMASMUH) */}
-      <div className="fixed inset-0 -z-30 w-full h-full overflow-hidden pointer-events-none">
-        {activeBg.startsWith('http') || activeBg.startsWith('data:') ? (
-          <img
-            src={activeBg}
-            alt="Latar Belakang SMA MUHIPO"
-            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
-          />
-        ) : (
-          <NextImage
-            src={activeBg}
-            alt="Latar Belakang SMA MUHIPO"
-            fill
-            priority
-            unoptimized
-            sizes="100vw"
-            className="object-cover object-center w-full h-full scale-105 brightness-100 dark:brightness-[0.88] dark:contrast-[1.10] transition-all duration-300"
-          />
-        )}
-      </div>
-
-      {/* 2. Glassmorphism Backdrop Overlay Dinamis */}
-      <div className="fixed inset-0 bg-slate-100/80 dark:bg-slate-950/65 dark:bg-gradient-to-b dark:from-slate-950/75 dark:via-slate-900/60 dark:to-slate-950/80 backdrop-blur-[2px] -z-20 pointer-events-none transition-colors duration-300" />
+    <div className="min-h-screen relative flex flex-col justify-between bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white transition-colors duration-300 overflow-x-hidden">
+      {/* Background Flat Kontras Tinggi (Ultra Cepat & Ringan) */}
+      <div className="fixed inset-0 -z-30 w-full h-full bg-slate-100 dark:bg-slate-950 pointer-events-none" />
 
       {/* 3. Kerangka Sidebar Induk Terpadu (Hanya muncul ketika masuk di menu Bank Soal atau Koreksi Rekap) */}
       {activeTab !== 'dashboard' && (
@@ -3462,6 +3487,18 @@ export default function GuruDashboardPage() {
                                                 >
                                                   Max ({maxBobot})
                                                 </button>
+
+                                                {/* Tombol Koreksi AI Studio / Python */}
+                                                <button
+                                                  type="button"
+                                                  title="Koreksi otomatis dengan AI Studio / AI Engine"
+                                                  disabled={aiLoadingId === j.id}
+                                                  onClick={() => handleRequestAiScoreGuru(j, peserta.id)}
+                                                  className="px-2 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] cursor-pointer transition shadow-2xs whitespace-nowrap flex items-center gap-1"
+                                                >
+                                                  <Bot className={`w-3 h-3 ${aiLoadingId === j.id ? 'animate-spin' : 'text-indigo-600'}`} />
+                                                  <span>{aiLoadingId === j.id ? 'AI...' : 'Koreksi AI'}</span>
+                                                </button>
                                               </div>
                                               <span className="text-[10px] font-mono text-slate-400">
                                                 Skor Tersimpan:{' '}
@@ -3470,6 +3507,19 @@ export default function GuruDashboardPage() {
                                                 </b>{' '}
                                                 / {maxBobot}
                                               </span>
+
+                                              {/* Feedback AI Banner */}
+                                              {aiSuggestions[j.id] && (
+                                                <div className="p-2 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-[10.5px] text-indigo-900 dark:text-indigo-200 mt-1">
+                                                  <div className="font-bold flex items-center gap-1 text-indigo-700 dark:text-indigo-300 mb-0.5">
+                                                    <Sparkles className="w-3 h-3" />
+                                                    <span>Analisis Koreksi AI ({aiSuggestions[j.id].engine || 'AI Engine'}):</span>
+                                                  </div>
+                                                  <p className="leading-snug">
+                                                    {aiSuggestions[j.id].feedback || 'Jawaban dianalisis berdasarkan kesesuaian rubrik.'}
+                                                  </p>
+                                                </div>
+                                              )}
                                             </div>
                                           </td>
                                         </tr>

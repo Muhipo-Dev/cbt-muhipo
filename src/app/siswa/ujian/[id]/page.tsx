@@ -525,32 +525,26 @@ export default function LembarUjianPage({
       }
     };
 
-    // 7. Context Menu, Copy, Cut, Paste, Drag & Selection Prevention
+    // 7. Context Menu, Copy, Cut, Paste, Drag & Selection Prevention (Semua Perangkat Termasuk Mobile & WebView)
     const handleContextMenu = (e: MouseEvent | TouchEvent) => {
-      // Izinkan sentuhan / long-press di smartphone/tablet agar gesture sentuh tidak terkunci
-      const devInfo = detectDeviceSecurityInfo();
-      if (devInfo.isMobile || devInfo.isTablet || ('touches' in e && e.touches)) {
-        return;
-      }
       e.preventDefault();
       cbtSecurityAudio.playWarningBuzzer();
+      setCheatWarning('Peringatan: Menu klik kanan / menu konteks dinonaktifkan!');
     };
 
     const handleCopyCutPaste = (e: ClipboardEvent) => {
       e.preventDefault();
       cbtSecurityAudio.playWarningBuzzer();
+      const actionName =
+        e.type === 'copy' ? 'Menyalin (Copy)' : e.type === 'cut' ? 'Memotong (Cut)' : 'Menempel (Paste)';
+      setCheatWarning(`Peringatan: Fitur ${actionName} dilarang selama ujian!`);
     };
 
     const handleSelectStart = (e: Event) => {
-      // Izinkan pemilihan teks pada input, textarea, serta elemen soal/jawaban agar gesture sentuh lancar
-      const devInfo = detectDeviceSecurityInfo();
-      if (devInfo.isMobile || devInfo.isTablet) {
-        return; // Jangan blokir touch selection / gesture di layar ponsel atau tablet
-      }
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.closest('.select-text'))) {
-        return;
-      }
+      e.preventDefault();
+    };
+
+    const handleDragStart = (e: DragEvent) => {
       e.preventDefault();
     };
 
@@ -590,6 +584,7 @@ export default function LembarUjianPage({
     window.addEventListener('cut', handleCopyCutPaste);
     window.addEventListener('paste', handleCopyCutPaste);
     document.addEventListener('selectstart', handleSelectStart);
+    document.addEventListener('dragstart', handleDragStart);
 
     return () => {
       if (pendingViolationTimer) clearTimeout(pendingViolationTimer);
@@ -611,6 +606,7 @@ export default function LembarUjianPage({
       window.removeEventListener('cut', handleCopyCutPaste);
       window.removeEventListener('paste', handleCopyCutPaste);
       document.removeEventListener('selectstart', handleSelectStart);
+      document.removeEventListener('dragstart', handleDragStart);
     };
   }, [isSecurityUnlocked, pesertaUjianId, ujianInfo]);
 
@@ -814,6 +810,14 @@ export default function LembarUjianPage({
 
   // Submit / Selesai Ujian
   const handleSelesaiUjian = async (isAuto = false) => {
+    // 0. Segera bersihkan dan flush semua timer debounce teks jika ada soal isian/esai yang baru saja diketik
+    Object.keys(textDebounceRef.current).forEach((sid) => {
+      if (textDebounceRef.current[sid]) {
+        clearTimeout(textDebounceRef.current[sid]);
+        delete textDebounceRef.current[sid];
+      }
+    });
+
     // Validasi Minimal Jawaban
     const minJawaban = ujianInfo?.minJawaban ? Number(ujianInfo.minJawaban) : null;
     if (!isAuto && minJawaban && minJawaban > 0) {
@@ -829,13 +833,27 @@ export default function LembarUjianPage({
     setSubmitting(true);
     isSubmittedRef.current = true; // Tandai ujian sudah diselesaikan agar tidak trigger false-positive anti cheat
     try {
+      // Pastikan semua jawaban saat ini juga tersimpan di IndexedDB sebelum final submit
+      for (const [sid, jState] of Object.entries(jawabanMap)) {
+        if (jState.jawabanDipilih) {
+          saveAnswerToIndexedDB({
+            ujianId,
+            soalId: sid,
+            jawabanDipilih: jState.jawabanDipilih,
+            raguRagu: jState.raguRagu,
+            sisaDetik,
+            syncedToServer: false,
+          });
+        }
+      }
+
       // Sinkronisasi sisa jawaban tertunda di IndexedDB sebelum final submit
       await syncPendingAnswersToServer(ujianId, sisaDetik);
 
       const res = await fetch(`/api/siswa/ujian/${ujianId}/selesai`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isAuto }),
+        body: JSON.stringify({ isAuto, jawabanMap }),
       });
       const data = await res.json();
 
@@ -854,11 +872,19 @@ export default function LembarUjianPage({
       // Mainkan suara ucapan selesai ujian yang ramah
       cbtSecurityAudio.speakSuccess('Ujian selesai, terimakasih telah mengerjakan');
 
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-      });
+      // Efek confetti ringan jika bukan perangkat low-end WebView
+      try {
+        const isLowEnd = typeof document !== 'undefined' && document.documentElement.classList.contains('low-end-webview');
+        if (!isLowEnd && typeof confetti === 'function') {
+          confetti({
+            particleCount: 50,
+            spread: 60,
+            origin: { y: 0.6 },
+          });
+        }
+      } catch (cErr) {
+        // silent
+      }
 
       const tampilkanHasil = data?.data?.tampilkanHasil !== false;
       const nilaiTotal = data?.data?.nilaiTotal ?? data?.data?.nilaiPG;
@@ -924,7 +950,12 @@ export default function LembarUjianPage({
   const totalRagu = Object.values(jawabanMap).filter((j) => j.raguRagu).length;
 
   return (
-    <div className="min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between selection:bg-emerald-500 selection:text-white font-sans pb-16 sm:pb-3" style={{ touchAction: 'pan-y pinch-zoom' }}>
+    <div
+      className={`min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between font-sans pb-16 sm:pb-3 ${
+        ujianInfo?.lockBrowser ? 'cbt-exam-lockdown select-none' : 'selection:bg-emerald-500 selection:text-white'
+      }`}
+      style={{ touchAction: 'pan-y pinch-zoom' }}
+    >
       {/* Modal Aktivasi Keamanan & Screen Recording */}
       {ujianInfo?.lockBrowser && (
         <SecurityLockModal

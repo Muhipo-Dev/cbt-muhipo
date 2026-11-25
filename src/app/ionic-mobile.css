@@ -100,16 +100,14 @@
     min-height: 52px !important;
     padding: 0.4rem 0.875rem !important;
     border-radius: 16px !important;
-    background: rgba(255, 255, 255, 0.95) !important;
+    background: rgba(255, 255, 255, 0.98) !important;
     border: 1px solid var(--ion-card-border) !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.02) !important;
-    backdrop-filter: blur(16px) !important;
-    -webkit-backdrop-filter: blur(16px) !important;
   }
   .dark header > .mobile-appbar-inner,
   .dark header > div.mobile-appbar-inner,
   .dark .ion-toolbar {
-    background: rgba(15, 23, 42, 0.95) !important;
+    background: rgba(15, 23, 42, 0.98) !important;
   }
 
   /* 3. MAIN CONTENT CONTAINER (Lapang, Ergonomis, & Anti-Mepet Tepi Layar) */
@@ -216,9 +214,7 @@
     border-radius: var(--ion-card-border-radius) !important;
     border: 1px solid var(--ion-card-border) !important;
     background: var(--ion-card-bg) !important;
-    backdrop-filter: blur(20px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04) !important;
     margin-bottom: 0.75rem !important;
     padding: 1.125rem 1rem !important;
     transition: all 0.15s ease !important;
@@ -440,12 +436,11 @@
     border-top-left-radius: 18px !important;
     border-top-right-radius: 18px !important;
     box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.08) !important;
-    background: rgba(255, 255, 255, 0.96) !important;
-    backdrop-filter: blur(16px) !important;
+    background: rgba(255, 255, 255, 0.98) !important;
     border-top: 1px solid var(--ion-card-border) !important;
   }
   .dark nav.fixed.bottom-0 {
-    background: rgba(2, 6, 23, 0.96) !important;
+    background: rgba(2, 6, 23, 0.98) !important;
     border-top-color: var(--ion-card-border) !important;
   }
 }

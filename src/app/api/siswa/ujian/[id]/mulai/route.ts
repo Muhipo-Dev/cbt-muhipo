@@ -96,20 +96,6 @@ export async function POST(
         }, { status: 400 });
       }
 
-      // Validasi Batas Kompensasi Keterlambatan Masuk Ujian (15 Menit sejak waktu mulai)
-      // Khusus untuk peserta yang baru pertama kali mulai / belum pernah mengerjakan
-      const isBelumMulai = !peserta || peserta.status === 'BELUM_MULAI';
-      const batasKompensasiMs = 15 * 60 * 1000; // 15 menit
-      const batasAkhirMasuk = new Date(scheduledStart.getTime() + batasKompensasiMs);
-
-      if (isBelumMulai && now > batasAkhirMasuk) {
-        const formattedBatas = batasAkhirMasuk.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-        return NextResponse.json({
-          success: false,
-          message: `Batas waktu toleransi keterlambatan masuk ujian telah berakhir (maksimal 15 menit setelah jadwal mulai, yaitu pukul ${formattedBatas} WIB). Silakan hubungi proktor ruang ujian.`,
-        }, { status: 403 });
-      }
-
       // Batas selesai ujian secara keseluruhan
       if (ujian.waktuSelesai) {
         const strictEnd = new Date(ujian.waktuSelesai);
@@ -154,10 +140,12 @@ export async function POST(
     }
 
     let currentSisaDetik = computedSisaDetik;
-    if (peserta.waktuMulai && peserta.status === 'SEDANG_MENGERJAKAN') {
-      const elapsedSinceStudentStart = Math.floor((now.getTime() - new Date(peserta.waktuMulai).getTime()) / 1000);
-      const studentRemaining = totalMaxDetik - elapsedSinceStudentStart;
-      currentSisaDetik = Math.max(0, Math.min(computedSisaDetik, studentRemaining));
+    if (peserta.status === 'SEDANG_MENGERJAKAN') {
+      if (peserta.waktuMulai) {
+        const elapsedSinceStudentStart = Math.floor((now.getTime() - new Date(peserta.waktuMulai).getTime()) / 1000);
+        const studentRemaining = totalMaxDetik - elapsedSinceStudentStart;
+        currentSisaDetik = Math.max(0, Math.min(computedSisaDetik, studentRemaining));
+      }
     }
 
     if (peserta.status === 'BELUM_MULAI' || peserta.status === 'RESET_LOGIN') {

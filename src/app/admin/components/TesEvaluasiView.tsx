@@ -30,6 +30,7 @@ export function TesEvaluasiView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'AI_EVALUATE_ANSWER',
+          pertanyaan: jawaban.soal?.pertanyaan || '',
           jawabanSiswa: jawaban.jawabanDipilih || '',
           rubrikKunci: jawaban.soal?.kunciJawabanTeks || '',
           tipeSoal: jawaban.soal?.tipeSoal || 'ESAI',
@@ -49,10 +50,11 @@ export function TesEvaluasiView({
           ...prev,
           [jawaban.id]: proposedScore,
         }))
-        showNotification('Saran Skor AI Diterapkan', `Rekomendasi AI Python: ${proposedScore} poin (${json.aiEvaluation.feedback || 'Kesesuaian rubrik teranalisis'})`, 'success')
+        const engineLabel = json.aiEvaluation.engine || 'AI Studio / Python'
+        showNotification('Saran Skor AI Diterapkan', `Rekomendasi ${engineLabel}: ${proposedScore} poin (${json.aiEvaluation.feedback || 'Kesesuaian rubrik teranalisis'})`, 'success')
       }
     } catch (e: any) {
-      showNotification('Gagal', 'Gagal memanggil Python AI Scorer: ' + e.message, 'error')
+      showNotification('Gagal', 'Gagal memanggil AI Scorer: ' + e.message, 'error')
     } finally {
       setAiLoadingId(null)
     }
@@ -272,16 +274,16 @@ export function TesEvaluasiView({
                             />
                             <span className="text-xs text-slate-400">/ {maxBobot} Poin</span>
 
-                            {/* Tombol Saran AI Python */}
+                            {/* Tombol Saran AI Studio / Python */}
                             <button
                               type="button"
                               onClick={() => handleRequestAiScore(jawaban)}
                               disabled={aiLoadingId === jawaban.id}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition shadow-2xs cursor-pointer"
-                              title="Hitung skor rekomendasi otomatis berbasis AI Python"
+                              title="Hitung skor rekomendasi otomatis berbasis AI Studio / AI Engine"
                             >
                               <Bot className={`w-3.5 h-3.5 ${aiLoadingId === jawaban.id ? 'animate-spin' : 'text-indigo-600 dark:text-indigo-400'}`} />
-                              <span>{aiLoadingId === jawaban.id ? 'Menganalisis...' : 'Saran AI Python'}</span>
+                              <span>{aiLoadingId === jawaban.id ? 'Menganalisis...' : 'Koreksi AI'}</span>
                             </button>
                           </div>
 
@@ -296,15 +298,15 @@ export function TesEvaluasiView({
                           </button>
                         </div>
 
-                        {/* Banner Feedback Hasil Evaluasi AI Python */}
+                        {/* Banner Feedback Hasil Evaluasi AI */}
                         {aiSuggestions[jawaban.id] && (
                           <div className="p-3 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-900 dark:text-indigo-200 space-y-1">
                             <div className="flex items-center gap-1.5 font-bold text-indigo-700 dark:text-indigo-300">
                               <Sparkles className="w-3.5 h-3.5" />
-                              <span>Analisis Semantik AI Python:</span>
+                              <span>Analisis Koreksi AI ({aiSuggestions[jawaban.id].engine || 'AI Engine'}):</span>
                             </div>
                             <p className="text-[11px] leading-relaxed">
-                              {aiSuggestions[jawaban.id].feedback || 'Jawaban dianalisis berdasarkan kesamaan kata kunci dan rubrik kunci jawaban.'}
+                              {aiSuggestions[jawaban.id].feedback || 'Jawaban dianalisis berdasarkan kesesuaian konsep rubrik kunci jawaban.'}
                             </p>
                           </div>
                         )}
