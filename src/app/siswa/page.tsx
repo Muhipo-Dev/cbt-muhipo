@@ -225,11 +225,8 @@ export default function SiswaPortalPage() {
   });
 
   return (
-    <div className="min-h-screen relative flex flex-col justify-between bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white transition-colors duration-300 overflow-x-hidden">
-      {/* Background Flat Kontras Tinggi (Ultra Cepat & Ringan) */}
-      <div className="fixed inset-0 -z-30 w-full h-full bg-slate-100 dark:bg-slate-950 pointer-events-none" />
-
-      {/* 3. Navbar */}
+    <div className="min-h-screen relative flex flex-col justify-between bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white overflow-x-hidden">
+      {/* Navbar Sejajar max-w-6xl */}
       <AppNavbar
         appTitle={pengaturan?.appTitle ? pengaturan.appTitle : 'CBT'}
         subtitle="Sistem Ujian SMA Muhammadiyah 1 Ponorogo"
@@ -240,363 +237,367 @@ export default function SiswaPortalPage() {
           username: siswa?.username,
         }}
         actions={
-          <div className="hidden sm:flex items-center gap-1 sm:gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/15 border border-blue-400/30 text-blue-700 dark:text-blue-200 font-bold text-xs shrink-0 backdrop-blur-md shadow-2xs">
-            <CalendarDays className="w-3.5 h-3.5 text-blue-600 dark:text-blue-300 shrink-0" />
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs shrink-0">
+            <CalendarDays className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
             <span>T.A {academicYear} ({semester})</span>
           </div>
         }
         onLogout={handleLogout}
       />
 
-      {/* 4. Main Content */}
-      <main className="p-3.5 sm:p-6 lg:p-8 max-w-6xl w-full mx-auto space-y-5 flex-1 relative z-10">
-        
-        {/* Banner Identitas Peserta */}
-        <div className="bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-xs backdrop-blur-xl flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 border border-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0">
-            <UserCheck className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate">
-              {siswa?.name || 'Memuat Data Siswa...'}
-            </h1>
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              <span>No. Peserta: <b className="text-blue-600 dark:text-blue-400 font-mono font-bold">{siswa?.nomorPeserta || siswa?.username || '-'}</b></span>
-              <span>•</span>
-              <span>Kelas: <b className="text-slate-800 dark:text-slate-200 font-semibold">{siswa?.kelas?.nama || siswa?.kelas || '-'}</b></span>
+      {/* Main Content (Sejajar Presisi Kiri-Kanan dengan Navbar, Tanpa Scroll-di-dalam-Scroll yang Miring/Offset) */}
+      <main className="px-3 sm:px-5 lg:px-6 py-4 sm:py-6 max-w-6xl w-full mx-auto space-y-4 flex-1">
+        {/* Panel Terpadu: Identitas Peserta + Filter Status + Pencarian */}
+        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                <UserCheck className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate">
+                  {siswa?.name || 'Memuat Data Peserta...'}
+                </h1>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  <span>
+                    No. Peserta:{' '}
+                    <b className="text-slate-900 dark:text-slate-100 font-mono">
+                      {siswa?.nomorPeserta || siswa?.username || '-'}
+                    </b>
+                  </span>
+                  <span className="text-slate-300 dark:text-slate-700">|</span>
+                  <span>
+                    Kelas:{' '}
+                    <b className="text-slate-900 dark:text-slate-100">
+                      {siswa?.kelas?.nama || siswa?.kelas || '-'}
+                    </b>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={fetchSiswaData}
+                className="min-h-[38px] px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5 cursor-pointer transition touch-manipulation"
+                title="Muat Ulang Jadwal Ujian"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
+                <span>Segarkan</span>
+              </button>
+              <a
+                href="/api/seb/config"
+                className="min-h-[38px] px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5 transition touch-manipulation"
+                title="Unduh file konfigurasi Safe Exam Browser (.seb)"
+              >
+                <Download className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span>Config SEB</span>
+              </a>
             </div>
           </div>
+
+          {/* Filter Tab & Search Input Sejajar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-0.5 md:pb-0">
+              {(
+                [
+                  { id: 'SEMUA', label: 'Semua', count: counts.semua },
+                  { id: 'SIAP', label: 'Siap Ujian', count: counts.siap },
+                  { id: 'TODAY', label: 'Hari Ini', count: counts.today },
+                  { id: 'ARSIP', label: 'Selesai', count: counts.arsip },
+                ] as const
+              ).map((tab) => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap inline-flex items-center gap-1.5 transition cursor-pointer touch-manipulation ${
+                      isActive
+                        ? 'bg-slate-900 dark:bg-blue-600 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${
+                        isActive
+                          ? 'bg-white/20 text-white'
+                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="relative w-full md:w-72 lg:w-80 shrink-0">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Cari mata pelajaran atau judul tes..."
+                className="w-full h-10 pl-9 pr-9 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-base sm:text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white dark:focus:bg-slate-900 transition"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  aria-label="Hapus pencarian"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Peringatan Tata Tertib Ujian Ringkas (Garis Aksen Kiri Tegas, Tanpa Gradien Berlebihan) */}
+        <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/90 dark:border-amber-900/60 border-l-4 border-l-amber-500 rounded-lg px-3.5 py-2.5 flex items-start sm:items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300">
+          <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+          <p className="leading-relaxed">
+            <b className="text-slate-900 dark:text-white">Tata Tertib Kiosk CBT:</b> Selama ujian berlangsung layar dikunci penuh. Dilarang keluar layar penuh atau berpindah aplikasi (batas maksimal <b>10x pelanggaran</b> sebelum akun terkunci otomatis).
+          </p>
         </div>
 
         {/* Notifikasi / Error Alert jika ada */}
         {actionError && (
-          <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2.5 shadow-xs">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
-            <span className="font-medium">{actionError}</span>
+          <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span className="font-medium flex-1">{actionError}</span>
             <button
               type="button"
               onClick={() => setActionError('')}
-              className="ml-auto text-rose-400 hover:text-rose-600"
+              className="p-1 text-rose-500 hover:text-rose-700 cursor-pointer"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         )}
 
-        {/* Peringatan Pengawasan CBT Ringkas & Elegan */}
-        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-3 sm:py-3 sm:px-4.5 shadow-xs backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5">
-          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
-            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
-              <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </div>
-            <div className="text-[11px] sm:text-xs text-slate-700 dark:text-slate-300 min-w-0 leading-relaxed">
-              <span className="font-bold text-amber-900 dark:text-amber-200 mr-1">
-                Peringatan!
-              </span>
-              <span>
-                Dilarang berpindah tab/aplikasi selama ujian. Akun otomatis terkunci jika mencapai batas maksimal <b>10x pelanggaran</b>.
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end pt-1 md:pt-0 border-t md:border-t-0 border-amber-500/15">
-            <a
-              href="/api/seb/config"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-[11px] font-bold text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition shadow-2xs"
-              title="Unduh file konfigurasi Safe Exam Browser (.seb) untuk iOS iPhone, iPad, Android, Mac & Windows"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <span>Config SEB (.seb)</span>
-              <Download className="w-3 h-3 ml-0.5 text-blue-500" />
-            </a>
-            <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/25 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
-              Anti-Curang Aktif
+        {/* Daftar Jadwal Ujian (Simetris Penuh Tanpa Offset Scrollbar Dalam) */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-0.5">
+            <span>
+              Menampilkan <b className="text-slate-900 dark:text-white">{filteredList.length}</b> jadwal ujian
+              {searchQuery && (
+                <span>
+                  {' '}untuk kata kunci &quot;<b className="text-blue-600 dark:text-blue-400">{searchQuery}</b>&quot;
+                </span>
+              )}
             </span>
           </div>
-        </div>
 
-        {/* Section: Search Bar Mandiri */}
-        <div className="bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-2.5 sm:p-3 shadow-xs backdrop-blur-xl">
-          <div className="relative w-full">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari tes (contoh: MTK, Penilaian Akhir, Nama Topik, Modul, Guru)..."
-              className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition shadow-inner"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer p-0.5"
-                title="Hapus Pencarian"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Kotak Area Soal / Jadwal Ujian (Scrollable Box) */}
-        <div className="bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs backdrop-blur-xl flex flex-col space-y-3.5">
-          {/* Header Info Kotak Soal */}
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pb-2.5 border-b border-slate-100 dark:border-slate-800/80">
-            <div className="font-medium">
-              Menampilkan <b className="text-slate-900 dark:text-white font-bold">{filteredList.length}</b> jadwal tes
+          {loading ? (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-16 text-center text-slate-500 dark:text-slate-400 text-xs space-y-2">
+              <RefreshCw className="w-5 h-5 animate-spin mx-auto text-blue-600" />
+              <div>Memuat jadwal ujian...</div>
+            </div>
+          ) : filteredList.length === 0 ? (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-14 px-6 text-center space-y-2.5">
+              <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 flex items-center justify-center mx-auto">
+                <CalendarX className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                {searchQuery ? 'Jadwal Ujian Tidak Ditemukan' : 'Belum Ada Jadwal Ujian'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                {searchQuery
+                  ? `Tidak ditemukan ujian dengan kata kunci "${searchQuery}".`
+                  : 'Saat ini belum ada jadwal ujian aktif untuk kelas Anda.'}
+              </p>
               {searchQuery && (
-                <span> untuk pencarian &quot;<b className="text-blue-600 dark:text-blue-400">{searchQuery}</b>&quot;</span>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-semibold transition cursor-pointer mt-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Reset Pencarian</span>
+                </button>
               )}
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {paginatedList.map((ujian) => {
+                const isFinished = ujian.statusPeserta === 'SELESAI';
+                const isWorking =
+                  ujian.statusPeserta === 'SEDANG_MENGERJAKAN' &&
+                  (ujian.sisaDetik === undefined || ujian.sisaDetik > 0);
+                const scheduledStart = ujian.waktuMulai ? new Date(ujian.waktuMulai) : null;
+                const scheduledEnd = ujian.waktuSelesai ? new Date(ujian.waktuSelesai) : null;
+                const now = serverClock.date;
+                const isNotStartedYet = scheduledStart ? now < scheduledStart : false;
+                const isExpired = !isWorking && (scheduledEnd ? now > scheduledEnd : false);
 
-          {/* Isi Kotak yang Dapat Di-Scroll Lancar di Ponsel */}
-          <div className="max-h-[68dvh] sm:max-h-[560px] overflow-y-auto overscroll-contain custom-scrollbar pr-1 sm:pr-1.5 space-y-4">
-            {loading ? (
-              <div className="text-center py-16 text-slate-400 text-xs animate-pulse space-y-2">
-                <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-500" />
-                <div>Memuat daftar jadwal tes untuk Anda...</div>
-              </div>
-            ) : filteredList.length === 0 ? (
-              /* Empty State */
-              <div className="text-center py-14 p-6 sm:p-8 space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/5 text-slate-400 flex items-center justify-center mx-auto">
-                  <CalendarX className="w-6 h-6" />
-                </div>
-                <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-200">
-                  {searchQuery
-                    ? 'Tidak Ditemukan Jadwal Tes yang Cocok'
-                    : 'Belum Ada Jadwal Ujian Aktif'}
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-                  {searchQuery
-                    ? `Tidak ada jadwal tes dengan kata kunci "${searchQuery}". Silakan periksa ejaan atau hapus kata kunci pencarian.`
-                    : 'Saat ini belum ada jadwal ujian yang ditugaskan untuk akun Anda.'}
-                </p>
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 text-blue-600 dark:text-blue-300 text-xs font-bold transition cursor-pointer mt-1"
+                const dateStartStr = scheduledStart
+                  ? scheduledStart.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                  : '-';
+                const timeStartStr = scheduledStart
+                  ? scheduledStart.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                  : '';
+                const timeEndStr = scheduledEnd
+                  ? scheduledEnd.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                  : '';
+
+                return (
+                  <div
+                    key={ujian.ujianId || ujian.pesertaUjianId}
+                    className={`bg-white dark:bg-slate-900 border rounded-xl p-4 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors flex flex-col justify-between ${
+                      isWorking
+                        ? 'border-amber-400 dark:border-amber-600/70'
+                        : ujian.isReady
+                        ? 'border-blue-300 dark:border-blue-800'
+                        : 'border-slate-200 dark:border-slate-800'
+                    }`}
                   >
-                    <X className="w-3.5 h-3.5" />
-                    <span>Hapus Pencarian</span>
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 pb-1">
-                {paginatedList.map((ujian) => {
-                  const isFinished = ujian.statusPeserta === 'SELESAI';
-                  const isWorking = ujian.statusPeserta === 'SEDANG_MENGERJAKAN' && (ujian.sisaDetik === undefined || ujian.sisaDetik > 0);
-                  const scheduledStart = ujian.waktuMulai ? new Date(ujian.waktuMulai) : null;
-                  const scheduledEnd = ujian.waktuSelesai ? new Date(ujian.waktuSelesai) : null;
-                  const now = serverClock.date;
-                  const isNotStartedYet = scheduledStart ? now < scheduledStart : false;
-                  const isExpired = !isWorking && (scheduledEnd ? now > scheduledEnd : false);
+                    <div className="space-y-3">
+                      {/* Header Card: Modul & Status Badge */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 truncate max-w-[150px]">
+                          {ujian.modulNama && ujian.modulNama !== 'Default' ? ujian.modulNama : 'Ujian CBT'}
+                        </span>
 
-                  // Format date & time
-                  const dateStartStr = scheduledStart
-                    ? scheduledStart.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-                    : '-';
-                  const timeStartStr = scheduledStart
-                    ? scheduledStart.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-                    : '';
-                  const timeEndStr = scheduledEnd
-                    ? scheduledEnd.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-                    : '';
-
-                  return (
-                    <div
-                      key={ujian.ujianId || ujian.pesertaUjianId}
-                      className={`bg-slate-50/80 dark:bg-slate-950/60 border rounded-2xl p-4 shadow-2xs hover:shadow-sm hover:border-blue-500/50 transition-all flex flex-col justify-between group ${
-                        isFinished
-                          ? 'border-emerald-500/30 dark:border-emerald-500/20'
-                          : isWorking
-                          ? 'border-amber-500/40 dark:border-amber-500/30 ring-1 ring-amber-500/20'
-                          : ujian.isReady
-                          ? 'border-blue-500/40 dark:border-blue-500/30 ring-1 ring-blue-500/20'
-                          : 'border-slate-200/90 dark:border-slate-800'
-                      }`}
-                    >
-                      <div className="space-y-2.5">
-                        {/* Header Card: Modul & Status Badge */}
-                        <div className="flex justify-between items-start gap-2">
-                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                            {ujian.modulNama && ujian.modulNama !== 'Default' ? (
-                              <span className="text-[11px] font-bold text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-600/15 border border-blue-200 dark:border-blue-400/20 truncate max-w-[150px]">
-                                {ujian.modulNama}
-                              </span>
-                            ) : (
-                              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                                Ujian CBT
-                              </span>
-                            )}
-                          </div>
-
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 flex items-center gap-1 ${
-                              isFinished
-                                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
-                                : isWorking
-                                ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30 animate-pulse'
-                                : isNotStartedYet
-                                ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
-                                : isExpired
-                                ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
-                                : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30'
-                            }`}
-                          >
-                            {isFinished
-                              ? '✓ SELESAI'
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide shrink-0 border ${
+                            isFinished
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
                               : isWorking
-                              ? 'SEDANG DIKERJAKAN'
+                              ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border-amber-200 dark:border-amber-800'
                               : isNotStartedYet
-                              ? 'BELUM DIBUKA'
+                              ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                               : isExpired
-                              ? 'WAKTU HABIS'
-                              : 'SIAP DIKERJAKAN'}
-                          </span>
-                        </div>
-
-                        {/* Judul Ujian */}
-                        <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2">
-                          {ujian.judul}
-                        </h3>
-
-                        {/* Metadata Detail */}
-                        <div className="space-y-1.5 text-[11px] text-slate-600 dark:text-slate-300 pt-0.5">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                            <span className="truncate font-semibold">{ujian.mataPelajaran || 'Mata Pelajaran'}</span>
-                          </div>
-
-                          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                              <span>{ujian.durasiMenit} Menit</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {ujian.jumlahSoal !== undefined && (
-                                <div className="flex items-center gap-1">
-                                  <FileQuestion className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-                                  <span>{ujian.jumlahSoal} Soal</span>
-                                </div>
-                              )}
-                              {ujian.minJawaban && (
-                                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 px-1.5 py-0.2 rounded">
-                                  Min: {ujian.minJawaban} Jwb
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {ujian.waktuMulai && (
-                            <div className="flex items-center gap-1 text-[10.5px] text-slate-500 dark:text-slate-400 bg-white/70 dark:bg-slate-900/60 p-1.5 rounded-lg border border-slate-100 dark:border-white/5">
-                              <CalendarDays className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                              <span className="truncate">
-                                {dateStartStr} ({timeStartStr} {timeEndStr ? `- ${timeEndStr}` : ''})
-                              </span>
-                            </div>
-                          )}
-                        </div>
+                              ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                              : 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                          }`}
+                        >
+                          {isFinished
+                            ? 'Selesai'
+                            : isWorking
+                            ? 'Berlangsung'
+                            : isNotStartedYet
+                            ? 'Belum Dibuka'
+                            : isExpired
+                            ? 'Berakhir'
+                            : 'Siap Ujian'}
+                        </span>
                       </div>
 
-                      {/* Bagian Bawah: Skor / Tombol Aksi */}
-                      <div className="pt-3 border-t border-slate-200/80 dark:border-white/5 mt-3 space-y-2">
-                        {isFinished ? (
-                          <>
-                            {ujian.tampilkanHasil ? (
-                              ujian.isHanyaPG || ujian.isKoreksiSelesai ? (
-                                <div className="p-2.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-500/30 flex items-center justify-between">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
-                                      <Award className="w-4 h-4" />
-                                    </div>
-                                    <div className="min-w-0 truncate">
-                                      <div className="text-[10.5px] font-semibold text-emerald-800 dark:text-emerald-300 truncate">
-                                        {ujian.isHanyaPG ? 'Nilai PG Otomatis' : 'Nilai Akhir Ujian'}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="text-right shrink-0">
-                                    <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
-                                      {ujian.nilaiTotal ?? ujian.nilaiPG ?? 0}
-                                    </span>
-                                    <span className="text-[9px] font-medium text-slate-400 ml-0.5">/100</span>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="p-2.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-500/30 flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0">
-                                      <Award className="w-4 h-4" />
-                                    </div>
-                                    <div>
-                                      <div className="text-[10px] font-semibold text-blue-800 dark:text-blue-300">
-                                        Skor PG: <b className="font-mono">{ujian.nilaiPG ?? 0}</b>
-                                      </div>
-                                      <div className="text-[9px] text-amber-600 dark:text-amber-400">
-                                        Koreksi esai berjalan
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-[9px] font-bold">
-                                    Proses
-                                  </span>
-                                </div>
-                              )
-                            ) : (
-                              <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 flex items-center justify-between text-[11px]">
-                                <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                                  Ujian Telah Selesai
-                                </span>
-                                <span className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">
-                                  Tuntas
-                                </span>
-                              </div>
-                            )}
-                          </>
-                        ) : isNotStartedYet ? (
-                          <button
-                            type="button"
-                            disabled
-                            className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold text-xs flex items-center justify-center gap-2 cursor-not-allowed opacity-80"
-                          >
-                            <Lock className="w-3.5 h-3.5" />
-                            <span>Dibuka {timeStartStr} WIB</span>
-                          </button>
-                        ) : isExpired ? (
-                          <div className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
-                            Jadwal Ujian Telah Berakhir
+                      {/* Judul Ujian & Mapel */}
+                      <div>
+                        <h3 className="text-sm sm:text-[15px] font-bold text-slate-900 dark:text-white leading-snug line-clamp-2">
+                          {ujian.judul}
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate flex items-center gap-1.5">
+                          <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{ujian.mataPelajaran || 'Mata Pelajaran'}</span>
+                        </p>
+                      </div>
+
+                      {/* Tabel Info Ringkas Terstruktur */}
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-300">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{ujian.durasiMenit} Menit</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <FileQuestion className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{ujian.jumlahSoal ?? '-'} Soal</span>
+                        </div>
+                        {ujian.waktuMulai && (
+                          <div className="col-span-2 flex items-center gap-1.5 text-slate-500 dark:text-slate-400 truncate">
+                            <CalendarDays className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">
+                              {dateStartStr} • {timeStartStr}{timeEndStr ? `–${timeEndStr}` : ''} WIB
+                            </span>
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleStartExam(ujian.ujianId || ujian.id)}
-                            disabled={actionLoading}
-                            className="min-h-[44px] w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 cursor-pointer transition disabled:opacity-50 active:scale-[0.98] touch-manipulation"
-                          >
-                            <Play className="w-3.5 h-3.5 fill-white" />
-                            <span>{isWorking ? 'Lanjutkan Ujian' : 'Kerjakan Ujian'}</span>
-                            <ChevronRight className="w-3.5 h-3.5 ml-auto" />
-                          </button>
                         )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
 
-          {/* Pagination Controls di dalam Kotak */}
+                    {/* Bagian Bawah: Skor / Tombol Aksi */}
+                    <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800">
+                      {isFinished ? (
+                        ujian.tampilkanHasil ? (
+                          ujian.isHanyaPG || ujian.isKoreksiSelesai ? (
+                            <div className="px-3 py-2 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
+                              <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                                <Award className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span>Nilai Akhir</span>
+                              </span>
+                              <span className="text-sm font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                                {ujian.nilaiTotal ?? ujian.nilaiPG ?? 0}
+                                <span className="text-[10px] font-normal text-slate-500">/100</span>
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                              <span className="text-slate-600 dark:text-slate-300">
+                                Skor PG: <b className="font-mono">{ujian.nilaiPG ?? 0}</b>
+                              </span>
+                              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                                Menunggu Koreksi Esai
+                              </span>
+                            </div>
+                          )
+                        ) : (
+                          <div className="min-h-[40px] px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                            <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5 font-medium">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                              <span>Jawaban Terkumpul</span>
+                            </span>
+                            <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">
+                              Tuntas
+                            </span>
+                          </div>
+                        )
+                      ) : isNotStartedYet ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="min-h-[42px] w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-not-allowed"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Dibuka Pukul {timeStartStr} WIB</span>
+                        </button>
+                      ) : isExpired ? (
+                        <div className="min-h-[42px] w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-xs font-medium text-slate-500 dark:text-slate-400">
+                          Jadwal Berakhir
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleStartExam(ujian.ujianId || ujian.id)}
+                          disabled={actionLoading}
+                          className={`min-h-[44px] w-full py-2.5 px-4 rounded-lg text-white font-semibold text-xs flex items-center justify-center gap-2 cursor-pointer transition disabled:opacity-50 active:scale-[0.99] touch-manipulation ${
+                            isWorking
+                              ? 'bg-amber-600 hover:bg-amber-700'
+                              : 'bg-blue-600 hover:bg-blue-700'
+                          }`}
+                        >
+                          <Play className="w-3.5 h-3.5 fill-white" />
+                          <span>{isWorking ? 'Lanjutkan Ujian' : 'Mulai Kerjakan'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Pagination Controls */}
           {totalPages > 1 && (
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="pt-3 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="text-xs text-slate-500 dark:text-slate-400">
-                Halaman <b className="text-slate-900 dark:text-white font-bold">{currentPage}</b> dari{' '}
-                <b className="text-slate-900 dark:text-white font-bold">{totalPages}</b>
+                Halaman <b className="text-slate-900 dark:text-white">{currentPage}</b> dari{' '}
+                <b className="text-slate-900 dark:text-white">{totalPages}</b>
               </div>
 
               <div className="flex items-center gap-1">
@@ -604,7 +605,7 @@ export default function SiswaPortalPage() {
                   type="button"
                   onClick={() => setCurrentPage(1)}
                   disabled={currentPage === 1}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
                   title="Halaman Pertama"
                 >
                   <ChevronsLeft className="w-4 h-4" />
@@ -614,13 +615,12 @@ export default function SiswaPortalPage() {
                   type="button"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
                   title="Sebelumnya"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
 
-                {/* Page Number Buttons */}
                 {Array.from({ length: totalPages }, (_, idx) => idx + 1)
                   .filter((p) => Math.abs(p - currentPage) <= 2 || p === 1 || p === totalPages)
                   .map((pageNum, idx, arr) => {
@@ -633,10 +633,10 @@ export default function SiswaPortalPage() {
                         <button
                           type="button"
                           onClick={() => setCurrentPage(pageNum)}
-                          className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          className={`min-w-[36px] min-h-[36px] rounded-lg text-xs font-bold transition cursor-pointer border ${
                             currentPage === pageNum
-                              ? 'bg-blue-600 text-white shadow-xs'
-                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                           }`}
                         >
                           {pageNum}
@@ -649,7 +649,7 @@ export default function SiswaPortalPage() {
                   type="button"
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
                   title="Selanjutnya"
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -659,7 +659,7 @@ export default function SiswaPortalPage() {
                   type="button"
                   onClick={() => setCurrentPage(totalPages)}
                   disabled={currentPage === totalPages}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
                   title="Halaman Terakhir"
                 >
                   <ChevronsRight className="w-4 h-4" />
@@ -667,10 +667,9 @@ export default function SiswaPortalPage() {
               </div>
             </div>
           )}
-        </div>
+        </section>
       </main>
 
-      {/* 5. AppFooter */}
       <AppFooter />
     </div>
   );

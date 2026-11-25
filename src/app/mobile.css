@@ -8,9 +8,9 @@
 :root {
   --cbt-mobile-bg: #f8fafc;
   --cbt-mobile-card-bg: #ffffff;
-  --cbt-mobile-radius: 1.125rem;
+  --cbt-mobile-radius: 0.625rem;
   --cbt-mobile-touch-size: 44px;
-  --cbt-mobile-nav-height: 56px;
+  --cbt-mobile-nav-height: 54px;
   --cbt-mobile-sheet-bg: #ffffff;
 }
 
@@ -46,13 +46,13 @@
     cursor: pointer;
   }
 
-  /* Form Input Optimization (Prevent automatic Safari/Chrome iOS & Android Zoom & Overlap) */
-  input, 
-  select, 
+  /* Form Input Optimization (Prevent automatic Safari/Chrome iOS & Android Zoom) */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
   textarea {
     font-size: 16px !important;
     touch-action: auto !important;
-    border-radius: 0.75rem;
+    border-radius: 0.5rem;
   }
 
   /* Smooth momentum scrolling on mobile containers */
