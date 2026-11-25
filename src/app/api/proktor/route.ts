@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser, hashPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { runAIProctorAnalysis } from '@/lib/pythonBridge';
+import { getCalibratedServerNow, computeAccurateExamRemainingSeconds } from '@/lib/exam-time';
+import { TipeSoal } from '@/lib/enums';
+import { matchIsianSingkat, matchPGKompleks, matchMenjodohkan } from '@/lib/cbt-scoring';
 
 export async function GET(request: NextRequest) {
   try {
@@ -129,7 +132,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const now = new Date();
+    const now = await getCalibratedServerNow();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
@@ -218,8 +221,27 @@ export async function GET(request: NextRequest) {
           return Boolean(val && val !== '[]' && val !== '{}');
         }).length;
 
+        const liveSisaDetik = computeAccurateExamRemainingSeconds({
+          now,
+          durasiMenit: activeUjian.durasiMenit,
+          jadwalSelesai: activeUjian.waktuSelesai,
+          pesertaWaktuMulai: p.waktuMulai,
+          pesertaSisaDetikTersimpan: p.sisaDetik,
+          pesertaUpdatedAt: p.updatedAt,
+          pesertaStatus: p.status,
+        });
+
+        let totalSoalPeserta = 0;
+        if (p.urutanSoalIds) {
+          try {
+            const parsedIds = JSON.parse(p.urutanSoalIds);
+            if (Array.isArray(parsedIds)) totalSoalPeserta = parsedIds.length;
+          } catch {}
+        }
+
         return {
           pesertaUjianId: p.id,
+          ujianId: p.ujianId,
           siswaId: p.siswa.id,
           nomorPeserta: p.siswa.nomorPeserta || '-',
           username: p.siswa.username,
@@ -228,7 +250,8 @@ export async function GET(request: NextRequest) {
           kelas: p.siswa.kelas?.nama || '-',
           status: p.status,
           jumlahJawaban: validAnswerCount,
-          sisaDetik: p.sisaDetik,
+          totalSoal: totalSoalPeserta,
+          sisaDetik: liveSisaDetik,
           ipAddress: p.ipAddress || '-',
           logsTerakhir: p.logs,
           violationLogs,
@@ -334,11 +357,56 @@ export async function POST(request: NextRequest) {
 
     if (action === 'RESET_LOGIN') {
       const { pesertaUjianId } = body;
+      if (!pesertaUjianId) {
+        return NextResponse.json({ success: false, message: 'pesertaUjianId diperlukan' }, { status: 400 });
+      }
+      const existingPu = await prisma.pesertaUjian.findUnique({
+        where: { id: pesertaUjianId },
+        include: { siswa: true, ujian: true },
+      });
+      if (!existingPu) {
+        return NextResponse.json({ success: false, message: 'Data peserta ujian tidak ditemukan' }, { status: 404 });
+      }
+      if (existingPu.status === 'SELESAI') {
+        return NextResponse.json({
+          success: false,
+          message: `Siswa "${existingPu.siswa.name}" sudah menyelesaikan ujian. Jawaban dan nilai telah dikunci.`,
+        }, { status: 400 });
+      }
+
+      // Hitung & simpan sisa waktu akurat saat ini sebelum diset ke RESET_LOGIN agar tidak hilang sedikitpun!
+      const now = await getCalibratedServerNow();
+      const preservedSeconds = computeAccurateExamRemainingSeconds({
+        now,
+        durasiMenit: existingPu.ujian.durasiMenit,
+        jadwalSelesai: existingPu.ujian.waktuSelesai,
+        pesertaWaktuMulai: existingPu.waktuMulai,
+        pesertaSisaDetikTersimpan: existingPu.sisaDetik,
+        pesertaUpdatedAt: existingPu.updatedAt,
+        pesertaStatus: existingPu.status,
+      });
+
       await prisma.pesertaUjian.update({
         where: { id: pesertaUjianId },
-        data: { status: 'RESET_LOGIN' },
+        data: {
+          status: 'RESET_LOGIN',
+          sisaDetik: preservedSeconds,
+        },
       });
-      return NextResponse.json({ success: true, message: 'Status peserta berhasil direset ke RESET_LOGIN' });
+
+      await prisma.logAktivitasUjian.create({
+        data: {
+          userId: user.userId,
+          pesertaUjianId,
+          aktivitas: 'RESET_LOGIN_BY_PROKTOR',
+          detail: `Pengawas (${user.name}) mereset sesi login siswa ${existingPu.siswa.name}. Seluruh jawaban tetap tersimpan aman.`,
+        },
+      }).catch(() => {});
+
+      return NextResponse.json({
+        success: true,
+        message: `Sesi login "${existingPu.siswa.name}" berhasil direset! Siswa dapat login kembali di perangkat baru/lama dan melanjutkan jawaban sebelumnya.`,
+      });
     }
 
     if (action === 'RESET_ALL_LOGINS') {
@@ -346,11 +414,14 @@ export async function POST(request: NextRequest) {
       if (!ujianId) {
         return NextResponse.json({ success: false, message: 'ujianId diperlukan' }, { status: 400 });
       }
-      await prisma.pesertaUjian.updateMany({
-        where: { ujianId, status: { not: 'SELESAI' } },
+      const res = await prisma.pesertaUjian.updateMany({
+        where: { ujianId, status: { notIn: ['SELESAI', 'BELUM_MULAI'] } },
         data: { status: 'RESET_LOGIN' },
       });
-      return NextResponse.json({ success: true, message: 'Seluruh siswa yang belum selesai berhasil direset status loginnya.' });
+      return NextResponse.json({
+        success: true,
+        message: `Berhasil mereset status login untuk ${res.count} peserta yang sedang aktif agar dapat login kembali.`,
+      });
     }
 
     if (action === 'LOCK_EXAM') {
@@ -371,7 +442,7 @@ export async function POST(request: NextRequest) {
           detail: `Proktor (${user.name}) mengunci lembar ujian siswa ${pu.siswa.name}.`,
         },
       });
-      return NextResponse.json({ success: true, message: `Ujian ${pu.siswa.name} berhasil dikunci.` });
+      return NextResponse.json({ success: true, message: `Lembar ujian "${pu.siswa.name}" berhasil dikunci.` });
     }
 
     if (action === 'UNLOCK_EXAM') {
@@ -379,6 +450,26 @@ export async function POST(request: NextRequest) {
       if (!pesertaUjianId) {
         return NextResponse.json({ success: false, message: 'pesertaUjianId diperlukan' }, { status: 400 });
       }
+
+      // PENTING: Ketika Proktor membuka kunci ujian (UNLOCK_EXAM), bersihkan juga log pelanggaran lama yang membuat
+      // pelanggaran >= 10 agar akun siswa tidak langsung terkunci lagi saat terjadi 1 event adaptasi!
+      await prisma.logAktivitasUjian.deleteMany({
+        where: {
+          pesertaUjianId,
+          aktivitas: {
+            in: [
+              'TAB_SWITCH_ALERT',
+              'APP_SWITCH_ALERT',
+              'WINDOW_BLUR',
+              'FULLSCREEN_EXIT',
+              'SCREEN_SHARE_STOPPED',
+              'KEYBOARD_SHORTCUT_VIOLATION',
+              'SECURITY_ALERT',
+            ],
+          },
+        },
+      });
+
       const pu = await prisma.pesertaUjian.update({
         where: { id: pesertaUjianId },
         data: { status: 'SEDANG_MENGERJAKAN' },
@@ -389,19 +480,144 @@ export async function POST(request: NextRequest) {
           userId: user.userId,
           pesertaUjianId,
           aktivitas: 'EXAM_UNLOCKED_BY_PROKTOR',
-          detail: `Proktor (${user.name}) membuka kunci lembar ujian siswa ${pu.siswa.name}.`,
+          detail: `Proktor (${user.name}) membuka kunci lembar ujian & mereset toleransi pelanggaran siswa ${pu.siswa.name}.`,
         },
       });
-      return NextResponse.json({ success: true, message: `Kunci ujian ${pu.siswa.name} berhasil dibuka.` });
+      return NextResponse.json({
+        success: true,
+        message: `Kunci ujian "${pu.siswa.name}" berhasil dibuka dan toleransi pelanggaran telah dipulihkan.`,
+      });
     }
 
     if (action === 'FORCE_FINISH' || action === 'FINISH_FORCE') {
       const { pesertaUjianId } = body;
+      if (!pesertaUjianId) {
+        return NextResponse.json({ success: false, message: 'pesertaUjianId diperlukan' }, { status: 400 });
+      }
+
+      const pesertaUjian = await prisma.pesertaUjian.findUnique({
+        where: { id: pesertaUjianId },
+        include: {
+          siswa: true,
+          ujian: {
+            include: {
+              mataPelajaran: {
+                include: {
+                  soalList: { include: { opsiJawaban: true } },
+                },
+              },
+            },
+          },
+          jawabanPeserta: true,
+        },
+      });
+
+      if (!pesertaUjian) {
+        return NextResponse.json({ success: false, message: 'Data peserta ujian tidak ditemukan' }, { status: 404 });
+      }
+
+      // Hitung nilai otomatis dari jawaban yang sudah masuk agar nilai siswa TIDAK menjadi 0 saat diselesaikan paksa!
+      let soalList = pesertaUjian.ujian.mataPelajaran.soalList;
+      if (pesertaUjian.urutanSoalIds) {
+        try {
+          const orderIds = JSON.parse(pesertaUjian.urutanSoalIds);
+          if (Array.isArray(orderIds) && orderIds.length > 0) {
+            const orderSet = new Set(orderIds);
+            soalList = soalList.filter((s) => orderSet.has(s.id));
+          }
+        } catch {}
+      }
+
+      const jawabanMap = new Map(pesertaUjian.jawabanPeserta.map((j) => [j.soalId, j]));
+      let totalNilaiPG = 0;
+      let maxNilaiObjektif = 0;
+      let totalBobotEsai = 0;
+      let adaSoalEsai = false;
+
+      for (const soal of soalList) {
+        const jawaban = jawabanMap.get(soal.id);
+        const bobot = soal.bobot || 1.0;
+
+        if (soal.tipeSoal === TipeSoal.PG || soal.tipeSoal === TipeSoal.BENAR_SALAH) {
+          maxNilaiObjektif += bobot;
+          const opsiBenar = soal.opsiJawaban.find((o) => o.isBenar);
+          const isBenar = Boolean(jawaban && opsiBenar && jawaban.jawabanDipilih === opsiBenar.id);
+          const skor = isBenar ? bobot : 0;
+          if (isBenar) totalNilaiPG += bobot;
+          if (jawaban) {
+            await prisma.jawabanPeserta.update({ where: { id: jawaban.id }, data: { isBenar, skor } });
+          }
+        } else if (soal.tipeSoal === TipeSoal.PG_KOMPLEKS) {
+          maxNilaiObjektif += bobot;
+          let chosenIds: string[] = [];
+          try {
+            if (jawaban?.jawabanDipilih) chosenIds = JSON.parse(jawaban.jawabanDipilih);
+          } catch {}
+          const matchResult = matchPGKompleks(chosenIds, soal.opsiJawaban, bobot);
+          totalNilaiPG += matchResult.skor;
+          if (jawaban) {
+            await prisma.jawabanPeserta.update({
+              where: { id: jawaban.id },
+              data: { isBenar: matchResult.isBenar, skor: matchResult.skor },
+            });
+          }
+        } else if (soal.tipeSoal === TipeSoal.ISIAN) {
+          maxNilaiObjektif += bobot;
+          const isBenar = matchIsianSingkat(jawaban?.jawabanDipilih || '', soal.kunciJawabanTeks || '');
+          const skor = isBenar ? bobot : 0;
+          if (isBenar) totalNilaiPG += bobot;
+          if (jawaban) {
+            await prisma.jawabanPeserta.update({ where: { id: jawaban.id }, data: { isBenar, skor } });
+          }
+        } else if (soal.tipeSoal === TipeSoal.MENJODOHKAN) {
+          maxNilaiObjektif += bobot;
+          const matchResult = matchMenjodohkan(jawaban?.jawabanDipilih || undefined, soal.matchingData || undefined, bobot);
+          totalNilaiPG += matchResult.skor;
+          if (jawaban) {
+            await prisma.jawabanPeserta.update({
+              where: { id: jawaban.id },
+              data: { isBenar: matchResult.isBenar, skor: matchResult.skor },
+            });
+          }
+        } else if (soal.tipeSoal === TipeSoal.ESAI) {
+          adaSoalEsai = true;
+          totalBobotEsai += bobot;
+        }
+      }
+
+      const mapel = pesertaUjian.ujian.mataPelajaran;
+      const maxNilai = mapel.nilaiMaksimal ?? 100.0;
+      const minNilai = mapel.nilaiMinimal ?? 0.0;
+      const totalBobotAssigned = maxNilaiObjektif + totalBobotEsai;
+      const rawTotalPG =
+        totalBobotAssigned > 0 ? Number(((totalNilaiPG / totalBobotAssigned) * maxNilai).toFixed(2)) : totalNilaiPG;
+      const finalNilaiPG = Math.min(maxNilai, Math.max(minNilai, rawTotalPG));
+
       await prisma.pesertaUjian.update({
         where: { id: pesertaUjianId },
-        data: { status: 'SELESAI', waktuSelesai: new Date(), sisaDetik: 0 },
+        data: {
+          status: 'SELESAI',
+          waktuSelesai: new Date(),
+          sisaDetik: 0,
+          nilaiPG: finalNilaiPG,
+          nilaiTotal: finalNilaiPG,
+          isKoreksiSelesai: !adaSoalEsai,
+        },
       });
-      return NextResponse.json({ success: true, message: 'Ujian peserta berhasil diselesaikan paksa.' });
+
+      await prisma.logAktivitasUjian.create({
+        data: {
+          userId: user.userId,
+          pesertaUjianId,
+          aktivitas: 'FORCE_FINISH_BY_PROKTOR',
+          detail: `Proktor (${user.name}) menyelesaikan paksa ujian ${pesertaUjian.siswa.name}. Nilai objektif terhitung: ${finalNilaiPG}.`,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Ujian "${pesertaUjian.siswa.name}" berhasil diselesaikan paksa & dinilai otomatis (Skor: ${finalNilaiPG}).`,
+      });
     }
 
     if (action === 'RESET_PELANGGARAN') {
@@ -498,11 +714,24 @@ export async function POST(request: NextRequest) {
     if (action === 'ADD_TIME' || action === 'ADD_EXTRA_TIME') {
       const { pesertaUjianId, extraMinutes } = body;
       const extraSeconds = (Number(extraMinutes) || 15) * 60;
-      const current = await prisma.pesertaUjian.findUnique({ where: { id: pesertaUjianId } });
+      const current = await prisma.pesertaUjian.findUnique({
+        where: { id: pesertaUjianId },
+        include: { ujian: true },
+      });
       if (current) {
+        const now = await getCalibratedServerNow();
+        const baseRemaining = computeAccurateExamRemainingSeconds({
+          now,
+          durasiMenit: current.ujian.durasiMenit,
+          jadwalSelesai: current.ujian.waktuSelesai,
+          pesertaWaktuMulai: current.waktuMulai,
+          pesertaSisaDetikTersimpan: current.sisaDetik,
+          pesertaUpdatedAt: current.updatedAt,
+          pesertaStatus: current.status,
+        });
         await prisma.pesertaUjian.update({
           where: { id: pesertaUjianId },
-          data: { sisaDetik: (current.sisaDetik || 0) + extraSeconds },
+          data: { sisaDetik: baseRemaining + extraSeconds },
         });
       }
       return NextResponse.json({ success: true, message: `Berhasil menambahkan waktu ${extraMinutes} menit.` });

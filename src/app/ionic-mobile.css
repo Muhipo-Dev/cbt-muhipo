@@ -83,12 +83,21 @@
   }
 
   /* 2. TOP APPBAR & TOOLBAR (Ionic Header) */
-  header,
+  header:not(#cbt-exam-header),
   .ion-header,
   .mobile-appbar {
     padding-top: max(0.5rem, var(--ion-safe-area-top)) !important;
     padding-left: max(1.25rem, calc(var(--ion-safe-area-left) + 1.25rem)) !important;
     padding-right: max(1.25rem, calc(var(--ion-safe-area-right) + 1.25rem)) !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 45 !important;
+  }
+
+  header#cbt-exam-header {
+    padding-top: max(0.375rem, var(--ion-safe-area-top)) !important;
+    padding-left: max(0.625rem, calc(var(--ion-safe-area-left) + 0.625rem)) !important;
+    padding-right: max(0.625rem, calc(var(--ion-safe-area-right) + 0.625rem)) !important;
     position: sticky !important;
     top: 0 !important;
     z-index: 45 !important;
@@ -371,11 +380,11 @@
     box-sizing: border-box !important;
   }
 
-  /* 8. BUTTON GROUPS & ACTION BARS (Jarak Pas, Rapi, & Simetris) */
-  .flex.items-center.gap-1\.5,
-  .flex.items-center.gap-2,
-  .flex.items-center.gap-2\.5,
-  .flex.items-center.gap-3,
+  /* 8. BUTTON GROUPS & ACTION BARS (Jarak Pas, Rapi, & Simetris - Kecualikan Header Compact Lembar Ujian) */
+  :not(#cbt-exam-root *) > .flex.items-center.gap-1\.5,
+  :not(#cbt-exam-root *) > .flex.items-center.gap-2,
+  :not(#cbt-exam-root *) > .flex.items-center.gap-2\.5,
+  :not(#cbt-exam-root *) > .flex.items-center.gap-3,
   .flex.flex-wrap.items-center.gap-2,
   .flex.flex-wrap.items-center.gap-2\.5 {
     gap: 0.625rem !important;
@@ -409,8 +418,8 @@
     box-sizing: border-box !important;
   }
 
-  /* 9. MODALS & SHEETS */
-  [role="dialog"] {
+  /* 9. MODALS & SHEETS (Kecualikan Fullscreen Lightbox ImageZoomModal) */
+  [role="dialog"]:not(#cbt-image-zoom-lightbox) {
     max-width: 95vw !important;
     width: 95vw !important;
     border-radius: 20px !important;

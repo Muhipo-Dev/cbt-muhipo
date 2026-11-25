@@ -65,6 +65,7 @@ export default function ComprehensiveAdminDashboard() {
   const [siswaList, setSiswaList] = useState<any[]>([])
   const [ujianList, setUjianList] = useState<any[]>([])
   const [selectedMapelId, setSelectedMapelId] = useState<string>('')
+  const [selectedProktorUjianId, setSelectedProktorUjianId] = useState<string>('')
 
   // Modal Extra Time State
   const [extraTimeModal, setExtraTimeModal] = useState<any>(null)
@@ -171,10 +172,16 @@ export default function ComprehensiveAdminDashboard() {
       }
 
       // 3. Proktor Live Data
-      const proktorRes = await fetch('/api/proktor')
+      const proktorUrl = selectedProktorUjianId
+        ? `/api/proktor?ujianId=${encodeURIComponent(selectedProktorUjianId)}`
+        : '/api/proktor'
+      const proktorRes = await fetch(proktorUrl)
       const proktorJson = await proktorRes.json()
       if (proktorJson.success) {
         setProktorData(proktorJson.data)
+        if (!selectedProktorUjianId && proktorJson.data?.activeUjian?.id) {
+          setSelectedProktorUjianId(proktorJson.data.activeUjian.id)
+        }
       }
 
       // 4. Settings Data
@@ -206,7 +213,10 @@ export default function ComprehensiveAdminDashboard() {
     // Polling Proktor Live every 5 seconds if on proktor tab
     const timer = setInterval(() => {
       if (activeTab === 'proktor_live' || activeTab === 'dashboard') {
-        fetch('/api/proktor')
+        const pUrl = selectedProktorUjianId
+          ? `/api/proktor?ujianId=${encodeURIComponent(selectedProktorUjianId)}`
+          : '/api/proktor'
+        fetch(pUrl)
           .then((r) => r.json())
           .then((j) => {
             if (j.success) setProktorData(j.data)
@@ -216,7 +226,7 @@ export default function ComprehensiveAdminDashboard() {
     }, 5000)
 
     return () => clearInterval(timer)
-  }, [activeTab])
+  }, [activeTab, selectedProktorUjianId])
 
   // Logout Handler
   const handleLogout = async () => {
@@ -724,12 +734,23 @@ export default function ComprehensiveAdminDashboard() {
           {activeTab === 'proktor_live' && (
             <ProktorLiveView
               proktorData={proktorData}
+              selectedUjianId={selectedProktorUjianId}
+              onSelectUjian={(uid) => {
+                setSelectedProktorUjianId(uid)
+                fetch(`/api/proktor?ujianId=${encodeURIComponent(uid)}`)
+                  .then((r) => r.json())
+                  .then((j) => {
+                    if (j.success) setProktorData(j.data)
+                  })
+                  .catch(() => {})
+              }}
               onResetLogin={handleResetLogin}
               onAddExtraTime={handleOpenAddExtraTime}
               onResetPelanggaran={handleResetPelanggaran}
               onResetAllPelanggaran={handleResetAllPelanggaran}
               onRefresh={fetchAllData}
               showNotification={showNotification}
+              showConfirm={showConfirm}
             />
           )}
 

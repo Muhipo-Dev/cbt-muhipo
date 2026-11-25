@@ -1866,13 +1866,25 @@ export default function GuruDashboardPage() {
                                   <span>{p.jumlahPelanggaran > 0 ? `${p.jumlahPelanggaran}x Peringatan` : 'Lihat Log'}</span>
                                 </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => handleResetLogin(p.pesertaUjianId, p.name)}
-                                  className="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-[11px] font-bold cursor-pointer hover:bg-rose-100"
-                                >
-                                  Reset Login
-                                </button>
+                                {(p.jumlahPelanggaran > 0 || p.status === 'TERKUNCI') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleResetPelanggaran(p.pesertaUjianId, p.name)}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold cursor-pointer hover:bg-emerald-100"
+                                  >
+                                    Reset Pelanggaran
+                                  </button>
+                                )}
+
+                                {p.status !== 'SELESAI' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleResetLogin(p.pesertaUjianId, p.name)}
+                                    className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-[11px] font-bold cursor-pointer hover:bg-amber-100"
+                                  >
+                                    Reset Login
+                                  </button>
+                                )}
 
                                 {p.status === 'SEDANG_MENGERJAKAN' && (
                                   <button

@@ -37,29 +37,43 @@ export interface OpsiItem {
  */
 export function normalizeMathExpression(expr: string): string {
   if (!expr) return '';
-  let m = String(expr).trim();
+  let m = String(expr)
+    .replace(/&radic;|&#8730;|&#x221a;/gi, '√')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&amp;/gi, '&')
+    .replace(/&times;/gi, 'x')
+    .replace(/&divide;/gi, '/')
+    .trim();
   m = m.replace(/^\$+|\$+$/g, '').trim();
   m = m.replace(/\s+/g, '');
   m = m.replace(/\\(?:times|cdot)|\*/g, 'x');
   m = m.replace(/\\div|:/g, '/');
   m = m.replace(/(\d+),(\d+)/g, '$1.$2');
+  const supMap: Record<string, string> = {
+    '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', 'ⁿ': 'n',
+  };
   m = m.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)');
   m = m.replace(/\\sqrt\[([^\]]+)\]\{([^}]+)\}/g, 'root($1,$2)');
   m = m.replace(/\\sqrt\{([^}]+)\}/g, 'sqrt($1)');
   m = m.replace(/\\sqrt\(([^)]+)\)/g, 'sqrt($1)');
   m = m.replace(/\\sqrt([0-9a-zA-Z]+)/g, 'sqrt($1)');
-  m = m.replace(/([0-9a-zA-Z]+)√\{([^}]+)\}/g, 'root($1,$2)');
-  m = m.replace(/([0-9a-zA-Z]+)√\(([^)]+)\)/g, 'root($1,$2)');
-  m = m.replace(/([0-9a-zA-Z]+)√([0-9a-zA-Z]+)/g, 'root($1,$2)');
+  m = m.replace(/√\[([^\]]+)\]\{([^}]+)\}/g, 'root($1,$2)');
+  m = m.replace(/√\[([^\]]+)\]\(([^)]+)\)/g, 'root($1,$2)');
+  m = m.replace(/√\[([^\]]+)\]([0-9a-zA-Z]+)/g, 'root($1,$2)');
+  m = m.replace(/([²³⁴⁵⁶⁷⁸⁹ⁿ]+)√\{([^}]+)\}/g, (_, s: string, v: string) => `root(${Array.from(s).map((c) => supMap[c] || c).join('')},${v})`);
+  m = m.replace(/([²³⁴⁵⁶⁷⁸⁹ⁿ]+)√\(([^)]+)\)/g, (_, s: string, v: string) => `root(${Array.from(s).map((c) => supMap[c] || c).join('')},${v})`);
+  m = m.replace(/([²³⁴⁵⁶⁷⁸⁹ⁿ]+)√([0-9a-zA-Z]+)/g, (_, s: string, v: string) => `root(${Array.from(s).map((c) => supMap[c] || c).join('')},${v})`);
   m = m.replace(/∛\{([^}]+)\}/g, 'root(3,$1)');
   m = m.replace(/∛\(([^)]+)\)/g, 'root(3,$1)');
   m = m.replace(/∛([0-9a-zA-Z]+)/g, 'root(3,$1)');
   m = m.replace(/∜\{([^}]+)\}/g, 'root(4,$1)');
   m = m.replace(/∜\(([^)]+)\)/g, 'root(4,$1)');
   m = m.replace(/∜([0-9a-zA-Z]+)/g, 'root(4,$1)');
+  // 2√3 -> 2sqrt(3) (perkalian koefisien dengan akar kuadrat, selaras dengan 2\sqrt{3})
   m = m.replace(/√\{([^}]+)\}/g, 'sqrt($1)');
   m = m.replace(/√\(([^)]+)\)/g, 'sqrt($1)');
-  m = m.replace(/√([0-9a-zA-Z]+)/g, 'sqrt($1)');
+  m = m.replace(/√([0-9a-zA-Z.]+)/g, 'sqrt($1)');
   m = m.replace(/\\(?:left|right|mathrm|mathbf|text)/g, '');
   m = m.replace(/\((\d+)\)\/\((\d+)\)/g, '$1/$2');
   m = m.replace(/\\/g, '');

@@ -39,7 +39,7 @@ const FRACTION_MAP: Record<string, string> = {
   '⅜': '\\frac{3}{8}', '⅝': '\\frac{5}{8}', '⅞': '\\frac{7}{8}',
 };
 
-// Mapping Unicode Greek & Math Symbols
+// Mapping Unicode Greek & Math Symbols (TIDAK mengubah panah kalimat atau tanda hubung biasa agar teks kalimat tetap utuh!)
 const SYMBOL_MAP: Record<string, string> = {
   'α': '\\alpha', 'β': '\\beta', 'γ': '\\gamma', 'δ': '\\delta',
   'ε': '\\epsilon', 'ζ': '\\zeta', 'η': '\\eta', 'θ': '\\theta',
@@ -50,16 +50,15 @@ const SYMBOL_MAP: Record<string, string> = {
   'Γ': '\\Gamma', 'Δ': '\\Delta', 'Θ': '\\Theta', 'Λ': '\\Lambda',
   'Ξ': '\\Xi', 'Π': '\\Pi', 'Σ': '\\Sigma', 'Υ': '\\Upsilon',
   'Φ': '\\Phi', 'Ψ': '\\Psi', 'Ω': '\\Omega',
-  '±': '\\pm', '∓': '\\mp', '×': '\\times', '÷': '\\div',
+  '±': '\\pm', '∓': '\\mp',
   '≠': '\\neq', '≤': '\\le', '≥': '\\ge', '≈': '\\approx',
-  '≡': '\\equiv', '∼': '\\sim', '≅': '\\cong', '∝': '\\propto',
+  '≡': '\\equiv', '≅': '\\cong', '∝': '\\propto',
   '∞': '\\infty', '∫': '\\int', '∬': '\\iint', '∭': '\\iiint',
   '∮': '\\oint', '∂': '\\partial', '∇': '\\nabla', '∑': '\\sum',
   '∏': '\\prod', '∈': '\\in', '∉': '\\notin', '⊂': '\\subset',
   '⊃': '\\supset', '⊆': '\\subseteq', '⊇': '\\supseteq',
   '∪': '\\cup', '∩': '\\cap', '∧': '\\land', '∨': '\\lor',
   '¬': '\\neg', '⇒': '\\Rightarrow', '⇔': '\\Leftrightarrow',
-  '→': '\\rightarrow', '←': '\\leftarrow', '↔': '\\leftrightarrow',
 };
 
 /**
@@ -81,6 +80,18 @@ function mathmlToLatex(mathmlStr: string): string {
   });
   res = res.replace(/<m:f[^>]*>[\s\S]*?<m:num[^>]*>([\s\S]*?)<\/m:num>[\s\S]*?<m:den[^>]*>([\s\S]*?)<\/m:den>[\s\S]*?<\/m:f>/gi, (_, num, den) => {
     return `\\frac{${cleanMathTags(num)}}{${cleanMathTags(den)}}`;
+  });
+
+  // Akar pangkat n: <mroot><mn>8</mn><mn>3</mn></mroot> atau <m:rad><m:radPr>...<m:deg>3</m:deg><m:e>8</m:e></m:rad>
+  res = res.replace(/<mroot[^>]*>([\s\S]*?)<\/mroot>/gi, (_, inner) => {
+    const parts = inner.split(/<\/(?:mn|mi|mo|mrow|mtext)>/gi).filter(Boolean);
+    const rad = cleanMathTags(parts[0] || '');
+    const deg = cleanMathTags(parts[1] || '');
+    return deg ? `\\sqrt[${deg}]{${rad}}` : `\\sqrt{${rad}}`;
+  });
+  res = res.replace(/<m:rad[^>]*>[\s\S]*?<m:deg[^>]*>([\s\S]*?)<\/m:deg>[\s\S]*?<m:e[^>]*>([\s\S]*?)<\/m:e>[\s\S]*?<\/m:rad>/gi, (_, deg, inner) => {
+    const cleanDeg = cleanMathTags(deg);
+    return cleanDeg ? `\\sqrt[${cleanDeg}]{${cleanMathTags(inner)}}` : `\\sqrt{${cleanMathTags(inner)}}`;
   });
 
   // Akar kuadrat: <msqrt>...</msqrt> atau <m:rad>
@@ -120,24 +131,13 @@ function cleanMathTags(str: string): string {
 
 /**
  * Konversi teks umum, formula Excel, Word Equation, atau Unicode Math menjadi format KaTeX ($...$).
+ * Aman terhadap tag HTML (tidak merusak atribut src/alt/style pada <img>, <audio>, dsb).
  */
 export function convertEquationToKatex(text: string | null | undefined): string {
   if (!text) return '';
   let str = String(text);
 
-  // 0. Decode entitas HTML matematika yang sering terbawa dari copy-paste / editor web / Word
-  str = str.replace(/&radic;/gi, '√');
-  str = str.replace(/&#8730;/g, '√');
-  str = str.replace(/&plusmn;/gi, '±');
-  str = str.replace(/&#177;/g, '±');
-  str = str.replace(/&times;/gi, '×');
-  str = str.replace(/&divide;/gi, '÷');
-  str = str.replace(/&le;/gi, '≤');
-  str = str.replace(/&ge;/gi, '≥');
-  str = str.replace(/&ne;/gi, '≠');
-  str = str.replace(/&deg;/gi, '°');
-
-  // 1. Tangani MathML / OMML jika terdeteksi dalam teks
+  // 1. Tangani MathML / OMML jika terdeteksi dalam teks sebelum memisahkan tag HTML biasa
   if (/<(?:m:oMath|math)[\s>]/i.test(str)) {
     str = str.replace(/<(?:m:oMath|math)[\s\S]*?<\/(?:m:oMath|math)>/gi, (match) => {
       const latex = mathmlToLatex(match);
@@ -145,96 +145,166 @@ export function convertEquationToKatex(text: string | null | undefined): string 
     });
   }
 
-  // 2. Deteksi format LaTeX yang belum dibungkus tanda $
-  // Format pecahan biasa yang berdampingan dengan akar: 1/4 √14 -> $\frac{1}{4}\sqrt{14}$
-  str = str.replace(/(\d+)\/(\d+)\s*(\$\sqrt\{[^}]+\}\$|\sqrt\{[^}]+\})/g, (_, a, b, c) => `$\\frac{${a}}{${b}}${c.replace(/\$/g, '')}$`);
+  // Pisahkan berdasarkan tag HTML agar tidak merusak tag <img src="...">, <b>, <p>, dll
+  const htmlParts = str.split(/(<[^>]+>)/g);
+  for (let pIdx = 0; pIdx < htmlParts.length; pIdx += 2) {
+    let chunk = htmlParts[pIdx];
+    if (!chunk) continue;
 
-  // Segmented LaTeX Auto-Wrapper: Proses bagian di luar tanda $...$ agar ekspresi majemuk seperti \frac{1}{4}\sqrt{14} otomatis dibungkus utuh
-  const mathSegments = str.split(/(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)/g);
-  for (let i = 0; i < mathSegments.length; i += 2) {
-    let segment = mathSegments[i];
-    if (!segment) continue;
+    // Decode entitas HTML matematika yang sering terbawa dari copy-paste / editor web / Word (termasuk &lt; &gt; di dalam rumus!)
+    chunk = chunk
+      .replace(/&radic;/gi, '√')
+      .replace(/&#8730;/g, '√')
+      .replace(/&#x221a;/gi, '√')
+      .replace(/&plusmn;/gi, '±')
+      .replace(/&#177;/g, '±')
+      .replace(/&times;/gi, '×')
+      .replace(/&divide;/gi, '÷')
+      .replace(/&le;/gi, '≤')
+      .replace(/&ge;/gi, '≥')
+      .replace(/&ne;/gi, '≠')
+      .replace(/&deg;/gi, '°')
+      .replace(/&sup2;/gi, '²')
+      .replace(/&sup3;/gi, '³')
+      .replace(/&frac12;/gi, '½')
+      .replace(/&frac14;/gi, '¼')
+      .replace(/&frac34;/gi, '¾')
+      .replace(/&nbsp;/gi, ' ');
 
-    // Rapikan \sqrt 14 -> \sqrt{14}
-    segment = segment.replace(/\\sqrt\s+([0-9a-zA-Z]+)/g, (_, val) => `\\sqrt{${val}}`);
+    // Bersihkan spasi rusak pada escape LaTeX
+    chunk = chunk.replace(/\\\s+sqrt\b/g, '\\sqrt').replace(/\\\s+frac\b/g, '\\frac');
 
-    // Tangani ekspresi LaTeX majemuk atau tunggal (misal: \frac{1}{4}\sqrt{14}, \sqrt{14}, \frac{a}{b})
-    segment = segment.replace(/(\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{[^{}]*\}|[a-zA-Z0-9\+\-\*/\=\(\)\,\s\\])*)/g, (match) => {
-      return '$' + match.trim() + '$';
+    // Konversi format Microsoft Excel / teks: =SQRT(x), SQRT(x), akar(x) -> \sqrt{x}
+    chunk = chunk.replace(/(?:=|\b)SQRT\(([^()]+)\)/gi, (_, val) => `$\\sqrt{${val}}$`);
+    chunk = chunk.replace(/\bakar\(([^()]+)\)/gi, (_, val) => `$\\sqrt{${val}}$`);
+    chunk = chunk.replace(/(?:=|\b)POWER\(([^,]+),\s*([^)]+)\)/gi, (_, b, p) => `$${b.trim()}^{${p.trim()}}$`);
+
+    // Akar pangkat n eksplisit dengan kurung siku atau angka superscript Unicode (³√8, ⁴√16, √[3]{8})
+    chunk = chunk.replace(/√\s*\[([^\]]+)\]\s*\{([^}]+)\}/g, (_, n, val) => `$\\sqrt[${n}]{${val}}$`);
+    chunk = chunk.replace(/√\s*\[([^\]]+)\]\s*\(([^)]+)\)/g, (_, n, val) => `$\\sqrt[${n}]{${val}}$`);
+    chunk = chunk.replace(/√\s*\[([^\]]+)\]\s*([a-zA-Z0-9]+)/g, (_, n, val) => `$\\sqrt[${n}]{${val}}$`);
+
+    chunk = chunk.replace(/([²³⁴⁵⁶⁷⁸⁹ⁿ]+)\s*√\s*\{([^}]+)\}/g, (_, sup, val) => {
+      const deg = Array.from(sup).map((c: any) => SUPERSCRIPT_MAP[c] || c).join('');
+      return `$\\sqrt[${deg}]{${val}}$`;
+    });
+    chunk = chunk.replace(/([²³⁴⁵⁶⁷⁸⁹ⁿ]+)\s*√\s*\(([^)]+)\)/g, (_, sup, val) => {
+      const deg = Array.from(sup).map((c: any) => SUPERSCRIPT_MAP[c] || c).join('');
+      return `$\\sqrt[${deg}]{${val}}$`;
+    });
+    chunk = chunk.replace(/([²³⁴⁵⁶⁷⁸⁹ⁿ]+)\s*√\s*([a-zA-Z0-9]+)/g, (_, sup, val) => {
+      const deg = Array.from(sup).map((c: any) => SUPERSCRIPT_MAP[c] || c).join('');
+      return `$\\sqrt[${deg}]{${val}}$`;
     });
 
-    mathSegments[i] = segment;
+    chunk = chunk.replace(/∛\s*\{([^}]+)\}/g, (_, val) => `$\\sqrt[3]{${val}}$`);
+    chunk = chunk.replace(/∛\s*\(([^)]+)\)/g, (_, val) => `$\\sqrt[3]{${val}}$`);
+    chunk = chunk.replace(/∛\s*([a-zA-Z0-9]+)/g, (_, val) => `$\\sqrt[3]{${val}}$`);
+    chunk = chunk.replace(/∜\s*\{([^}]+)\}/g, (_, val) => `$\\sqrt[4]{${val}}$`);
+    chunk = chunk.replace(/∜\s*\(([^)]+)\)/g, (_, val) => `$\\sqrt[4]{${val}}$`);
+    chunk = chunk.replace(/∜\s*([a-zA-Z0-9]+)/g, (_, val) => `$\\sqrt[4]{${val}}$`);
+
+    // Akar kuadrat dengan atau tanpa koefisien pengali di depannya:
+    // Contoh: √14 -> $\sqrt{14}$, 2√3 -> $2\sqrt{3}$, -5√(x+1) -> $-5\sqrt{x+1}$
+    // PENTING: 2√3 adalah 2 dikali akar 3 ($2\sqrt{3}$), BUKAN akar pangkat 2 dari 3!
+    const segsBeforeWrap = chunk.split(/(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)/g);
+    for (let sIdx = 0; sIdx < segsBeforeWrap.length; sIdx++) {
+      if (sIdx % 2 === 1) {
+        // Di dalam blok $...$ yang sudah ada: decode &lt;/&gt;/&amp; dari contentEditable & ubah simbol √ menjadi \sqrt{...}
+        let inside = segsBeforeWrap[sIdx];
+        inside = inside
+          .replace(/&lt;/gi, '<')
+          .replace(/&gt;/gi, '>')
+          .replace(/&amp;/gi, '&');
+        inside = inside.replace(/√\s*\[([^\]]+)\]\s*\{([^}]+)\}/g, (_, n, val) => `\\sqrt[${n}]{${val}}`);
+        inside = inside.replace(/√\s*\[([^\]]+)\]\s*\(([^)]+)\)/g, (_, n, val) => `\\sqrt[${n}]{${val}}`);
+        inside = inside.replace(/√\s*\[([^\]]+)\]\s*([a-zA-Z0-9]+)/g, (_, n, val) => `\\sqrt[${n}]{${val}}`);
+        inside = inside.replace(/√\s*\{([^}]+)\}/g, (_, val) => `\\sqrt{${val}}`);
+        inside = inside.replace(/√\s*\(([^)]+)\)/g, (_, val) => `\\sqrt{${val}}`);
+        inside = inside.replace(/√\s*([a-zA-Z0-9]+)/g, (_, val) => `\\sqrt{${val}}`);
+        inside = inside.replace(/\\sqrt(?!\[|\{)\s*([0-9]+|[a-zA-Z])(?![a-zA-Z0-9])/g, (_, val) => `\\sqrt{${val}}`);
+        segsBeforeWrap[sIdx] = inside;
+      } else {
+        // Di luar blok $...$: konversi dan bungkus rapi dengan $...$
+        let outside = segsBeforeWrap[sIdx];
+        if (!outside) continue;
+
+        // Pecahan berdampingan akar: 1/4 √14 -> $\frac{1}{4}\sqrt{14}$
+        outside = outside.replace(
+          /([+\-]?\d+)\/(\d+)\s*(?:√\s*\{([^}]+)\}|√\s*\(([^)]+)\)|√\s*([a-zA-Z0-9]+)|\\sqrt\{([^}]+)\})/g,
+          (_, a, b, g1, g2, g3, g4) => `$\\frac{${a}}{${b}}\\sqrt{${g1 || g2 || g3 || g4}}$`
+        );
+
+        // Koefisien (opsional) + Akar kuadrat: 2√3 -> $2\sqrt{3}$, √14 -> $\sqrt{14}$, √(x+y) -> $\sqrt{x+y}$, √2,25 -> $\sqrt{2,25}$
+        outside = outside.replace(
+          /(?<![a-zA-Z\\])([+\-]?\d+(?:[.,]\d+)?)?\s*√\s*\{([^}]+)\}/g,
+          (_, coeff, val) => `$${coeff ? coeff.trim() : ''}\\sqrt{${val}}$`
+        );
+        outside = outside.replace(
+          /(?<![a-zA-Z\\])([+\-]?\d+(?:[.,]\d+)?)?\s*√\s*\(([^)]+)\)/g,
+          (_, coeff, val) => `$${coeff ? coeff.trim() : ''}\\sqrt{${val}}$`
+        );
+        outside = outside.replace(
+          /(?<![a-zA-Z\\])([+\-]?\d+(?:[.,]\d+)?)?\s*√\s*([0-9]+(?:[.,][0-9]+)?|[a-zA-Z0-9]+)/g,
+          (_, coeff, val) => `$${coeff ? coeff.trim() : ''}\\sqrt{${val}}$`
+        );
+        // Jika ada simbol √ berdiri sendiri (misal "lambang akar (√)"), ubah menjadi $\sqrt{\phantom{x}}$ atau biarkan aman tanpa hilang
+        outside = outside.replace(/√(?![a-zA-Z0-9{(\[])/g, '$\\surd$');
+
+        // Rapikan \sqrt 14 -> \sqrt{14}
+        outside = outside.replace(/\\sqrt(?!\[|\{)\s*([0-9]+|[a-zA-Z])(?![a-zA-Z0-9])/g, (_, val) => `\\sqrt{${val}}`);
+
+        // Bungkus ekspresi LaTeX mentah yang belum dibungkus $...$
+        outside = outside.replace(
+          /((?:[+\-]?\d+(?:[.,]\d+)?\s*)?\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{(?:[^{}]|\{[^{}]*\})*\}|[a-zA-Z0-9+\-*/=(),.^_\\])*)/g,
+          (match) => `$${match.trim()}$`
+        );
+
+        // Pecahan Unicode: ½, ⅓, ¼, ¾, dsb.
+        Object.entries(FRACTION_MAP).forEach(([char, latex]) => {
+          if (outside.includes(char)) {
+            outside = outside.replaceAll(char, `$${latex}$`);
+          }
+        });
+
+        // Word/Excel Superscripts (Pangkat): x², x³, 10⁵
+        const supChars = Object.keys(SUPERSCRIPT_MAP).join('');
+        const supRegex = new RegExp(`([a-zA-Z0-9)]+)([${supChars}]+)`, 'g');
+        outside = outside.replace(supRegex, (_, base, sups) => {
+          const converted = Array.from(sups).map((c: any) => SUPERSCRIPT_MAP[c] || c).join('');
+          return `$${base}^{${converted}}$`;
+        });
+
+        // Word/Excel Subscripts (Indeks): x₁, x₂, H₂O
+        const subChars = Object.keys(SUBSCRIPT_MAP).join('');
+        const subRegex = new RegExp(`([a-zA-Z0-9)]+)([${subChars}]+)`, 'g');
+        outside = outside.replace(subRegex, (_, base, subs) => {
+          const converted = Array.from(subs).map((c: any) => SUBSCRIPT_MAP[c] || c).join('');
+          return `$${base}_{${converted}}$`;
+        });
+
+        // Simbol Derajat Suhu: 100°C, 360°, 45°
+        outside = outside.replace(/(\d+)\s*°\s*C\b/gi, (_, n) => `$${n}^\\circ\\text{C}$`);
+        outside = outside.replace(/(\d+)\s*°/g, (_, n) => `$${n}^\\circ$`);
+
+        // Simbol Khusus (Greek, Operasi)
+        Object.entries(SYMBOL_MAP).forEach(([char, latex]) => {
+          if (outside.includes(char)) {
+            outside = outside.replaceAll(char, ` $${latex}$ `);
+          }
+        });
+
+        segsBeforeWrap[sIdx] = outside;
+      }
+    }
+
+    chunk = segsBeforeWrap.join('');
+    // Bersihkan spasi berlebih tanpa menggabungkan dua blok $...$ secara keliru
+    chunk = chunk.replace(/[ \t]{2,}/g, ' ');
+    htmlParts[pIdx] = chunk;
   }
-  str = mathSegments.join('');
 
-  // Gabungkan $...$ yang bersentuhan atau bersebelahan: misal $\frac{1}{4}$$\sqrt{14}$ -> $\frac{1}{4}\sqrt{14}$
-  str = str.replace(/\$\s*\$/g, '');
-
-  // 3. Konversi format Microsoft Excel SQRT / Pangkat
-  // =SQRT(x) atau SQRT(x) -> \sqrt{x}
-  str = str.replace(/(?:=|\b)SQRT\(([^)]+)\)/gi, (_, val) => `$\\sqrt{${val}}$`);
-  // =POWER(x, y) atau POWER(x, y) -> x^{y}
-  str = str.replace(/(?:=|\b)POWER\(([^,]+),\s*([^)]+)\)/gi, (_, b, p) => `\${${b}}^{\${${p}}\$`);
-
-  // 4. Konversi Unicode Akar: akar pangkat n (3√8, 3√(x), ∛x, ∜x) & akar kuadrat (√14, √x, √(x+y))
-  str = str.replace(/(?<![\$\w])([0-9a-zA-Z]+)√\s*\{([^}]+)\}/g, (_, n, val) => `$\\sqrt[${n}]{${val}}$`);
-  str = str.replace(/(?<![\$\w])([0-9a-zA-Z]+)√\s*\(([^)]+)\)/g, (_, n, val) => `$\\sqrt[${n}]{${val}}$`);
-  str = str.replace(/(?<![\$\w])([0-9a-zA-Z]+)√\s*([0-9a-zA-Z]+)/g, (_, n, val) => `$\\sqrt[${n}]{${val}}$`);
-  str = str.replace(/∛\s*\{([^}]+)\}/g, (_, val) => `$\\sqrt[3]{${val}}$`);
-  str = str.replace(/∛\s*\(([^)]+)\)/g, (_, val) => `$\\sqrt[3]{${val}}$`);
-  str = str.replace(/∛\s*([a-zA-Z0-9]+)/g, (_, val) => `$\\sqrt[3]{${val}}$`);
-  str = str.replace(/∜\s*\{([^}]+)\}/g, (_, val) => `$\\sqrt[4]{${val}}$`);
-  str = str.replace(/∜\s*\(([^)]+)\)/g, (_, val) => `$\\sqrt[4]{${val}}$`);
-  str = str.replace(/∜\s*([a-zA-Z0-9]+)/g, (_, val) => `$\\sqrt[4]{${val}}$`);
-  str = str.replace(/(?<![\$\w])√\s*\{([^}]+)\}/g, (_, val) => `$\\sqrt{${val}}$`);
-  str = str.replace(/(?<![\$\w])√\s*\(([^)]+)\)/g, (_, val) => `$\\sqrt{${val}}$`);
-  str = str.replace(/(?<![\$\w])√\s*([a-zA-Z0-9]+)/g, (_, val) => `$\\sqrt{${val}}$`);
-
-  // 5. Konversi Pecahan Unicode: ½, ⅓, ⅔, ¼, ¾, dsb.
-  Object.entries(FRACTION_MAP).forEach(([char, latex]) => {
-    if (str.includes(char)) {
-      str = str.replaceAll(char, `$${latex}$`);
-    }
-  });
-
-  // 6. Konversi Word/Excel Superscripts (Pangkat): x², x³, 10⁵, dsb.
-  const supChars = Object.keys(SUPERSCRIPT_MAP).join('');
-  const supRegex = new RegExp(`([a-zA-Z0-9)]+)([${supChars}]+)`, 'g');
-  str = str.replace(supRegex, (_, base, sups) => {
-    const converted = Array.from(sups).map((c: any) => SUPERSCRIPT_MAP[c] || c).join('');
-    return `$${base}^{${converted}}$`;
-  });
-
-  // 7. Konversi Word/Excel Subscripts (Indeks): x₁, x₂, H₂O, dsb.
-  const subChars = Object.keys(SUBSCRIPT_MAP).join('');
-  const subRegex = new RegExp(`([a-zA-Z0-9)]+)([${subChars}]+)`, 'g');
-  str = str.replace(subRegex, (_, base, subs) => {
-    const converted = Array.from(subs).map((c: any) => SUBSCRIPT_MAP[c] || c).join('');
-    return `$${base}_{${converted}}$`;
-  });
-
-  // 8. Konversi Simbol Derajat Suhu: 100°C, 360°, 45° -> $100^\circ\text{C}$, $360^\circ$, $45^\circ$
-  str = str.replace(/(\d+)\s*°\s*C\b/gi, (_, n) => `$${n}^\\circ\\text{C}$`);
-  str = str.replace(/(\d+)\s*°/g, (_, n) => `$${n}^\\circ$`);
-
-  // 9. Konversi Simbol Khusus (Greek, Operasi) jika berdiri bebas atau bersama variabel
-  // Contoh: α = 0.05, 5 × 10, ± 2.5
-  Object.entries(SYMBOL_MAP).forEach(([char, latex]) => {
-    if (str.includes(char)) {
-      // Ganti simbol yang tidak berada di dalam tag HTML
-      str = str.replaceAll(char, ` $${latex}$ `);
-    }
-  });
-
-  // 10. Gabungkan $...$ yang berdempetan: misal $x^2$ $+$ $y^2$ -> $x^2 + y^2$
-  str = str.replace(/\$\s*\$\s*/g, ' ');
-  str = str.replace(/\$\s*([\+\-\*\/\=\<\>\±\times\div\neq\le\ge]+)\s*\$/g, ' $1 ');
-  str = str.replace(/\$\s+([a-zA-Z0-9\+\-\*\/\=\^\_\{\}\\]+)\s+\$/g, '$$$1$$');
-
-  // Bersihkan spasi ganda yang tidak sengaja terbentuk
-  str = str.replace(/\s{2,}/g, ' ').trim();
-
-  return str;
+  return htmlParts.join('').trim();
 }
 
 /**
@@ -244,10 +314,9 @@ export function hasEquationOrFormula(text: string | null | undefined): boolean {
   if (!text) return false;
   const str = String(text);
 
-  // Periksa MathML, OMML, LaTeX, formula Excel, superscripts, subscripts, atau pecahan unicode
   if (/<(?:m:oMath|math)[\s>]/i.test(str)) return true;
   if (/\\(?:frac|sqrt|sum|int|lim|prod|alpha|beta|theta|pi|times|pm|le|ge)\b/.test(str)) return true;
-  if (/(?:=|\b)(?:SQRT|POWER|SUM|AVERAGE)\(/i.test(str)) return true;
+  if (/(?:=|\b)(?:SQRT|POWER|SUM|AVERAGE|akar)\(/i.test(str)) return true;
   if (/[²³⁴⁵⁶⁷⁸⁹⁰⁺⁻ⁿⁱ₁₂₃₄₅₆₇₈₉₀½⅓⅔¼¾⅕⅙⅛√∛∜±×÷≠≤≥≈∞°αβγδθπλσωΔΩ∑∫]/.test(str)) return true;
 
   return false;

@@ -65,7 +65,9 @@ export async function GET() {
       });
     }
 
-    const serverNow = new Date();
+    const rawNow = new Date();
+    const offsetMs = Number(settings?.timeSyncOffsetMs) || 0;
+    const serverNow = new Date(rawNow.getTime() + offsetMs);
 
     const response = NextResponse.json({
       success: true,

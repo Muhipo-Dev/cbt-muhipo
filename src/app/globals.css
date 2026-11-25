@@ -429,13 +429,40 @@ bdi,
 }
 
 /* Reset & Hapus semua frame border / box-border di dalam konten soal dan opsi jawaban,
-   tetapi jangan pernah merusak garis pecahan, akar, vlist, atau elemen internal KaTeX */
-.prose *:not(.katex):not(.katex *),
-.prose > *:not(.katex) {
+   tetapi JANGAN PERNAH merusak garis pecahan (.frac-line), garis atap akar (.sqrt-line, .hide-tail svg),
+   vlist, atau SVG matematika mandiri (.inline-math-svg) */
+.prose *:not(.katex):not(.katex *):not(.inline-math-svg):not(.inline-math-svg *),
+.prose > *:not(.katex):not(.inline-math-svg):not(.cbt-ai-math-compound) {
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
   background-color: transparent !important;
+}
+
+/* Pastikan SVG akar internal KaTeX (.katex .sqrt svg) & garis vinculum (.sqrt-line, .overline-line, .frac-line)
+   tidak tertekan max-width: 100% dari Tailwind Preflight yang membuat simbol akar menghilang (width 0px)! */
+.katex svg {
+  display: block !important;
+  position: absolute !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: inherit !important;
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}
+
+.katex .sqrt > .vlist-t .sqrt-line,
+.katex .overline .overline-line,
+.katex .mfrac .frac-line {
+  border-bottom-style: solid !important;
+  border-bottom-width: 0.04em !important;
+  min-height: 1px !important;
+}
+
+.inline-math-svg {
+  display: inline-block !important;
+  max-width: none !important;
+  overflow: visible !important;
 }
 
 /* Biarkan gambar soal bersih tanpa border, frame, atau background */
@@ -587,8 +614,8 @@ h1, h2, h3, h4, h5, h6, p {
   overflow-wrap: break-word;
 }
 
-/* Terapkan max-width pada gambar/media tetapi jangan pernah menyentuh elemen matematika KaTeX */
-img, video, canvas, audio, iframe, embed, object, svg:not(.katex *):not([preserveAspectRatio]) {
+/* Terapkan max-width pada gambar/media tetapi jangan pernah menyentuh elemen matematika KaTeX atau SVG rumus mandiri */
+img, video, canvas, audio, iframe, embed, object, svg:not(.katex *):not(.inline-math-svg):not([preserveAspectRatio]) {
   max-width: 100%;
 }
 
@@ -623,7 +650,7 @@ img {
     -webkit-text-size-adjust: 100%;
     touch-action: pan-y pinch-zoom;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: auto;
+    overscroll-behavior-y: contain;
     overflow-y: auto;
   }
 
@@ -730,13 +757,26 @@ header img,
   touch-action: pan-y pinch-zoom;
 }
 
+.cbt-exam-lockdown button,
+.cbt-exam-lockdown [role="button"],
+.cbt-exam-lockdown a {
+  touch-action: manipulation !important;
+}
+
 .cbt-exam-lockdown input,
+.cbt-exam-lockdown select,
 .cbt-exam-lockdown textarea {
-  -webkit-user-select: text !important;
-  -moz-user-select: text !important;
-  -ms-user-select: text !important;
-  user-select: text !important;
-  touch-action: auto !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+  touch-action: manipulation !important;
+}
+
+.cbt-exam-lockdown ::selection {
+  background: transparent !important;
+  color: inherit !important;
 }
 
 .cbt-exam-lockdown img {

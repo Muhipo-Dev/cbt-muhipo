@@ -117,22 +117,37 @@ export async function POST(
     }
     const jawabanMap = new Map(pesertaUjian.jawabanPeserta.map((j) => [j.soalId, j]));
 
-    // Validasi Minimal Jawaban Terisi (Kecuali jika waktu ujian habis otomatis)
-    const minJawaban = (pesertaUjian.ujian as any).minJawaban;
-    if (!isAuto && minJawaban && minJawaban > 0) {
+    // Validasi Wajib Mengisi Seluruh Soal (atau Minimal Jawaban jika disetel khusus) sebelum menyelesaikan ujian!
+    // Pengecualian hanya ketika waktu habis otomatis (isAuto === true) atau diselesaikan paksa oleh Proktor.
+    if (!isAuto) {
+      const totalSoalWajib =
+        (pesertaUjian.ujian as any).minJawaban && Number((pesertaUjian.ujian as any).minJawaban) > 0
+          ? Math.min(soalList.length, Number((pesertaUjian.ujian as any).minJawaban))
+          : soalList.length;
+
       const jumlahTerjawab = soalList.filter((s) => {
         const j = jawabanMap.get(s.id);
         if (!j || !j.jawabanDipilih) return false;
         const val = j.jawabanDipilih.trim();
         if (!val || val === '[]' || val === '{}') return false;
+        if (s.tipeSoal === TipeSoal.MENJODOHKAN && s.matchingData) {
+          try {
+            const expectedPairs = JSON.parse(s.matchingData);
+            const answeredPairs = JSON.parse(val);
+            if (Array.isArray(expectedPairs) && expectedPairs.length > 0 && typeof answeredPairs === 'object' && answeredPairs !== null) {
+              return Object.keys(answeredPairs).filter((k) => Boolean(answeredPairs[k])).length >= expectedPairs.length;
+            }
+          } catch {}
+        }
         return true;
       }).length;
 
-      if (jumlahTerjawab < minJawaban) {
+      if (jumlahTerjawab < totalSoalWajib) {
+        const belumDijawab = totalSoalWajib - jumlahTerjawab;
         return NextResponse.json(
           {
             success: false,
-            message: `Syarat minimal jawaban belum terpenuhi! Anda baru menjawab ${jumlahTerjawab} dari minimal ${minJawaban} butir soal yang diwajibkan.`,
+            message: `Belum dapat menyelesaikan ujian! Anda wajib mengisi seluruh soal terlebih dahulu (masih ada ${belumDijawab} soal yang belum dijawab dari ${totalSoalWajib} soal).`,
           },
           { status: 400 }
         );

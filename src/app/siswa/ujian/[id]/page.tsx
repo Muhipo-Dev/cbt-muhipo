@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef, use } from 'react';
+import React, { useEffect, useState, useRef, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { MathRenderer } from '@/components/MathRenderer';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -17,15 +17,16 @@ import {
   Grid,
   ShieldAlert,
   Send,
-  HelpCircle,
-  Sparkles,
   Database,
   HardDriveDownload,
+  Type,
+  ZoomIn,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 import {
   cbtSecurityAudio,
+  cbtWakeLock,
   setupExamKeyboardLockdown,
   setupBrowserNavigationLock,
   setupAntiScreenshotAndRecording,
@@ -34,7 +35,8 @@ import {
   isCurrentlyFullscreen,
   detectDeviceSecurityInfo,
   enableChromeKeyboardLock,
-  unlockChromeKeyboardLock,
+  isEditableExamInput,
+  isMobileSplitScreenDetected,
 } from '@/lib/cbt-security';
 import { SecurityLockModal } from '@/components/SecurityLockModal';
 import {
@@ -79,6 +81,8 @@ interface JawabanState {
   raguRagu: boolean;
 }
 
+type FontScaleSize = 'small' | 'normal' | 'large' | 'xlarge';
+
 export default function LembarUjianPage({
   params,
 }: {
@@ -100,10 +104,11 @@ export default function LembarUjianPage({
   const [isSecurityUnlocked, setIsSecurityUnlocked] = useState(false);
   const [violationCount, setViolationCount] = useState(0);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const [isSplitScreenBlocked, setIsSplitScreenBlocked] = useState(false);
 
-  // UI state
+  // UI state (termasuk 4 tingkat Font Size: Kecil, Sedang, Besar, Ekstra Besar untuk aksesibilitas smartphone)
   const [showNavGrid, setShowNavGrid] = useState(false);
-  const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>('normal');
+  const [fontSize, setFontSize] = useState<FontScaleSize>('normal');
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'offline_saved' | 'error'>('saved');
@@ -112,6 +117,7 @@ export default function LembarUjianPage({
   const [cheatWarning, setCheatWarning] = useState<string | null>(null);
   const [isExambro, setIsExambro] = useState(false);
   const [isSEB, setIsSEB] = useState(false);
+  const [isKeyboardTyping, setIsKeyboardTyping] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -121,14 +127,62 @@ export default function LembarUjianPage({
   const securityUnlockedAtRef = useRef<number | null>(null);
   const lastViolationTimeRef = useRef<number>(0);
 
+  // Drift-proof deadline timestamp (ms lokal client yang dikalibrasi terhadap sisa waktu server)
+  const deadlineLocalMsRef = useRef<number | null>(null);
+  const sisaDetikRef = useRef<number>(0);
+  const jawabanMapRef = useRef<Record<string, JawabanState>>({});
+  const ujianInfoRef = useRef<any>(null);
+
+  useEffect(() => {
+    sisaDetikRef.current = sisaDetik;
+  }, [sisaDetik]);
+
+  useEffect(() => {
+    jawabanMapRef.current = jawabanMap;
+  }, [jawabanMap]);
+
+  useEffect(() => {
+    ujianInfoRef.current = ujianInfo;
+  }, [ujianInfo]);
+
+  // Simpan & pulihkan preferensi ukuran font peserta di localStorage
+  useEffect(() => {
+    try {
+      const savedFont = localStorage.getItem('cbt_exam_font_scale') as FontScaleSize | null;
+      if (savedFont && ['small', 'normal', 'large', 'xlarge'].includes(savedFont)) {
+        setFontSize(savedFont);
+      }
+    } catch {}
+  }, []);
+
+  const handleChangeFontSize = (nextSize: FontScaleSize) => {
+    setFontSize(nextSize);
+    try {
+      localStorage.setItem('cbt_exam_font_scale', nextSize);
+    } catch {}
+  };
+
+  const cycleMobileFontSize = () => {
+    const order: FontScaleSize[] = ['small', 'normal', 'large', 'xlarge'];
+    const nextIdx = (order.indexOf(fontSize) + 1) % order.length;
+    handleChangeFontSize(order[nextIdx]);
+  };
+
+  // Navigasi ke nomor soal tertentu + Smooth Scroll ke atas kartu soal
+  const navigateToQuestion = useCallback((targetIndex: number) => {
+    const bounded = Math.max(0, Math.min(soalList.length - 1, targetIndex));
+    setCurrentIndex(bounded);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [soalList.length]);
+
   // 1. Inisialisasi Android Exambro Native Bridge & Fetch Soal dengan Dukungan Fallback IndexedDB
   useEffect(() => {
-    // Deteksi apakah sedang berjalan di aplikasi Android CBT Exambro atau Safe Exam Browser (SEB)
     const exambroInfo = detectExambroApp();
     setIsExambro(exambroInfo.isExambro);
     setIsSEB(exambroInfo.isSEB);
 
-    // Daftarkan Global JavaScript Hooks (window.cbtExambro*) agar aplikasi Android dapat berkomunikasi dua arah
     registerGlobalExambroBridge({
       onRestoreAnswers: (restoredAnswers) => {
         setJawabanMap((prev) => ({
@@ -142,51 +196,108 @@ export default function LembarUjianPage({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+      cbtWakeLock.releaseWakeLock();
     };
   }, [ujianId]);
 
-  // Background Auto-Sync: Mengirim jawaban tertunda dari IndexedDB ke Server CBT saat koneksi pulih
+  // Background Auto-Sync & Server Time Heartbeat:
+  // 1. Mengirim jawaban tertunda dari IndexedDB ke Server CBT saat koneksi pulih (tiap 8 detik)
+  // 2. Mengambil sisaDetik otoritatif dari server (tiap 30 detik) agar jika Proktor menambah waktu (ADD_TIME)
+  //    atau mengunci ujian (LOCK_EXAM), smartphone peserta langsung sinkron secara otomatis!
   useEffect(() => {
-    if (!ujianId) return;
+    if (!ujianId || loading) return;
 
     const attemptAutoSync = async () => {
       if (isSubmittedRef.current) return;
       try {
-        const res = await syncPendingAnswersToServer(ujianId, sisaDetik);
+        const res = await syncPendingAnswersToServer(ujianId, sisaDetikRef.current);
         if (res.success && res.syncedCount > 0) {
           setSyncStatus('saved');
         }
-      } catch (e) {
+      } catch {
         // silent sync retry
       }
     };
 
-    const syncInterval = setInterval(attemptAutoSync, 6000);
+    const syncServerClockAndStatus = async () => {
+      if (isSubmittedRef.current) return;
+      try {
+        const res = await fetch(`/api/siswa/ujian/${ujianId}/jawaban`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ heartbeatOnly: true }),
+        });
+        const json = await res.json();
+        if (res.status === 403 && json.isLocked) {
+          await exitUniversalFullscreen();
+          releaseExambroKioskSecurity();
+          alert(
+            json.message ||
+              'Akun ujian Anda telah dikunci oleh Pengawas/Proktor. Silakan hubungi pengawas ruang.'
+          );
+          router.push('/siswa');
+          return;
+        }
+        if ((res.status === 400 && json.isFinished) || (res.status === 409 && json.isResetLogin)) {
+          isSubmittedRef.current = true;
+          await exitUniversalFullscreen();
+          releaseExambroKioskSecurity();
+          alert(json.message || 'Sesi ujian telah diperbarui oleh Pengawas.');
+          router.push('/siswa');
+          return;
+        }
+        if (res.ok && json.success && typeof json.sisaDetik === 'number') {
+          deadlineLocalMsRef.current = Date.now() + json.sisaDetik * 1000;
+          setSisaDetik(json.sisaDetik);
+        }
+      } catch {
+        // offline - tetap mengandalkan deadlineLocalMsRef lokal tanpa gangguan
+      }
+    };
+
+    const syncInterval = setInterval(attemptAutoSync, 8000);
+    const heartbeatInterval = setInterval(syncServerClockAndStatus, 30000);
     window.addEventListener('online', attemptAutoSync);
+    window.addEventListener('online', syncServerClockAndStatus);
 
     return () => {
       clearInterval(syncInterval);
+      clearInterval(heartbeatInterval);
       window.removeEventListener('online', attemptAutoSync);
+      window.removeEventListener('online', syncServerClockAndStatus);
     };
-  }, [ujianId, sisaDetik]);
+  }, [ujianId, loading, router]);
 
   const fetchUjianData = async () => {
     try {
       setLoading(true);
+      const t0 = Date.now();
       const res = await fetch(`/api/siswa/ujian/${ujianId}/mulai`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
+      const t1 = Date.now();
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        // Coba fallback ke cadangan sesi ujian IndexedDB jika server down
+        // Jika ditolak karena belum mulai, waktu habis, selesai, atau terkunci (status 400/403), jangan buka dari cache offline!
+        if (res.status === 400 || res.status === 403 || res.status === 401) {
+          alert(data.message || 'Tidak dapat membuka lembar ujian.');
+          router.push('/siswa');
+          return;
+        }
+
+        // Hanya gunakan fallback IndexedDB apabila server benar-benar down (5xx / gangguan jaringan)
         const cachedSession = await getExamSessionFromIndexedDB(ujianId);
         if (cachedSession && cachedSession.soalList?.length) {
           setUjianInfo(cachedSession.ujianInfo);
           setPesertaUjianId(cachedSession.pesertaUjianId || null);
           setSoalList(cachedSession.soalList);
+          const fallbackDetik = cachedSession.ujianInfo?.sisaWaktuDetik || 1800;
+          deadlineLocalMsRef.current = Date.now() + fallbackDetik * 1000;
+          setSisaDetik(fallbackDetik);
+
           const cachedAnswers = await getAllCachedAnswersFromIndexedDB(ujianId);
           const map: Record<string, JawabanState> = {};
           cachedSession.soalList.forEach((s: SoalItem) => {
@@ -205,42 +316,45 @@ export default function LembarUjianPage({
         return;
       }
 
+      const initialSisaDetik = Math.max(0, Number(data.data.ujian.sisaWaktuDetik) || 0);
+      // Kompensasi setengah RTT jaringan agar hitung mundur presisi terhadap server
+      const rttHalfMs = Math.min(2000, Math.floor((t1 - t0) / 2));
+      deadlineLocalMsRef.current = Date.now() + Math.max(0, initialSisaDetik * 1000 - rttHalfMs);
+
       setUjianInfo(data.data.ujian);
       setPesertaUjianId(data.data.pesertaUjianId);
       setSoalList(data.data.soalList);
-      setSisaDetik(data.data.ujian.sisaWaktuDetik || 0);
+      setSisaDetik(initialSisaDetik);
+      if (typeof data.data.totalPelanggaran === 'number') {
+        setViolationCount(data.data.totalPelanggaran);
+      }
 
-      // Fitur Anti-Cheat & Lockdown Sistem:
-      // Selalu WAJIB aktif (lockBrowser !== false). Hanya ujian tanpa proteksi eksplisit (lockBrowser === false) yang di-bypass.
       if (data.data.ujian.lockBrowser === false) {
         setIsSecurityUnlocked(true);
         setIsFullscreen(true);
       } else {
         setIsSecurityUnlocked(false);
       }
+
       await saveExamSessionToIndexedDB(ujianId, {
         pesertaUjianId: data.data.pesertaUjianId,
         ujianInfo: data.data.ujian,
         soalList: data.data.soalList,
       });
 
-      // 2. Ambil cache jawaban offline lokal dari IndexedDB & Native Android Exambro
       const localCachedAnswers = await getAllCachedAnswersFromIndexedDB(ujianId);
       const nativeExambroAnswers = await fetchAnswersFromAndroidExambro(ujianId);
 
-      // Inisialisasi jawaban tersimpan & merge dengan cache IndexedDB + Exambro
       const map: Record<string, JawabanState> = {};
       data.data.soalList.forEach((s: SoalItem) => {
         map[s.id] = { jawabanDipilih: '', raguRagu: false };
       });
 
-      // Isi dari data server
       data.data.jawabanTersimpan?.forEach((j: any) => {
         map[j.soalId] = {
           jawabanDipilih: j.jawabanDipilih || '',
           raguRagu: Boolean(j.raguRagu),
         };
-        // Simpan jawaban server ke IndexedDB sebagai data ter-sync
         saveAnswerToIndexedDB({
           ujianId,
           soalId: j.soalId,
@@ -250,7 +364,6 @@ export default function LembarUjianPage({
         });
       });
 
-      // Merge dengan cache IndexedDB lokal
       Object.keys(localCachedAnswers).forEach((soalId) => {
         const local = localCachedAnswers[soalId];
         if (local && !local.syncedToServer && local.jawabanDipilih) {
@@ -261,7 +374,6 @@ export default function LembarUjianPage({
         }
       });
 
-      // Merge dengan cache Native Android Exambro jika ada
       if (nativeExambroAnswers && typeof nativeExambroAnswers === 'object') {
         Object.keys(nativeExambroAnswers).forEach((soalId) => {
           const nativeItem = (nativeExambroAnswers as any)[soalId];
@@ -275,12 +387,9 @@ export default function LembarUjianPage({
       }
 
       setJawabanMap(map);
-
-      // Coba sinkronisasi jika ada sisa jawaban pending di IndexedDB
-      syncPendingAnswersToServer(ujianId, data.data.ujian.sisaWaktuDetik);
+      syncPendingAnswersToServer(ujianId, initialSisaDetik);
     } catch (err) {
       console.error('Koneksi server terganggu, mencoba pulihkan dari IndexedDB:', err);
-      // Fallback ke cache IndexedDB
       const cachedSession = await getExamSessionFromIndexedDB(ujianId);
       if (cachedSession && cachedSession.soalList?.length) {
         setUjianInfo(cachedSession.ujianInfo);
@@ -292,6 +401,10 @@ export default function LembarUjianPage({
         }
         setPesertaUjianId(cachedSession.pesertaUjianId || null);
         setSoalList(cachedSession.soalList);
+        const fallbackDetik = cachedSession.ujianInfo?.sisaWaktuDetik || 1800;
+        deadlineLocalMsRef.current = Date.now() + fallbackDetik * 1000;
+        setSisaDetik(fallbackDetik);
+
         const cachedAnswers = await getAllCachedAnswersFromIndexedDB(ujianId);
         const map: Record<string, JawabanState> = {};
         cachedSession.soalList.forEach((s: SoalItem) => {
@@ -310,40 +423,33 @@ export default function LembarUjianPage({
     }
   };
 
-  // Aktivasi Protokol Keamanan Ringan (Fullscreen + Audio Alarms Tanpa Screen Capture)
+  // Aktivasi Protokol Keamanan Kiosk (Fullscreen + WakeLock + Audio Alarms)
   const handleActivateSecurity = async (): Promise<boolean> => {
     try {
-      // 0. Unlock Web Audio & Speech synthesis untuk Safari macOS & iOS
       cbtSecurityAudio.unlockAudio();
+      cbtWakeLock.requestWakeLock().catch(() => {});
 
       const devInfo = detectDeviceSecurityInfo();
 
-      // 1. Eksekusi Fullscreen:
-      // Di Mac (Safari/Chrome), iPad, dan Windows/Android -> minta Fullscreen
-      // Di iPhone Safari (di mana Apple sengaja membatasi requestFullscreen pada HTML body) -> lewati tanpa melempar error
       if (devInfo.hasFullscreen) {
         try {
-          await requestUniversalFullscreen();
-          const fullscreenActive = isCurrentlyFullscreen();
-          setIsFullscreen(fullscreenActive);
+          await requestUniversalFullscreen(document.documentElement);
+          setIsFullscreen(isCurrentlyFullscreen());
         } catch (fsErr) {
           console.warn('Fullscreen request non-fatal:', fsErr);
           setIsFullscreen(true);
         }
       } else {
-        // iPhone / iOS Safari: Diizinkan langsung berjalan lancar dalam mode viewport mobile
+        // iPhone / iOS Safari / Exambro Native Kiosk: langsung berjalan dalam viewport penuh
         setIsFullscreen(true);
       }
 
-      // LAYER 2: Enforce Kiosk mode dan FLAG_SECURE pada Android Exambro native bridge
       enforceExambroKioskSecurity();
 
-      // 2. Buka lembar ujian dan aktifkan grace period 5 detik bebas pelanggaran
       securityUnlockedAtRef.current = Date.now();
       setIsSecurityUnlocked(true);
       setCooldownRemaining(5);
 
-      // Jalankan hitung mundur 5 detik masa bebas pelanggaran
       if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
       cooldownTimerRef.current = setInterval(() => {
         setCooldownRemaining((prev) => {
@@ -358,50 +464,204 @@ export default function LembarUjianPage({
       return true;
     } catch (e: any) {
       console.warn('Aktivasi keamanan non-blocking:', e);
-      // Tetap izinkan siswa masuk agar tidak terblokir
       setIsSecurityUnlocked(true);
       setIsFullscreen(true);
       return true;
     }
   };
 
-  // 2. Countdown Timer Real-time
-  useEffect(() => {
-    if (sisaDetik <= 0 && !loading && ujianInfo) {
-      // Auto submit jika waktu habis
-      handleSelesaiUjian(true);
+  // Helper pengecekan apakah sebuah butir soal sudah terisi lengkap
+  const isSoalAnswered = useCallback((soal: SoalItem | undefined, val?: string) => {
+    if (!val) return false;
+    const t = val.trim();
+    if (!t || t === '[]' || t === '{}') return false;
+    if (soal?.tipeSoal === 'MENJODOHKAN' && soal.matchingData) {
+      try {
+        const expectedPairs = JSON.parse(soal.matchingData);
+        const answeredMap = JSON.parse(t);
+        if (Array.isArray(expectedPairs) && expectedPairs.length > 0 && typeof answeredMap === 'object' && answeredMap !== null) {
+          return Object.keys(answeredMap).filter((k) => Boolean(answeredMap[k])).length >= expectedPairs.length;
+        }
+      } catch {}
+    }
+    return true;
+  }, []);
+
+  // Submit / Selesai Ujian (Didefinisikan dengan useCallback stabil untuk dipanggil dari Timer maupun Tombol Submit)
+  const handleSelesaiUjian = useCallback(async (isAuto = false) => {
+    if (isSubmittedRef.current) return;
+
+    Object.keys(textDebounceRef.current).forEach((sid) => {
+      if (textDebounceRef.current[sid]) {
+        clearTimeout(textDebounceRef.current[sid]);
+        delete textDebounceRef.current[sid];
+      }
+    });
+
+    const currentMap = jawabanMapRef.current;
+    const currentUjian = ujianInfoRef.current;
+    const answeredCount = soalList.filter((s) => isSoalAnswered(s, currentMap[s.id]?.jawabanDipilih)).length;
+    const requiredCount =
+      currentUjian?.minJawaban && Number(currentUjian.minJawaban) > 0
+        ? Math.min(soalList.length, Number(currentUjian.minJawaban))
+        : soalList.length;
+
+    if (!isAuto && answeredCount < requiredCount) {
+      const firstUnansweredIdx = soalList.findIndex((s) => !isSoalAnswered(s, currentMap[s.id]?.jawabanDipilih));
+      const remainingUnanswered = requiredCount - answeredCount;
+      setCheatWarning(
+        `Harap isi seluruh soal terlebih dahulu! Masih ada ${remainingUnanswered} soal yang belum diisi.`
+      );
+      setShowSubmitModal(false);
+      if (firstUnansweredIdx >= 0) {
+        navigateToQuestion(firstUnansweredIdx);
+      }
       return;
     }
 
-    timerRef.current = setInterval(() => {
-      setSisaDetik((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          handleSelesaiUjian(true);
-          return 0;
+    setSubmitting(true);
+    isSubmittedRef.current = true;
+    try {
+      for (const [sid, jState] of Object.entries(currentMap)) {
+        if (jState.jawabanDipilih) {
+          saveAnswerToIndexedDB({
+            ujianId,
+            soalId: sid,
+            jawabanDipilih: jState.jawabanDipilih,
+            raguRagu: jState.raguRagu,
+            sisaDetik: sisaDetikRef.current,
+            syncedToServer: false,
+          });
         }
-        return prev - 1;
+      }
+
+      await syncPendingAnswersToServer(ujianId, sisaDetikRef.current);
+
+      const res = await fetch(`/api/siswa/ujian/${ujianId}/selesai`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isAuto, jawabanMap: currentMap }),
       });
-    }, 1000);
+      const data = await res.json();
+
+      if (!data.success) {
+        isSubmittedRef.current = false;
+        alert(data.message || 'Gagal menyelesaikan ujian.');
+        setSubmitting(false);
+        return;
+      }
+
+      setIsSecurityUnlocked(false);
+      await exitUniversalFullscreen();
+      setIsFullscreen(false);
+      releaseExambroKioskSecurity();
+
+      cbtSecurityAudio.speakSuccess('Ujian selesai, terimakasih telah mengerjakan');
+
+      try {
+        const isLowEnd =
+          typeof document !== 'undefined' && document.documentElement.classList.contains('low-end-webview');
+        if (!isLowEnd && typeof confetti === 'function') {
+          confetti({
+            particleCount: 50,
+            spread: 60,
+            origin: { y: 0.6 },
+          });
+        }
+      } catch {}
+
+      const tampilkanHasil = data?.data?.tampilkanHasil === true;
+      const nilaiTotal = data?.data?.nilaiTotal ?? data?.data?.nilaiPG;
+
+      if (isAuto) {
+        if (tampilkanHasil && nilaiTotal !== undefined) {
+          alert(`Waktu habis! Jawaban Anda telah otomatis dikumpulkan.\n\nNilai Anda: ${nilaiTotal}/100`);
+        } else {
+          alert('Waktu habis! Jawaban Anda telah otomatis dikumpulkan.');
+        }
+      } else {
+        if (tampilkanHasil && nilaiTotal !== undefined) {
+          alert(`Ujian berhasil diselesaikan!\n\nNilai Perolehan: ${nilaiTotal}/100`);
+        } else {
+          alert('Ujian berhasil diselesaikan!\n\nJawaban Anda telah tersimpan aman.');
+        }
+      }
+      router.push('/siswa');
+    } catch {
+      isSubmittedRef.current = false;
+      alert(
+        'Terjadi kendala koneksi ke server saat pengumpulan. Seluruh jawaban Anda tetap AMAN tersimpan di perangkat ini (IndexedDB). Silakan laporkan ke proktor ruang atau klik tombol Cadangan Jawaban.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }, [ujianId, router, soalList, isSoalAnswered, navigateToQuestion]);
+
+  // 2. Drift-Proof Countdown Timer Real-time (Berbasis Timestamp Absolut — Kebal Throttling Tab/Layar Mati di Chrome Android & Safari iOS!)
+  useEffect(() => {
+    if (loading || !ujianInfo) return;
+
+    const tick = () => {
+      if (isSubmittedRef.current) return;
+      if (deadlineLocalMsRef.current === null) return;
+
+      const remainingSec = Math.max(
+        0,
+        Math.ceil((deadlineLocalMsRef.current - Date.now()) / 1000)
+      );
+      setSisaDetik(remainingSec);
+
+      if (remainingSec <= 0) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        handleSelesaiUjian(true);
+      }
+    };
+
+    tick();
+    timerRef.current = setInterval(tick, 1000);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [sisaDetik, loading]);
+  }, [loading, ujianInfo, handleSelesaiUjian]);
 
-  // 3. Anti-Cheat Engine Lintas Platform & Pengawasan Area Terkoordinasi (Anti-Collision State Machine)
-  // Hanya aktif jika fitur lockBrowser dinyalakan oleh guru/admin pada paket ujian terkait.
-  // Di luar fitur Anti-Cheat Lockdown (ujian biasa / latihan), peserta bebas melakukan scroll, sentuh, dan klik secara normal.
+  // Pantau fokus pada input jawaban (ISIAN / ESAI / SELECT) agar keyboard virtual HP tidak disalahartikan sebagai keluar Fullscreen
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      if (isEditableExamInput(e.target)) {
+        setIsKeyboardTyping(true);
+      }
+    };
+    const onFocusOut = () => {
+      setTimeout(() => {
+        if (typeof document !== 'undefined' && !isEditableExamInput(document.activeElement)) {
+          setIsKeyboardTyping(false);
+        }
+      }, 250);
+    };
+
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
+
+  // 3. Anti-Cheat Engine Lintas Platform & Pengawasan Area Terkoordinasi (Chrome Ponsel, Safari iOS, Exambro, Desktop)
   useEffect(() => {
     if (!isSecurityUnlocked || ujianInfo?.lockBrowser === false) return;
 
-    // Mutex & Debounce Ref untuk mencegah tabrakan event serentak
     let isHandlingViolation = false;
     let pendingViolationTimer: NodeJS.Timeout | null = null;
 
-    // Dispatcher Terpadu Pengawasan Area (Mencegah multi-firing antara visibilitychange, blur, pagehide, dan fullscreenchange)
     const dispatchAreaViolation = (
-      primaryType: 'TAB_SWITCH_ALERT' | 'APP_SWITCH_ALERT' | 'FULLSCREEN_EXIT' | 'KEYBOARD_SHORTCUT_VIOLATION' | 'MOUSE_LEAVE_ALERT',
+      primaryType:
+        | 'TAB_SWITCH_ALERT'
+        | 'APP_SWITCH_ALERT'
+        | 'FULLSCREEN_EXIT'
+        | 'KEYBOARD_SHORTCUT_VIOLATION'
+        | 'SECURITY_ALERT',
       detailMsg: string,
       voiceWarning: string
     ) => {
@@ -410,28 +670,29 @@ export default function LembarUjianPage({
         return;
       }
 
-      // Jika sedang menangani event dalam jeda 800ms, jangan dobelkan peringatan
       if (isHandlingViolation) return;
       isHandlingViolation = true;
 
-      // Jalankan trigger log dan suara terkoordinasi sekali saja
       triggerCheatLog(primaryType, detailMsg);
       cbtSecurityAudio.triggerFullWarning(voiceWarning);
       setCheatWarning(`Peringatan: ${detailMsg}`);
 
-      // Buka kembali mutex setelah 1.2 detik
       if (pendingViolationTimer) clearTimeout(pendingViolationTimer);
       pendingViolationTimer = setTimeout(() => {
         isHandlingViolation = false;
-      }, 1200);
+      }, 1500);
     };
 
-    // Browser History Trap (Cegah Tombol Back / Gesture Back HP)
+    // Browser History Trap (Cegah Tombol Back / Gesture Swipe-Back HP Android & Safari iOS)
     const cleanupHistoryLock = setupBrowserNavigationLock(() => {
       if (isSubmittedRef.current) return;
+      // Jika modal daftar soal atau modal zoom gambar sedang terbuka, tutup saja modalnya tanpa menghitung pelanggaran!
+      if (document.getElementById('cbt-image-zoom-lightbox')) {
+        return;
+      }
       dispatchAreaViolation(
         'KEYBOARD_SHORTCUT_VIOLATION',
-        'Tombol kembali / navigasi dicegah! Harap tetap di lembar ujian.',
+        'Tombol kembali / gesture swipe-back dicegah! Harap tetap di lembar ujian.',
         'Dilarang menekan tombol kembali selama ujian!'
       );
     });
@@ -439,7 +700,6 @@ export default function LembarUjianPage({
     // Anti-Screenshot & Anti-Screen-Record Protection
     const cleanupAntiScreenshot = setupAntiScreenshotAndRecording((detail) => {
       if (isSubmittedRef.current) return;
-      // Langsung tutupi konten dengan privacy shield
       setIsPrivacyObscured(true);
       setTimeout(() => {
         setIsPrivacyObscured(false);
@@ -451,83 +711,93 @@ export default function LembarUjianPage({
       );
     });
 
-    // Enforce Kiosk mode dan FLAG_SECURE pada Android Exambro native bridge
     enforceExambroKioskSecurity();
 
-    // Mencegah Siswa Menutup Tab atau Refresh (BeforeUnload Trap)
+    // BeforeUnload Trap
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isSubmittedRef.current) return;
-      const warningText = 'Peringatan: Ujian sedang berlangsung! Jika Anda keluar atau memuat ulang, progres ujian dan status Anda akan dicatat pelanggaran.';
+      const warningText =
+        'Peringatan: Ujian sedang berlangsung! Jika Anda keluar atau memuat ulang, aktivitas akan dicatat pelanggaran.';
       e.preventDefault();
       e.returnValue = warningText;
       return warningText;
     };
 
-    // Keyboard lockdown (Command di macOS, Ctrl di Windows/Linux, Alt, DevTools, Close tab)
+    // Keyboard lockdown
     const cleanupKeyboard = setupExamKeyboardLockdown((reason) => {
       dispatchAreaViolation(
         'KEYBOARD_SHORTCUT_VIOLATION',
         reason,
-        'Peringatan! Tombol kombinasi keyboard dilarang selama ujian!'
+        'Peringatan! Tombol pintasan dilarang selama ujian!'
       );
     });
 
-    // 1. Visibility Change Listener (Tab Switch)
+    // 1. Visibility Change Listener (Tab Switch / Home Button / App Switcher di Chrome Android & Safari iOS)
     const handleVisibilityChange = () => {
       if (document.hidden) {
         setIsPrivacyObscured(true);
         dispatchAreaViolation(
           'TAB_SWITCH_ALERT',
-          'Siswa berpindah tab browser atau meminimalkan browser',
+          'Peserta meninggalkan halaman ujian (pindah tab / meminimalkan browser ponsel)',
           'Peringatan! Anda terdeteksi meninggalkan halaman ujian!'
         );
       } else {
-        // Pulihkan perlindungan privasi setelah tab kembali fokus
+        // Saat kembali ke halaman ujian, nyalakan kembali WakeLock & hitung ulang timer seketika
+        cbtWakeLock.requestWakeLock().catch(() => {});
+        if (deadlineLocalMsRef.current !== null) {
+          setSisaDetik(Math.max(0, Math.ceil((deadlineLocalMsRef.current - Date.now()) / 1000)));
+        }
         setTimeout(() => {
           setIsPrivacyObscured(false);
-        }, 500);
+        }, 450);
       }
     };
 
-    // 2. Window Blur Listener (App Switch / Alt+Tab) - dengan debounce halus agar tidak false positive
+    // 2. Window Blur Listener (App Switcher / Control Center / Notification Shade / Picture-in-Picture)
+    // Di Safari iOS & Chrome Android, menarik Control Center / Notification Center atau membuka Floating App
+    // memicu window 'blur' tanpa selalu mengubah document.hidden menjadi true.
+    // Kita beri debounce 650ms dan abaikan jika fokus sedang berada di kolom input/select internal halaman!
     let blurTimeout: NodeJS.Timeout | null = null;
     const handleWindowBlur = () => {
-      // Jika dokumen sudah hidden, event sudah ditangani oleh visibilitychange
-      if (document.hidden) return;
-
-      // Di smartphone mobile (Android / iOS), window blur sering terpicu secara false-positive
-      // ketika memunculkan keyboard virtual on-screen, dropdown/select, atau address bar autohide.
-      const devInfo = detectDeviceSecurityInfo();
-      if (devInfo.isMobile) return;
+      if (document.hidden || isSubmittedRef.current) return;
+      if (isEditableExamInput(document.activeElement)) return;
 
       if (blurTimeout) clearTimeout(blurTimeout);
       blurTimeout = setTimeout(() => {
-        if (!document.hasFocus() && !document.hidden && !isSubmittedRef.current) {
+        if (isSubmittedRef.current || document.hidden) return;
+        if (isEditableExamInput(document.activeElement)) return;
+
+        if (!document.hasFocus()) {
           setIsPrivacyObscured(true);
+          const devInfo = detectDeviceSecurityInfo();
           dispatchAreaViolation(
             'APP_SWITCH_ALERT',
-            'Siswa berpindah aplikasi lain (Jendela Tidak Fokus)',
-            'Peringatan! Dilarang membuka aplikasi lain selama ujian!'
+            devInfo.isMobile || devInfo.isTablet
+              ? 'Layar ujian kehilangan fokus (membuka jendela aplikasi lain / panel notifikasi)'
+              : 'Peserta berpindah ke jendela aplikasi lain (Window Blur)',
+            'Peringatan! Dilarang membuka aplikasi atau panel lain selama ujian!'
           );
         }
-      }, 350);
+      }, 650);
     };
 
     const handleWindowFocus = () => {
       if (blurTimeout) clearTimeout(blurTimeout);
       setIsPrivacyObscured(false);
+      cbtWakeLock.requestWakeLock().catch(() => {});
     };
 
-    // 3. Page Hide Listener
+    // 3. Page Hide Listener (Khusus Safari iOS ketika tab ditutup / digeser keluar)
     const handlePageHide = () => {
+      if (isSubmittedRef.current) return;
       dispatchAreaViolation(
         'TAB_SWITCH_ALERT',
-        'Siswa menutup atau menyembunyikan halaman ujian',
+        'Peserta menutup atau meninggalkan tab ujian',
         'Peringatan! Dilarang menutup halaman ujian!'
       );
     };
 
-    // 4. Deteksi Kursor Mouse Keluar Viewport (Hanya peringatan buzzer lokal tanpa mencatat ke server)
+    // 4. Deteksi Kursor Mouse Keluar Viewport (Desktop)
     const handleMouseLeave = (e: MouseEvent) => {
       if (isSubmittedRef.current) return;
       if (securityUnlockedAtRef.current && Date.now() - securityUnlockedAtRef.current < 5000) {
@@ -539,69 +809,63 @@ export default function LembarUjianPage({
       }
     };
 
-    // 5. Fullscreen Change Listener
+    // 5. Fullscreen Change Listener (dengan pengecualian cerdas saat keyboard virtual HP muncul untuk soal Isian/Esai!)
     const handleFullscreenChange = () => {
       const inFullscreen = isCurrentlyFullscreen();
       setIsFullscreen(inFullscreen);
       if (isSubmittedRef.current) return;
 
       const devInfo = detectDeviceSecurityInfo();
+      // Jika di ponsel Android peserta mengetuk kolom input ISIAN/ESAI, Chrome Android otomatis keluar fullscreen sementara
+      // untuk menampilkan keyboard on-screen. Jangan hukum siswa atas perilaku bawaan OS Android ini!
       if (!inFullscreen && devInfo.hasFullscreen) {
+        if ((devInfo.isMobile || devInfo.isTablet) && isEditableExamInput(document.activeElement)) {
+          return;
+        }
+
         dispatchAreaViolation(
           'FULLSCREEN_EXIT',
-          'Siswa keluar dari mode layar penuh',
+          'Peserta keluar dari mode layar penuh (Fullscreen Lockdown)',
           'Peringatan! Layar terkunci! Harap segera kembali ke mode layar penuh!'
         );
-
-        // Otomatis kembalikan ke layar penuh jika diizinkan browser
-        const rootElem = document.getElementById('cbt-exam-root') || document.documentElement;
-        requestUniversalFullscreen(rootElem as HTMLElement).then((success) => {
-          if (success) {
-            enableChromeKeyboardLock();
-            setIsFullscreen(true);
-          }
-        }).catch(() => {});
       }
     };
 
-    // 6. Click-to-reenter Fullscreen
-    const handleDocumentClickToFullscreen = () => {
+    // 6. Deteksi Split-Screen / Multi-Window / Pop-up View di Android Chrome & iPadOS Safari
+    let resizeCheckTimer: NodeJS.Timeout | null = null;
+    const handleResizeSplitCheck = () => {
       if (isSubmittedRef.current) return;
-      if (!isCurrentlyFullscreen()) {
-        const devInfo = detectDeviceSecurityInfo();
-        if (devInfo.hasFullscreen && !devInfo.isMobile && !devInfo.isTablet) {
-          const rootElem = document.getElementById('cbt-exam-root') || document.documentElement;
-          requestUniversalFullscreen(rootElem as HTMLElement).then((success) => {
-            if (success) {
-              enableChromeKeyboardLock();
-              setIsFullscreen(true);
-            }
-          }).catch(() => {});
+      if (resizeCheckTimer) clearTimeout(resizeCheckTimer);
+      resizeCheckTimer = setTimeout(() => {
+        const splitDetected = isMobileSplitScreenDetected();
+        setIsSplitScreenBlocked(splitDetected);
+        if (splitDetected) {
+          dispatchAreaViolation(
+            'SECURITY_ALERT',
+            'Terdeteksi mode Layar Belah (Split-Screen / Jendela Mengambang) pada perangkat mobile!',
+            'Peringatan! Dilarang menggunakan fitur layar belah atau jendela mengambang selama ujian!'
+          );
         }
-      }
+      }, 400);
     };
 
-    // 7. Context Menu, Copy, Cut, Paste, Drag & Selection Prevention (Semua Perangkat Termasuk Mobile & WebView)
+    // 7. Context Menu, Copy, Cut, Paste, Drag & Selection Prevention (BLOKIR TOTAL Termasuk di Kolom Input!)
     const handleContextMenu = (e: MouseEvent | TouchEvent) => {
       e.preventDefault();
       cbtSecurityAudio.playWarningBuzzer();
-      setCheatWarning('Peringatan: Menu klik kanan / menu konteks dinonaktifkan!');
+      setCheatWarning('Peringatan: Klik kanan / menu tahan-sentuh diblokir selama ujian!');
     };
 
     const handleCopyCutPaste = (e: ClipboardEvent) => {
       e.preventDefault();
+      e.stopPropagation();
       cbtSecurityAudio.playWarningBuzzer();
       const actionName =
         e.type === 'copy' ? 'Menyalin (Copy)' : e.type === 'cut' ? 'Memotong (Cut)' : 'Menempel (Paste)';
-      setCheatWarning(`Peringatan: Fitur ${actionName} dilarang selama ujian!`);
+      setCheatWarning(`Peringatan: Akses ${actionName} diblokir total selama ujian!`);
     };
 
     const handleSelectStart = (e: Event) => {
-      // Izinkan pemilihan teks jika target berada dalam input atau textarea
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-        return;
-      }
       e.preventDefault();
     };
 
@@ -609,32 +873,16 @@ export default function LembarUjianPage({
       e.preventDefault();
     };
 
-    // 8. Mobile App Lifecycle & Split-Screen / App-Switch Detection
-    // Menangkap perpindahan aplikasi saat notification shade ditarik atau multi-window diaktifkan
-    const handleWindowFocusChange = () => {
-      if (document.hidden) {
-        dispatchAreaViolation(
-          'TAB_SWITCH_ALERT',
-          'Siswa berpindah tab / aplikasi browser mobile',
-          'Peringatan! Dilarang meninggalkan layar ujian!'
-        );
-      }
-    };
-
-    // Mencegah pull-down refresh gesture di Android Chrome / Safari yang bisa memicu reload
-    const handleTouchMove = (e: TouchEvent) => {
-      // Jika scroll berada di paling atas dan mencoba menarik ke bawah
-      if (window.scrollY === 0 && e.touches[0].clientY > 0) {
-        // biarkan browser menangani scroll biasa kecuali pull-to-refresh
-      }
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
     window.addEventListener('pagehide', handlePageHide);
-    document.addEventListener('click', handleDocumentClickToFullscreen, { capture: true });
+    window.addEventListener('resize', handleResizeSplitCheck);
     document.addEventListener('mouseleave', handleMouseLeave);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
@@ -646,18 +894,24 @@ export default function LembarUjianPage({
     window.addEventListener('paste', handleCopyCutPaste);
     document.addEventListener('selectstart', handleSelectStart);
     document.addEventListener('dragstart', handleDragStart);
+    document.addEventListener('drop', handleDrop);
+
+    // Cek awal apakah siswa membuka ujian dalam keadaan Split-Screen
+    handleResizeSplitCheck();
 
     return () => {
       if (pendingViolationTimer) clearTimeout(pendingViolationTimer);
+      if (blurTimeout) clearTimeout(blurTimeout);
+      if (resizeCheckTimer) clearTimeout(resizeCheckTimer);
       cleanupHistoryLock();
       cleanupKeyboard();
       cleanupAntiScreenshot();
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('pagehide', handlePageHide);
-      document.removeEventListener('click', handleDocumentClickToFullscreen, { capture: true });
+      window.removeEventListener('resize', handleResizeSplitCheck);
       document.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
@@ -669,17 +923,15 @@ export default function LembarUjianPage({
       window.removeEventListener('paste', handleCopyCutPaste);
       document.removeEventListener('selectstart', handleSelectStart);
       document.removeEventListener('dragstart', handleDragStart);
+      document.removeEventListener('drop', handleDrop);
     };
   }, [isSecurityUnlocked, pesertaUjianId, ujianInfo]);
 
   const triggerCheatLog = async (aktivitas: string, detail: string) => {
-    // 1. Masa penyesuaian 5 detik pertama: bypass semua pelanggaran
     if (securityUnlockedAtRef.current && Date.now() - securityUnlockedAtRef.current < 5000) {
-      console.log(`[CBT Security] Pelanggaran '${aktivitas}' di-bypass selama masa adaptasi 5 detik.`);
       return;
     }
 
-    // 2. Debounce anti-spam: minimal jeda 4 detik antar laporan pelanggaran
     const now = Date.now();
     if (now - lastViolationTimeRef.current < 4000) {
       return;
@@ -704,17 +956,16 @@ export default function LembarUjianPage({
       } else if (currentViolation > 0) {
         const sisaPelanggaran = Math.max(0, 10 - currentViolation);
         setCheatWarning(
-          `Peringatan Pelanggaran (${currentViolation}/10): Dilarang keluar dari halaman ujian atau berpindah aplikasi! Sisa toleransi: ${sisaPelanggaran} kali lagi sebelum akun terkunci otomatis.`
+          `Pelanggaran (${currentViolation}/10): ${detail} — Sisa toleransi ${sisaPelanggaran}x lagi sebelum terkunci otomatis.`
         );
       }
-    } catch (e) {
+    } catch {
       // silent
     }
   };
 
   // 4. Autosave Jawaban ke IndexedDB Client Caching & Server Realtime
   const saveJawaban = async (soalId: string, value: string, ragu: boolean, immediate = true) => {
-    // 1. Update React Local State
     setJawabanMap((prev) => ({
       ...prev,
       [soalId]: {
@@ -723,13 +974,12 @@ export default function LembarUjianPage({
       },
     }));
 
-    // 2. Simpan seketika ke IndexedDB Client Caching & Native Android Exambro
     saveAnswerToIndexedDB({
       ujianId,
       soalId,
       jawabanDipilih: value,
       raguRagu: ragu,
-      sisaDetik,
+      sisaDetik: sisaDetikRef.current,
       syncedToServer: false,
     });
     saveAnswerToAndroidExambro({
@@ -737,10 +987,9 @@ export default function LembarUjianPage({
       soalId,
       jawabanDipilih: value,
       raguRagu: ragu,
-      sisaDetik,
+      sisaDetik: sisaDetikRef.current,
     });
 
-    // 3. Fungsi kirim payload ke server CBT
     const sendPayload = async () => {
       setSyncStatus('saving');
       try {
@@ -751,42 +1000,45 @@ export default function LembarUjianPage({
             soalId,
             jawabanDipilih: value,
             raguRagu: ragu,
-            sisaDetik,
           }),
         });
         const data = await res.json();
+        if (res.status === 403 && data.isLocked) {
+          alert(data.message || 'Akun ujian Anda telah dikunci oleh Pengawas.');
+          router.push('/siswa');
+          return;
+        }
         if (res.ok && data.success) {
-          // Tandai di IndexedDB bahwa data butir ini sudah terkirim ke server
           await markAnswersAsSynced(ujianId, [soalId]);
           setSyncStatus('saved');
+          // Sinkronkan sisa waktu otoritatif dari server (misal jika proktor baru menambah waktu)
+          if (typeof data.sisaDetik === 'number') {
+            deadlineLocalMsRef.current = Date.now() + data.sisaDetik * 1000;
+            setSisaDetik(data.sisaDetik);
+          }
         } else {
-          // Tetap aman di IndexedDB
           setSyncStatus('offline_saved');
         }
-      } catch (e) {
-        console.warn('[CBT Offline Sync] Server tidak dapat dijangkau. Jawaban aman tersimpan di IndexedDB browser.');
+      } catch {
         setSyncStatus('offline_saved');
       }
     };
 
     if (immediate) {
-      // Untuk Pilihan Ganda / Kompleks / Menjodohkan / Ragu-ragu: Kirim seketika
       if (textDebounceRef.current[soalId]) {
         clearTimeout(textDebounceRef.current[soalId]);
       }
       sendPayload();
     } else {
-      // Untuk Ketik Teks Isian/Esai: Debounce 400ms agar hemat request tapi tetap realtime saat selesai mengetik
       if (textDebounceRef.current[soalId]) {
         clearTimeout(textDebounceRef.current[soalId]);
       }
       textDebounceRef.current[soalId] = setTimeout(() => {
         sendPayload();
-      }, 400);
+      }, 450);
     }
   };
 
-  // Toggle Pilihan Ganda Biasa / Benar-Salah
   const handleSelectOpsi = (soalId: string, opsiId: string) => {
     if (submitting || isSubmittedRef.current) return;
     const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
@@ -794,14 +1046,13 @@ export default function LembarUjianPage({
     saveJawaban(soalId, nextVal, curr.raguRagu, true);
   };
 
-  // Toggle Pilihan Ganda Kompleks (Bisa pilih multiple)
   const handleSelectOpsiKompleks = (soalId: string, opsiId: string) => {
     if (submitting || isSubmittedRef.current) return;
     const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
     let currentIds: string[] = [];
     try {
       if (curr.jawabanDipilih) currentIds = JSON.parse(curr.jawabanDipilih);
-    } catch (e) {
+    } catch {
       currentIds = [];
     }
 
@@ -814,7 +1065,6 @@ export default function LembarUjianPage({
     saveJawaban(soalId, JSON.stringify(currentIds), curr.raguRagu, true);
   };
 
-  // Toggle Ragu-Ragu
   const handleToggleRagu = () => {
     if (submitting || isSubmittedRef.current) return;
     const currentSoal = soalList[currentIndex];
@@ -823,14 +1073,12 @@ export default function LembarUjianPage({
     saveJawaban(currentSoal.id, curr.jawabanDipilih, !curr.raguRagu, true);
   };
 
-  // Input Teks untuk Isian / Esai
   const handleInputTeks = (soalId: string, text: string) => {
     if (submitting || isSubmittedRef.current) return;
     const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
     saveJawaban(soalId, text, curr.raguRagu, false);
   };
 
-  // Pilih Pasangan Pencocokan / Menjodohkan
   const handleSelectMatching = (soalId: string, leftText: string, rightText: string) => {
     if (submitting || isSubmittedRef.current) return;
     const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
@@ -839,7 +1087,7 @@ export default function LembarUjianPage({
       if (curr.jawabanDipilih) {
         mapping = JSON.parse(curr.jawabanDipilih);
       }
-    } catch (e) {
+    } catch {
       mapping = {};
     }
 
@@ -852,7 +1100,6 @@ export default function LembarUjianPage({
     saveJawaban(soalId, JSON.stringify(mapping), curr.raguRagu, true);
   };
 
-  // Unduh Cadangan Jawaban Darurat (Emergency Export)
   const handleDownloadEmergencyBackup = async () => {
     try {
       const jsonString = await exportExamAnswersBackupJSON(ujianId);
@@ -865,146 +1112,42 @@ export default function LembarUjianPage({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (e) {
+    } catch {
       alert('Gagal mengunduh cadangan jawaban.');
     }
   };
 
-  // Submit / Selesai Ujian
-  const handleSelesaiUjian = async (isAuto = false) => {
-    // 0. Segera bersihkan dan flush semua timer debounce teks jika ada soal isian/esai yang baru saja diketik
-    Object.keys(textDebounceRef.current).forEach((sid) => {
-      if (textDebounceRef.current[sid]) {
-        clearTimeout(textDebounceRef.current[sid]);
-        delete textDebounceRef.current[sid];
-      }
-    });
-
-    // Validasi Minimal Jawaban
-    const minJawaban = ujianInfo?.minJawaban ? Number(ujianInfo.minJawaban) : null;
-    if (!isAuto && minJawaban && minJawaban > 0) {
-      if (totalTerjawab < minJawaban) {
-        alert(
-          `Gagal Mengumpulkan Ujian!\n\nSyarat minimal jawaban belum terpenuhi. Anda baru menjawab ${totalTerjawab} butir soal, sedangkan tes ini mewajibkan minimal ${minJawaban} butir soal terjawab.`
-        );
-        setShowSubmitModal(false);
-        return;
-      }
-    }
-
-    setSubmitting(true);
-    isSubmittedRef.current = true; // Tandai ujian sudah diselesaikan agar tidak trigger false-positive anti cheat
-    try {
-      // Pastikan semua jawaban saat ini juga tersimpan di IndexedDB sebelum final submit
-      for (const [sid, jState] of Object.entries(jawabanMap)) {
-        if (jState.jawabanDipilih) {
-          saveAnswerToIndexedDB({
-            ujianId,
-            soalId: sid,
-            jawabanDipilih: jState.jawabanDipilih,
-            raguRagu: jState.raguRagu,
-            sisaDetik,
-            syncedToServer: false,
-          });
-        }
-      }
-
-      // Sinkronisasi sisa jawaban tertunda di IndexedDB sebelum final submit
-      await syncPendingAnswersToServer(ujianId, sisaDetik);
-
-      const res = await fetch(`/api/siswa/ujian/${ujianId}/selesai`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isAuto, jawabanMap }),
-      });
-      const data = await res.json();
-
-      if (!data.success) {
-        isSubmittedRef.current = false;
-        alert(data.message || 'Gagal menyelesaikan ujian.');
-        setSubmitting(false);
-        return;
-      }
-
-      // Keluar dari layar penuh secara otomatis dan lepaskan seluruh kunci keamanan (Layer 1 & Layer 2)
-      setIsSecurityUnlocked(false);
-      await exitUniversalFullscreen();
-      setIsFullscreen(false);
-      releaseExambroKioskSecurity();
-
-      // Mainkan suara ucapan selesai ujian yang ramah
-      cbtSecurityAudio.speakSuccess('Ujian selesai, terimakasih telah mengerjakan');
-
-      // Efek confetti ringan jika bukan perangkat low-end WebView
-      try {
-        const isLowEnd = typeof document !== 'undefined' && document.documentElement.classList.contains('low-end-webview');
-        if (!isLowEnd && typeof confetti === 'function') {
-          confetti({
-            particleCount: 50,
-            spread: 60,
-            origin: { y: 0.6 },
-          });
-        }
-      } catch (cErr) {
-        // silent
-      }
-
-      const tampilkanHasil = data?.data?.tampilkanHasil !== false;
-      const nilaiTotal = data?.data?.nilaiTotal ?? data?.data?.nilaiPG;
-
-      if (isAuto) {
-        if (tampilkanHasil && nilaiTotal !== undefined) {
-          alert(`Waktu habis! Jawaban Anda telah otomatis dikumpulkan.\n\nNilai Anda: ${nilaiTotal}/100`);
-        } else {
-          alert('Waktu habis! Jawaban Anda telah otomatis dikumpulkan.');
-        }
-      } else {
-        if (tampilkanHasil && nilaiTotal !== undefined) {
-          alert(`Ujian berhasil diselesaikan!\n\nNilai Perolehan: ${nilaiTotal}/100`);
-        } else {
-          alert('Ujian berhasil diselesaikan!\n\nJawaban Anda telah tersimpan aman.');
-        }
-      }
-      router.push('/siswa');
-    } catch (e) {
-      isSubmittedRef.current = false;
-      alert(
-        'Terjadi kendala koneksi ke server saat pengumpulan. Seluruh jawaban Anda tetap AMAN tersimpan di komputer ini (IndexedDB). Silakan laporkan ke proktor ruang atau klik tombol Cadangan Jawaban.'
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Format Timer HH:MM:SS
   const formatTime = (seconds: number) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
+    const safeSec = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(safeSec / 3600);
+    const m = Math.floor((safeSec % 3600) / 60);
+    const s = safeSec % 60;
     return `${h > 0 ? `${h}:` : ''}${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // Toggle Fullscreen Browser
+  // Toggle Fullscreen Browser: Selama ujian lockBrowser aktif, hanya izinkan MASUK fullscreen (cegah keluar tak sengaja!)
   const toggleFullscreen = async () => {
     try {
       if (!isCurrentlyFullscreen()) {
-        await requestUniversalFullscreen();
+        await requestUniversalFullscreen(document.documentElement);
         setIsFullscreen(isCurrentlyFullscreen());
-      } else {
+      } else if (ujianInfo?.lockBrowser === false) {
         await exitUniversalFullscreen();
         setIsFullscreen(isCurrentlyFullscreen());
+      } else {
+        setCheatWarning('Mode Layar Penuh dikunci selama ujian berlangsung.');
       }
-    } catch (_) {
+    } catch {
       setIsFullscreen(isCurrentlyFullscreen());
     }
   };
 
   if (loading || !soalList.length) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center text-slate-800 dark:text-slate-100">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center text-slate-800 dark:text-slate-100 p-4">
         <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4 shadow-sm" />
         <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Menyiapkan Lembar Ujian CBT...</p>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Memuat soal dan preferensi ujian</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Sinkronisasi waktu server & memuat butir soal</p>
       </div>
     );
   }
@@ -1012,69 +1155,113 @@ export default function LembarUjianPage({
   const currentSoal = soalList[currentIndex];
   const currentJawaban = jawabanMap[currentSoal?.id] || { jawabanDipilih: '', raguRagu: false };
 
-  // Hitung jumlah soal sudah dijawab
-  const totalTerjawab = Object.values(jawabanMap).filter((j) => Boolean(j.jawabanDipilih)).length;
+  const totalTerjawab = soalList.filter((s) => isSoalAnswered(s, jawabanMap[s.id]?.jawabanDipilih)).length;
+  const totalWajibDijawab =
+    ujianInfo?.minJawaban && Number(ujianInfo.minJawaban) > 0
+      ? Math.min(soalList.length, Number(ujianInfo.minJawaban))
+      : soalList.length;
+  const belumDijawabCount = Math.max(0, totalWajibDijawab - totalTerjawab);
+  const isAllRequiredAnswered = totalTerjawab >= totalWajibDijawab;
   const totalRagu = Object.values(jawabanMap).filter((j) => j.raguRagu).length;
+
+  const questionFontClass =
+    fontSize === 'small'
+      ? 'text-xs sm:text-sm'
+      : fontSize === 'large'
+      ? 'text-base sm:text-lg'
+      : fontSize === 'xlarge'
+      ? 'text-lg sm:text-xl'
+      : 'text-sm sm:text-base';
+
+  const optionFontClass =
+    fontSize === 'small'
+      ? 'text-xs'
+      : fontSize === 'large'
+      ? 'text-sm sm:text-base'
+      : fontSize === 'xlarge'
+      ? 'text-base sm:text-lg'
+      : 'text-xs sm:text-sm';
+
+  const fontLabelMap: Record<FontScaleSize, string> = {
+    small: 'A-',
+    normal: 'A',
+    large: 'A+',
+    xlarge: 'A++',
+  };
+
+  const deviceSec = typeof window !== 'undefined' ? detectDeviceSecurityInfo() : null;
+  const shouldShowFullscreenLockOverlay = Boolean(
+    isSecurityUnlocked &&
+      !isFullscreen &&
+      !isKeyboardTyping &&
+      ujianInfo?.lockBrowser !== false &&
+      cooldownRemaining === 0 &&
+      !isSubmittedRef.current &&
+      deviceSec?.hasFullscreen
+  );
 
   return (
     <div
       id="cbt-exam-root"
-
-      className={`min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between font-sans pb-16 sm:pb-3 ${
+      className={`min-h-screen min-h-[100dvh] bg-slate-100/80 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between font-sans overflow-x-hidden ${
         ujianInfo?.lockBrowser !== false ? 'cbt-exam-lockdown select-none' : 'selection:bg-emerald-500 selection:text-white'
       } ${isPrivacyObscured && ujianInfo?.lockBrowser !== false ? 'cbt-privacy-shield-active' : ''}`}
       style={{ touchAction: 'pan-y pinch-zoom' }}
     >
-      {/* Privacy Shield Blindfold Overlay (Aktif saat tangkapan layar, PrintScreen, Alt+Tab, atau background screenshot) */}
+      {/* Privacy Shield Blindfold Overlay */}
       {isPrivacyObscured && ujianInfo?.lockBrowser !== false && !isSubmittedRef.current && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center select-none backdrop-blur-xl">
+        <div className="fixed inset-0 z-[100] bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center select-none">
           <div className="w-16 h-16 rounded-full bg-rose-500/20 border-2 border-rose-500 flex items-center justify-center mb-4 text-rose-500 animate-pulse">
             <ShieldAlert className="w-9 h-9" />
           </div>
-          <h3 className="text-xl font-bold text-white tracking-wide">
+          <h3 className="text-lg sm:text-xl font-bold text-white tracking-wide">
             Layar Soal Disamarkan (Privacy Guard)
           </h3>
-          <p className="text-sm text-slate-400 mt-2 max-w-sm">
-            Tangkapan layar, rekam layar, dan perpindahan jendela diblokir demi keamanan ujian.
+          <p className="text-xs sm:text-sm text-slate-400 mt-2 max-w-sm leading-relaxed">
+            Harap tetap fokus di layar ujian. Perpindahan aplikasi, panel sistem, dan tangkapan layar diblokir demi integritas ujian.
           </p>
         </div>
       )}
 
-      {/* Modal Aktivasi Keamanan & Screen Recording */}
+      {/* Split-Screen / Floating Window Blocker Overlay (Khusus Mobile & Tablet) */}
+      {isSplitScreenBlocked && ujianInfo?.lockBrowser !== false && !isSubmittedRef.current && (
+        <div className="fixed inset-0 z-[95] bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center select-none">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-500 flex items-center justify-center mb-4 text-amber-400 animate-bounce">
+            <AlertTriangle className="w-9 h-9" />
+          </div>
+          <h3 className="text-lg sm:text-xl font-black text-white">
+            Mode Layar Belah (Split-Screen) Terdeteksi!
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-md leading-relaxed">
+            Tutup aplikasi kedua / jendela mengambang (Pop-Up View) dan kembalikan browser ke ukuran layar penuh untuk melanjutkan mengerjakan soal.
+          </p>
+        </div>
+      )}
+
+      {/* Modal Aktivasi Keamanan Kiosk */}
       {ujianInfo?.lockBrowser !== false && (
         <SecurityLockModal
           isOpen={!isSecurityUnlocked}
           onActivateSecurity={handleActivateSecurity}
-          requireScreenShare={true}
         />
       )}
 
-      {/* Force Fullscreen Lockdown Overlay: Mencegah interaksi & mengunci layar jika keluar dari Fullscreen selama ujian aktif (hanya pada perangkat yang mendukung Fullscreen API) */}
-      {isSecurityUnlocked && !isFullscreen && ujianInfo?.lockBrowser !== false && cooldownRemaining === 0 && !isSubmittedRef.current && (typeof window !== 'undefined' && detectDeviceSecurityInfo().hasFullscreen) && (
+      {/* Force Fullscreen Lockdown Overlay */}
+      {shouldShowFullscreenLockOverlay && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl shadow-rose-900/40 space-y-5 animate-in zoom-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl space-y-5 animate-in zoom-in duration-200">
             <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-rose-600 flex items-center justify-center mx-auto shadow-md">
               <ShieldAlert className="w-10 h-10 animate-bounce" />
             </div>
             <div>
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-rose-600 bg-rose-100 dark:bg-rose-950/80 px-3 py-1 rounded-full border border-rose-200 dark:border-rose-800 inline-block">
-                Layar Ujian Terkunci
+                Layar Ujian Terkunci ({violationCount}/10 Pelanggaran)
               </span>
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-2">
                 Kembali ke Mode Layar Penuh!
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
-                Anda terdeteksi keluar dari mode layar penuh atau beralih jendela. Lembar soal terkunci demi menjaga integritas ujian.
-              </p>
-            </div>
-
-            <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-left text-xs text-rose-800 dark:text-rose-300">
-              <p className="font-bold flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                Peringatan Sistem:
-              </p>
-              <p className="mt-1 text-[11px] text-rose-700 dark:text-rose-400">
-                Setiap upaya meninggalkan layar ujian otomatis dicatat dan dapat mengakibatkan ujian terkunci permanen oleh proktor.
+                Anda keluar dari mode layar penuh. Ketuk tombol di bawah untuk mengembalikan layar penuh dan melanjutkan ujian.
               </p>
             </div>
 
@@ -1082,10 +1269,11 @@ export default function LembarUjianPage({
               type="button"
               onClick={async () => {
                 cbtSecurityAudio.unlockAudio();
-                await requestUniversalFullscreen();
+                cbtWakeLock.requestWakeLock().catch(() => {});
+                await requestUniversalFullscreen(document.documentElement);
                 setIsFullscreen(isCurrentlyFullscreen());
               }}
-              className="w-full py-3.5 px-6 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-sm shadow-lg shadow-rose-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
+              className="min-h-[48px] w-full py-3.5 px-6 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-sm shadow-lg shadow-rose-600/30 transition flex items-center justify-center gap-2 cursor-pointer touch-manipulation"
             >
               <Maximize2 className="w-4 h-4" />
               <span>Buka Kunci & Masuk Layar Penuh</span>
@@ -1094,66 +1282,89 @@ export default function LembarUjianPage({
         </div>
       )}
 
-      {/* Sticky Header CBT Compact (Light & Dark Modern Style) */}
-      <header className="sticky top-0 z-40 px-2 sm:px-6 lg:px-8 py-1.5 sm:py-2.5 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200/90 dark:border-white/10 backdrop-blur-md flex items-center justify-between gap-1.5 sm:gap-4 shadow-xs">
-        {/* Left: Info Ujian & Nomor Soal */}
-        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
-          <div className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-600 font-extrabold text-white text-xs sm:text-sm shadow-xs shadow-emerald-600/30 shrink-0">
+      {/* Sticky Header CBT Ergonomis & Responsif untuk Smartphone (320px - Desktop) */}
+      <header
+        id="cbt-exam-header"
+        className="sticky top-0 z-40 px-2.5 sm:px-6 lg:px-8 py-1.5 sm:py-2.5 bg-white/98 dark:bg-slate-900/98 border-b border-slate-200/90 dark:border-white/10 flex items-center justify-between gap-1.5 sm:gap-3 shadow-xs"
+      >
+        {/* Left: Nomor Soal Aktif & Judul */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div className="flex items-center justify-center min-w-[34px] h-[34px] sm:w-9 sm:h-9 rounded-xl bg-emerald-600 font-extrabold text-white text-xs sm:text-sm shadow-xs shrink-0">
             {currentIndex + 1}
           </div>
           <div className="min-w-0">
-            <h1 className="text-xs sm:text-sm lg:text-base font-extrabold text-slate-900 dark:text-white truncate max-w-[120px] xs:max-w-[180px] sm:max-w-none">
+            <h1 className="text-[11px] xs:text-xs sm:text-sm lg:text-base font-extrabold text-slate-900 dark:text-white truncate max-w-[96px] xs:max-w-[140px] sm:max-w-xs lg:max-w-md">
               {ujianInfo?.judul || 'Lembar Ujian CBT'}
             </h1>
-            <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5">
-              <span className="text-[9px] sm:text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200/60 dark:border-emerald-800 font-mono shrink-0">
-                Soal {currentIndex + 1} / {soalList.length}
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[10px] sm:text-[11px] font-bold text-emerald-700 dark:text-emerald-300 font-mono shrink-0">
+                {currentIndex + 1}/{soalList.length}
               </span>
-              <span className="text-[9px] sm:text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate hidden xs:inline">
-                • {currentSoal?.tipeSoal ? currentSoal.tipeSoal.replace('_', ' ') : ''}
-              </span>
+              {/* Indikator Sinkronisasi Ringkas yang tampak juga di Mobile */}
+              <span
+                className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                  syncStatus === 'saving'
+                    ? 'bg-amber-500 animate-ping'
+                    : syncStatus === 'offline_saved' || syncStatus === 'error'
+                    ? 'bg-sky-500'
+                    : 'bg-emerald-500'
+                }`}
+                title={
+                  syncStatus === 'saving'
+                    ? 'Menyimpan jawaban...'
+                    : syncStatus === 'offline_saved'
+                    ? 'Tersimpan aman di memori perangkat (Offline)'
+                    : 'Tersimpan di server'
+                }
+              />
+              {violationCount > 0 && (
+                <span className="text-[9px] sm:text-[10px] font-extrabold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.2 rounded border border-rose-200 dark:border-rose-800 shrink-0">
+                  ⚠️ {violationCount}/10
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Center: Realtime Countdown Timer */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 px-2 sm:px-3 py-1 rounded-xl shadow-2xs">
-            <Clock className={`w-3.5 h-3.5 ${sisaDetik < 300 ? 'text-rose-600 animate-pulse' : 'text-emerald-600 dark:text-emerald-400'}`} />
+        {/* Center: Realtime Countdown Timer (Tabular Nums Anti-Geser) */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div
+            className={`flex items-center gap-1 sm:gap-1.5 border px-2.5 sm:px-3 py-1.5 rounded-xl shadow-2xs transition-colors ${
+              sisaDetik <= 300
+                ? 'bg-rose-50 dark:bg-rose-950/70 border-rose-300 dark:border-rose-800'
+                : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10'
+            }`}
+          >
+            <Clock
+              className={`w-3.5 h-3.5 shrink-0 ${
+                sisaDetik <= 300 ? 'text-rose-600 animate-pulse' : 'text-emerald-600 dark:text-emerald-400'
+              }`}
+            />
             <span
-              className={`font-mono text-xs sm:text-sm font-extrabold tracking-wider ${
-                sisaDetik < 300 ? 'text-rose-600 font-black' : 'text-slate-800 dark:text-slate-200'
+              className={`font-mono swiss-tabular-nums text-xs sm:text-sm font-black tracking-wider ${
+                sisaDetik <= 300 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-100'
               }`}
             >
               {formatTime(sisaDetik)}
             </span>
           </div>
 
-          {/* Autosave Server Sync & IndexedDB Offline Status Indicator */}
+          {/* Desktop Sync Badge */}
           <div
-            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold border transition-all ${
+            className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-bold border ${
               syncStatus === 'saving'
-                ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/80 animate-pulse'
+                ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/80'
                 : syncStatus === 'offline_saved' || syncStatus === 'error'
                 ? 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800/80'
                 : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/80'
             }`}
-            title={
-              syncStatus === 'saving'
-                ? 'Menyimpan jawaban ke server...'
-                : syncStatus === 'offline_saved' || syncStatus === 'error'
-                ? 'Server terputus/mati. Jawaban 100% AMAN tersimpan di IndexedDB browser siswa dan akan otomatis tersinkronisasi saat server aktif kembali.'
-                : 'Semua jawaban tersimpan aman di server dan dicadangkan ke IndexedDB'
-            }
           >
             {syncStatus === 'offline_saved' || syncStatus === 'error' ? (
               <Database className="w-3 h-3 text-sky-600 dark:text-sky-400 shrink-0" />
             ) : (
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  syncStatus === 'saving'
-                    ? 'bg-amber-500 animate-ping'
-                    : 'bg-emerald-500'
+                  syncStatus === 'saving' ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'
                 }`}
               />
             )}
@@ -1161,177 +1372,161 @@ export default function LembarUjianPage({
               {syncStatus === 'saving'
                 ? 'Menyimpan...'
                 : syncStatus === 'offline_saved' || syncStatus === 'error'
-                ? 'Cadangan Offline (IndexedDB)'
-                : 'Tersimpan Online'}
+                ? 'Offline Aman'
+                : 'Tersimpan'}
             </span>
           </div>
 
-          {/* Badge Indikator Android CBT Exambro App / Safe Exam Browser */}
           {isSEB ? (
-            <div
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 text-[10px] font-bold shadow-2xs"
-              title="Aplikasi Safe Exam Browser (SEB) iOS / Android Aktif Terkunci Aman"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-              <span>Safe Exam Browser (SEB)</span>
+            <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 text-[10px] font-bold">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              <span>SEB Kiosk</span>
             </div>
           ) : isExambro ? (
-            <div
-              className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80 text-[10px] font-bold shadow-2xs"
-              title="Aplikasi Android CBT Exambro Kiosk aktif dengan sinkronisasi native bridge storage ganda"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-              <span>Exambro Kiosk</span>
+            <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80 text-[10px] font-bold">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+              <span>Exambro</span>
             </div>
           ) : null}
         </div>
 
-        {/* Right: Quick Tools (ThemeToggle, Font size, Grid Modal, Fullscreen) */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* Tombol Switch Tema Terpadu */}
-          <ThemeToggle size="sm" />
-
-          {/* Font Resizer (Khusus Layar Sedang/Besar) */}
-          <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-950 rounded-xl p-1 border border-slate-200 dark:border-white/10 text-xs">
-            <button
-              onClick={() => setFontSize('normal')}
-              className={`px-2.5 py-1 rounded-lg transition font-bold ${
-                fontSize === 'normal'
-                  ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 shadow-2xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-              }`}
-            >
-              A
-            </button>
-            <button
-              onClick={() => setFontSize('large')}
-              className={`px-2.5 py-1 rounded-lg transition font-bold text-sm ${
-                fontSize === 'large'
-                  ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 shadow-2xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-              }`}
-            >
-              A+
-            </button>
-            <button
-              onClick={() => setFontSize('xlarge')}
-              className={`px-2.5 py-1 rounded-lg transition font-bold text-base ${
-                fontSize === 'xlarge'
-                  ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 shadow-2xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-              }`}
-            >
-              A++
-            </button>
-          </div>
-
+        {/* Right: Quick Tools (Font Size Mobile & Desktop, ThemeToggle, Daftar Soal) */}
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Tombol Ukuran Teks di Smartphone (44x44px Touch Target - Siklus Kecil/Sedang/Besar/Ekstra Besar) */}
           <button
-            onClick={toggleFullscreen}
-            className="p-2 sm:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-950 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-xs hidden sm:flex items-center gap-1 transition cursor-pointer"
-            title="Fullscreen Mode"
+            type="button"
+            onClick={cycleMobileFontSize}
+            className="md:hidden min-w-[42px] min-h-[42px] px-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 text-[11px] font-extrabold flex items-center justify-center gap-0.5 active:scale-95 touch-manipulation"
+            title="Ubah Ukuran Teks Soal (Kecil / Sedang / Besar / Ekstra Besar)"
           >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            <Type className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>{fontLabelMap[fontSize]}</span>
           </button>
 
-          {/* Grid Nomor Soal Button */}
+          {/* Font Resizer Lengkap untuk Tablet & Desktop */}
+          <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-950 rounded-xl p-0.5 border border-slate-200 dark:border-white/10 text-xs">
+            {(['small', 'normal', 'large', 'xlarge'] as FontScaleSize[]).map((sz) => (
+              <button
+                key={sz}
+                type="button"
+                onClick={() => handleChangeFontSize(sz)}
+                className={`min-h-[34px] px-2.5 py-1 rounded-lg transition font-bold cursor-pointer ${
+                  fontSize === sz
+                    ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 shadow-2xs'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                }`}
+              >
+                {fontLabelMap[sz]}
+              </button>
+            ))}
+          </div>
+
+          <ThemeToggle size="sm" />
+
+          {/* Tombol Layar Penuh: Hanya tampil saat BELUM fullscreen (agar siswa tidak bisa menekan tombol keluar fullscreen selama ujian!) */}
+          {deviceSec?.hasFullscreen && (!isFullscreen || ujianInfo?.lockBrowser === false) && (
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className="min-w-[40px] min-h-[40px] p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs hidden sm:flex items-center justify-center transition cursor-pointer touch-manipulation"
+              title="Masuk Mode Layar Penuh"
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+          )}
+
+          {/* Grid Nomor Soal Button (44px Touch Target) */}
           <button
+            type="button"
             onClick={() => setShowNavGrid(!showNavGrid)}
-            className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold transition shadow-2xs cursor-pointer shrink-0"
+            className="min-h-[42px] flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-extrabold transition shadow-2xs cursor-pointer shrink-0 active:scale-95 touch-manipulation"
           >
-            <Grid className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-emerald-400" />
-            <span className="hidden sm:inline">Daftar Soal ({totalTerjawab}/{soalList.length})</span>
+            <Grid className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="hidden sm:inline">Soal ({totalTerjawab}/{soalList.length})</span>
             <span className="sm:hidden font-mono text-[11px]">{totalTerjawab}/{soalList.length}</span>
           </button>
         </div>
       </header>
 
-      {/* Banner & Floating Countdown 5 Detik Sebelum Pelanggaran Dimulai */}
+      {/* Masa Adaptasi 5 Detik Banner */}
       {cooldownRemaining > 0 && (
-        <div className="bg-gradient-to-r from-amber-600 via-emerald-600 to-teal-600 text-white border-b border-emerald-700 px-3 sm:px-8 py-2.5 text-xs font-semibold flex items-center justify-between gap-3 z-30 shadow-md animate-in slide-in-from-top duration-300">
+        <div className="bg-gradient-to-r from-amber-600 via-emerald-600 to-teal-600 text-white border-b border-emerald-700 px-3 sm:px-8 py-2 text-xs font-semibold flex items-center justify-between gap-3 z-30 shadow-md">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-white/25 backdrop-blur-md text-white font-black text-base animate-pulse border border-white/30 shrink-0">
+            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-white/25 text-white font-black text-sm shrink-0">
               {cooldownRemaining}s
             </div>
-            <div className="min-w-0">
-              <span className="font-black text-xs sm:text-sm block tracking-wide">
-                ⏱️ Pengawasan Pelanggaran Dimulai Dalam: {cooldownRemaining} Detik
-              </span>
-              <span className="text-[11px] text-emerald-100 hidden sm:block">
-                Masa adaptasi layar & perizinan Google Chrome (Bebas dari sanksi pelanggaran).
-              </span>
-            </div>
+            <span className="font-bold text-xs truncate">
+              Masa adaptasi layar aktif ({cooldownRemaining} detik bebas sanksi pelanggaran)
+            </span>
           </div>
-          {!isFullscreen && (
-            <button
-              onClick={() => {
-                requestUniversalFullscreen();
-                setIsFullscreen(isCurrentlyFullscreen());
-              }}
-              className="px-3 py-1.5 rounded-xl bg-white text-emerald-900 hover:bg-emerald-50 text-[11px] font-black transition cursor-pointer shrink-0 flex items-center gap-1.5 shadow-md active:scale-95"
-            >
-              <Maximize2 className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Masuk Fullscreen</span>
-            </button>
-          )}
         </div>
       )}
 
       {/* Warning Alert Anti-Cheat */}
       {cheatWarning && (
-        <div className="bg-rose-50 border-b border-rose-200 px-4 sm:px-8 py-2.5 text-rose-800 text-xs font-medium flex items-center justify-between gap-3 z-20 shadow-2xs">
-          <div className="flex items-center gap-2.5">
-            <ShieldAlert className="w-4 h-4 text-rose-600 animate-bounce shrink-0" />
-            <span>{cheatWarning}</span>
+        <div className="bg-rose-50 dark:bg-rose-950/80 border-b border-rose-200 dark:border-rose-800 px-3 sm:px-8 py-2 text-rose-800 dark:text-rose-200 text-xs font-medium flex items-center justify-between gap-2.5 z-20 shadow-2xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+            <span className="leading-snug">{cheatWarning}</span>
           </div>
           <button
+            type="button"
             onClick={() => setCheatWarning(null)}
-            className="text-[11px] bg-rose-600 hover:bg-rose-700 px-2.5 py-1 rounded-lg text-white font-bold transition shrink-0 cursor-pointer"
+            className="min-h-[34px] text-[11px] bg-rose-600 hover:bg-rose-700 px-3 py-1 rounded-lg text-white font-bold transition shrink-0 cursor-pointer touch-manipulation"
           >
             Tutup
           </button>
         </div>
       )}
 
-      {/* Main Content Area: Diberikan margin-bottom aman (pb-28 di mobile) agar soal & opsi terbawah tidak terpotong atau tertutup bottom navigation bar */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-2.5 sm:p-5 lg:p-6 pb-28 sm:pb-8 flex flex-col justify-between">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-xs dark:shadow-xl space-y-4 sm:space-y-6">
-          {/* Question Audio Player (Jika tipe listening) */}
+      {/* Main Content Area: Momentum Scroll Lancar & Ruang Aman untuk Bottom Navigation di Ponsel */}
+      <main className="flex-1 max-w-5xl w-full mx-auto px-2.5 sm:px-5 lg:px-6 pt-3 sm:pt-5 pb-28 sm:pb-8 flex flex-col justify-between overscroll-contain">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-white/10 rounded-2xl sm:rounded-3xl p-3.5 xs:p-4 sm:p-7 shadow-xs dark:shadow-xl space-y-4 sm:space-y-6">
+          {/* Bar Info Tipe Soal & Bobot Ringkas */}
+          <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100 dark:border-white/10 text-[11px] text-slate-500 dark:text-slate-400">
+            <span className="font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded-lg border border-emerald-200/70 dark:border-emerald-800/60">
+              Butir Soal #{currentIndex + 1} • {currentSoal.tipeSoal.replace('_', ' ')}
+            </span>
+            {currentJawaban.raguRagu && (
+              <span className="font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-800">
+                Ditandai Ragu-Ragu
+              </span>
+            )}
+          </div>
+
+          {/* Question Audio Player */}
           {currentSoal.mediaAudio && (
-            <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+            <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
                 <Volume2 className="w-4 h-4" />
               </div>
-              <audio ref={audioRef} controls src={currentSoal.mediaAudio} className="w-full h-7" />
+              <audio ref={audioRef} controls src={currentSoal.mediaAudio} className="w-full h-9" />
             </div>
           )}
 
-          {/* Question Media Gambar (Jika ada) */}
+          {/* Question Media Gambar (Mendukung Pinch-to-Zoom & Ketuk untuk Lightbox Zoom) */}
           {currentSoal.mediaGambar && (
-            <div className="overflow-hidden bg-transparent p-1 max-w-lg mx-auto">
+            <div className="relative overflow-hidden bg-slate-50/60 dark:bg-slate-950/40 rounded-2xl p-2 max-w-lg mx-auto border border-slate-100 dark:border-white/5">
               <img
                 src={currentSoal.mediaGambar}
                 alt="Gambar Soal"
-                className="w-full h-auto object-contain max-h-64 sm:max-h-80"
+                className="cbt-zoomable-media w-full h-auto object-contain max-h-64 sm:max-h-80 mx-auto cursor-zoom-in"
               />
+              <span className="mt-1.5 flex items-center justify-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 pointer-events-none">
+                <ZoomIn className="w-3 h-3" />
+                <span>Ketuk gambar untuk memperbesar detail</span>
+              </span>
             </div>
           )}
 
-          {/* Question Text with KaTeX Math Rendering */}
-          <div
-            className={`text-slate-900 dark:text-slate-100 break-words leading-relaxed pb-1 select-text ${
-              fontSize === 'large'
-                ? 'text-base sm:text-lg'
-                : fontSize === 'xlarge'
-                ? 'text-lg sm:text-xl'
-                : 'text-sm sm:text-base'
-            }`}
-          >
+          {/* Question Text with MathRenderer (Mendukung penuh Akar Kuadrat, Akar Pangkat-n, Pecahan, Arab, Jawa) */}
+          <div className={`text-slate-900 dark:text-slate-100 break-words leading-relaxed overflow-x-auto custom-scrollbar pb-1 ${questionFontClass}`}>
             <MathRenderer content={currentSoal.pertanyaan} />
           </div>
 
-          {/* Opsi Jawaban: Pilihan Ganda & Benar Salah */}
+          {/* Opsi Jawaban: Pilihan Ganda & Benar Salah (Target Sentuh >= 48px) */}
           {(currentSoal.tipeSoal === 'PG' || currentSoal.tipeSoal === 'BENAR_SALAH') && (
-            <div className="space-y-2.5 sm:space-y-3 pt-4 border-t border-slate-100 dark:border-white/10">
+            <div className="space-y-2.5 sm:space-y-3 pt-3 sm:pt-4 border-t border-slate-100 dark:border-white/10">
               {currentSoal.opsiJawaban.map((opsi) => {
                 const isSelected = currentJawaban.jawabanDipilih === opsi.id;
 
@@ -1340,23 +1535,30 @@ export default function LembarUjianPage({
                     key={opsi.id}
                     type="button"
                     onClick={() => handleSelectOpsi(currentSoal.id, opsi.id)}
-                    className={`w-full text-left p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all flex items-start gap-3 sm:gap-3.5 cursor-pointer touch-manipulation ${
+                    className={`min-h-[52px] w-full text-left p-3 sm:p-4 rounded-2xl transition-all flex items-start gap-3 sm:gap-3.5 cursor-pointer touch-manipulation active:scale-[0.99] ${
                       isSelected
-                        ? 'bg-emerald-50/95 dark:bg-emerald-950/60 border-2 border-emerald-500 dark:border-emerald-400 text-emerald-950 dark:text-emerald-100 shadow-sm ring-2 ring-emerald-500/30'
-                        : 'bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
+                        ? 'bg-emerald-50/95 dark:bg-emerald-950/60 border-2 border-emerald-500 dark:border-emerald-400 text-emerald-950 dark:text-emerald-100 shadow-xs ring-2 ring-emerald-500/25'
+                        : 'bg-slate-50/40 dark:bg-slate-950/30 hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200'
                     }`}
                   >
                     <div
-                      className={`flex-shrink-0 w-8 h-8 rounded-xl font-extrabold flex items-center justify-center text-xs sm:text-sm transition ${
+                      className={`flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl font-extrabold flex items-center justify-center text-xs sm:text-sm transition ${
                         isSelected
                           ? 'bg-emerald-600 text-white shadow-xs scale-105'
-                          : 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
+                          : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
                       }`}
                     >
                       {opsi.label}
                     </div>
-                    <div className={`flex-1 pt-1 text-xs sm:text-sm break-words select-text border-0 ring-0 outline-none ${isSelected ? 'font-semibold text-emerald-950 dark:text-emerald-100' : 'text-slate-800 dark:text-slate-200'}`}>
+                    <div className={`flex-1 pt-1 break-words min-w-0 space-y-2 ${optionFontClass} ${isSelected ? 'font-semibold text-emerald-950 dark:text-emerald-100' : 'text-slate-800 dark:text-slate-200'}`}>
                       <MathRenderer content={opsi.konten} />
+                      {opsi.gambar && (
+                        <img
+                          src={opsi.gambar}
+                          alt={`Gambar Opsi ${opsi.label}`}
+                          className="cbt-zoomable-media max-h-44 w-auto rounded-xl object-contain cursor-zoom-in"
+                        />
+                      )}
                     </div>
                   </button>
                 );
@@ -1364,9 +1566,9 @@ export default function LembarUjianPage({
             </div>
           )}
 
-          {/* Opsi Jawaban: Pilihan Ganda Kompleks (Multiple Select) */}
+          {/* Opsi Jawaban: Pilihan Ganda Kompleks */}
           {currentSoal.tipeSoal === 'PG_KOMPLEKS' && (
-            <div className="space-y-2.5 sm:space-y-3 pt-4 border-t border-slate-100 dark:border-white/10">
+            <div className="space-y-2.5 sm:space-y-3 pt-3 sm:pt-4 border-t border-slate-100 dark:border-white/10">
               <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 px-3 py-2 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-2">
                 <span>💡</span>
                 <span>Pilihan Ganda Kompleks: Anda dapat memilih lebih dari satu jawaban yang benar.</span>
@@ -1375,7 +1577,7 @@ export default function LembarUjianPage({
                 let chosenIds: string[] = [];
                 try {
                   if (currentJawaban.jawabanDipilih) chosenIds = JSON.parse(currentJawaban.jawabanDipilih);
-                } catch (e) {
+                } catch {
                   chosenIds = [];
                 }
                 const isSelected = chosenIds.includes(opsi.id);
@@ -1385,23 +1587,30 @@ export default function LembarUjianPage({
                     key={opsi.id}
                     type="button"
                     onClick={() => handleSelectOpsiKompleks(currentSoal.id, opsi.id)}
-                    className={`w-full text-left p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all flex items-start gap-3 sm:gap-3.5 cursor-pointer touch-manipulation ${
+                    className={`min-h-[52px] w-full text-left p-3 sm:p-4 rounded-2xl transition-all flex items-start gap-3 sm:gap-3.5 cursor-pointer touch-manipulation active:scale-[0.99] ${
                       isSelected
-                        ? 'bg-teal-50/95 dark:bg-teal-950/60 border-2 border-teal-500 dark:border-teal-400 text-teal-950 dark:text-teal-100 shadow-sm ring-2 ring-teal-500/30'
-                        : 'bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-white/20'
+                        ? 'bg-teal-50/95 dark:bg-teal-950/60 border-2 border-teal-500 dark:border-teal-400 text-teal-950 dark:text-teal-100 shadow-xs ring-2 ring-teal-500/25'
+                        : 'bg-slate-50/40 dark:bg-slate-950/30 hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200'
                     }`}
                   >
                     <div
-                      className={`flex-shrink-0 w-8 h-8 rounded-xl font-extrabold flex items-center justify-center text-xs sm:text-sm transition ${
+                      className={`flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl font-extrabold flex items-center justify-center text-xs sm:text-sm transition ${
                         isSelected
                           ? 'bg-teal-600 text-white shadow-xs scale-105'
-                          : 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
+                          : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
                       }`}
                     >
                       {isSelected ? '✓' : opsi.label}
                     </div>
-                    <div className={`flex-1 pt-1 text-xs sm:text-sm break-words select-text border-0 ring-0 outline-none ${isSelected ? 'font-semibold text-teal-950 dark:text-teal-100' : 'text-slate-800 dark:text-slate-200'}`}>
+                    <div className={`flex-1 pt-1 break-words min-w-0 space-y-2 ${optionFontClass} ${isSelected ? 'font-semibold text-teal-950 dark:text-teal-100' : 'text-slate-800 dark:text-slate-200'}`}>
                       <MathRenderer content={opsi.konten} />
+                      {opsi.gambar && (
+                        <img
+                          src={opsi.gambar}
+                          alt={`Gambar Opsi ${opsi.label}`}
+                          className="cbt-zoomable-media max-h-44 w-auto rounded-xl object-contain cursor-zoom-in"
+                        />
+                      )}
                     </div>
                   </button>
                 );
@@ -1409,14 +1618,12 @@ export default function LembarUjianPage({
             </div>
           )}
 
-          {/* Opsi Jawaban: Mencocokkan / Menjodohkan (4-7 Kotak Kiri & Kanan) */}
+          {/* Opsi Jawaban: Mencocokkan / Menjodohkan */}
           {currentSoal.tipeSoal === 'MENJODOHKAN' && (
-            <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-white/10">
-              <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 text-blue-900 dark:text-blue-300 px-3 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1.5">
+            <div className="space-y-3 pt-3 sm:pt-4 border-t border-slate-100 dark:border-white/10">
+              <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 text-blue-900 dark:text-blue-300 px-3 py-2 rounded-xl text-[11px] font-semibold flex items-center gap-1.5">
                 <span>🔄</span>
-                <span>
-                  Soal Mencocokkan: Pasangkan setiap kotak di kolom kiri dengan pilihan pasangan yang tepat di kolom kanan.
-                </span>
+                <span>Pasangkan setiap pernyataan di kiri dengan pilihan pasangan yang tepat.</span>
               </div>
 
               {(() => {
@@ -1425,7 +1632,7 @@ export default function LembarUjianPage({
                   if (currentSoal.matchingData) {
                     matchingPairs = JSON.parse(currentSoal.matchingData);
                   }
-                } catch (e) {
+                } catch {
                   matchingPairs = [];
                 }
 
@@ -1437,7 +1644,6 @@ export default function LembarUjianPage({
                   );
                 }
 
-                // Kumpulkan semua opsi kanan yang unik untuk dipilih
                 const rightOptions = Array.from(new Set(matchingPairs.map((p) => p.right.trim()))).sort();
 
                 let currentMatches: Record<string, string> = {};
@@ -1445,12 +1651,12 @@ export default function LembarUjianPage({
                   if (currentJawaban.jawabanDipilih) {
                     currentMatches = JSON.parse(currentJawaban.jawabanDipilih);
                   }
-                } catch (e) {
+                } catch {
                   currentMatches = {};
                 }
 
                 return (
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {matchingPairs.map((pair, pIdx) => {
                       const selectedRight = currentMatches[pair.left] || '';
                       const isMatched = Boolean(selectedRight);
@@ -1458,40 +1664,35 @@ export default function LembarUjianPage({
                       return (
                         <div
                           key={pIdx}
-                          className={`p-2.5 sm:p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                          className={`p-3 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
                             isMatched
                               ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-400 dark:border-blue-500/60 shadow-2xs'
                               : 'bg-white dark:bg-slate-950/60 border-slate-200 dark:border-white/10'
                           }`}
                         >
-                          {/* Kotak Kiri */}
-                          <div className="flex items-center gap-2.5 flex-1">
-                            <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs shrink-0 shadow-xs">
+                          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                            <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs shrink-0 shadow-xs mt-0.5">
                               {pIdx + 1}
                             </span>
-                            <div className="font-semibold text-slate-900 dark:text-white text-xs sm:text-sm">
+                            <div className={`font-semibold text-slate-900 dark:text-white min-w-0 ${optionFontClass}`}>
                               <MathRenderer content={pair.left} />
                             </div>
                           </div>
 
-                          {/* Arrow Indikator */}
-                          <div className="hidden sm:flex text-slate-400 font-bold px-1 text-xs">
-                            ➔
-                          </div>
+                          <div className="hidden sm:flex text-slate-400 font-bold px-1 text-xs">➔</div>
 
-                          {/* Kotak Kanan / Dropdown Pilihan */}
                           <div className="flex-1 sm:max-w-xs">
                             <select
                               value={selectedRight}
                               onChange={(e) => handleSelectMatching(currentSoal.id, pair.left, e.target.value)}
-                              className={`w-full p-2 rounded-lg text-xs font-semibold border cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                              className={`min-h-[44px] w-full px-3 py-2 rounded-xl text-base sm:text-xs font-semibold border cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                                 isMatched
                                   ? 'bg-blue-600 text-white border-blue-600 font-bold'
                                   : 'bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-300'
                               }`}
                             >
                               <option value="" className="bg-white dark:bg-slate-900 text-slate-500">
-                                -- Pilih Pasangan Kotak --
+                                -- Pilih Pasangan --
                               </option>
                               {rightOptions.map((opt, oIdx) => (
                                 <option
@@ -1499,7 +1700,7 @@ export default function LembarUjianPage({
                                   value={opt}
                                   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                                 >
-                                  {opt}
+                                  {opt.replace(/\$/g, '')}
                                 </option>
                               ))}
                             </select>
@@ -1513,9 +1714,9 @@ export default function LembarUjianPage({
             </div>
           )}
 
-          {/* Input Jawaban: Isian Singkat */}
+          {/* Input Jawaban: Isian Singkat (Font 16px di mobile anti auto-zoom Safari/Chrome) */}
           {currentSoal.tipeSoal === 'ISIAN' && (
-            <div className="pt-4 border-t border-slate-100 dark:border-white/10 space-y-2">
+            <div className="pt-3 sm:pt-4 border-t border-slate-100 dark:border-white/10 space-y-2">
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                 Ketik Jawaban Singkat Anda:
               </label>
@@ -1523,15 +1724,28 @@ export default function LembarUjianPage({
                 type="text"
                 value={currentJawaban.jawabanDipilih || ''}
                 onChange={(e) => handleInputTeks(currentSoal.id, e.target.value)}
+                onCopy={(e) => e.preventDefault()}
+                onCut={(e) => e.preventDefault()}
+                onPaste={(e) => e.preventDefault()}
+                onDrop={(e) => e.preventDefault()}
+                onSelect={(e) => {
+                  const inp = e.currentTarget;
+                  if (inp.selectionStart !== inp.selectionEnd) {
+                    inp.setSelectionRange(inp.selectionEnd, inp.selectionEnd);
+                  }
+                }}
                 placeholder="Ketikkan jawaban di sini..."
-                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-slate-900 dark:text-white text-sm focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                className="min-h-[48px] w-full p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-slate-900 dark:text-white text-base sm:text-sm focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
               />
             </div>
           )}
 
           {/* Input Jawaban: Esai / Uraian */}
           {currentSoal.tipeSoal === 'ESAI' && (
-            <div className="pt-4 border-t border-slate-100 dark:border-white/10 space-y-2">
+            <div className="pt-3 sm:pt-4 border-t border-slate-100 dark:border-white/10 space-y-2">
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                 Tuliskan Uraian Lengkap Jawaban Anda:
               </label>
@@ -1539,39 +1753,50 @@ export default function LembarUjianPage({
                 rows={5}
                 value={currentJawaban.jawabanDipilih || ''}
                 onChange={(e) => handleInputTeks(currentSoal.id, e.target.value)}
-                placeholder="Tuliskan langkah pengerjaan atau uraian jawaban secara jelas dan terstruktur..."
-                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-slate-900 dark:text-white text-xs sm:text-sm focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition leading-relaxed"
+                onCopy={(e) => e.preventDefault()}
+                onCut={(e) => e.preventDefault()}
+                onPaste={(e) => e.preventDefault()}
+                onDrop={(e) => e.preventDefault()}
+                onSelect={(e) => {
+                  const ta = e.currentTarget;
+                  if (ta.selectionStart !== ta.selectionEnd) {
+                    ta.setSelectionRange(ta.selectionEnd, ta.selectionEnd);
+                  }
+                }}
+                placeholder="Tuliskan langkah pengerjaan atau uraian jawaban secara jelas..."
+                autoCorrect="off"
+                spellCheck={false}
+                className="w-full p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-slate-900 dark:text-white text-base sm:text-sm focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition leading-relaxed"
               />
             </div>
           )}
         </div>
 
-        {/* Bottom Navigation Toolbar (Compact & Ergonomis di Android, iOS Safari & Desktop) */}
-        <div className="fixed sm:static bottom-0 left-0 right-0 z-30 sm:mt-4 flex items-center justify-between gap-1.5 xs:gap-2 bg-white/95 dark:bg-slate-900/95 sm:bg-white sm:dark:bg-slate-900 border-t sm:border border-slate-200/90 dark:border-white/10 px-2.5 xs:px-3 py-2 sm:p-3 sm:rounded-2xl shadow-lg sm:shadow-xs dark:shadow-xl backdrop-blur-md pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+        {/* Bottom Navigation Toolbar (44px+ Touch Target Ergonomis di Smartphone Android & iOS Safari) */}
+        <div className="fixed sm:static bottom-0 left-0 right-0 z-30 sm:mt-4 grid grid-cols-3 items-center gap-2 bg-white/98 dark:bg-slate-900/98 sm:bg-white sm:dark:bg-slate-900 border-t sm:border border-slate-200/90 dark:border-white/10 px-3 py-2 sm:p-3 sm:rounded-2xl shadow-[0_-4px_16px_rgba(0,0,0,0.06)] sm:shadow-xs pb-[max(0.625rem,env(safe-area-inset-bottom))]">
           {/* Tombol Sebelumnya */}
           <button
             type="button"
             disabled={currentIndex === 0}
-            onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-            className="min-h-[40px] xs:min-h-[44px] flex items-center justify-center gap-1 xs:gap-1.5 px-2.5 xs:px-3.5 sm:px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer border border-slate-200 dark:border-white/10 active:scale-95 touch-manipulation shrink-0"
+            onClick={() => navigateToQuestion(currentIndex - 1)}
+            className="min-h-[46px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer border border-slate-200 dark:border-white/10 active:scale-95 touch-manipulation"
           >
-            <ChevronLeft className="w-4 h-4" />
-            <span className="hidden xs:inline">Sebelumnya</span>
-            <span className="xs:hidden">Sebelum</span>
+            <ChevronLeft className="w-4 h-4 shrink-0" />
+            <span className="truncate">Sebelumnya</span>
           </button>
 
           {/* Tombol Ragu-Ragu */}
           <button
             type="button"
             onClick={handleToggleRagu}
-            className={`min-h-[40px] xs:min-h-[44px] flex items-center justify-center gap-1 xs:gap-1.5 px-2.5 xs:px-3.5 sm:px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer border active:scale-95 touch-manipulation shrink-0 ${
+            className={`min-h-[46px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer border active:scale-95 touch-manipulation ${
               currentJawaban.raguRagu
-                ? 'bg-amber-500 text-white border-amber-600 shadow-xs shadow-amber-500/20'
+                ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
                 : 'bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60'
             }`}
           >
-            <BookmarkCheck className="w-4 h-4" />
-            <span>{currentJawaban.raguRagu ? 'Ragu: Ya' : 'Ragu'}</span>
+            <BookmarkCheck className="w-4 h-4 shrink-0" />
+            <span className="truncate">{currentJawaban.raguRagu ? 'Ragu: Ya' : 'Ragu-Ragu'}</span>
           </button>
 
           {/* Tombol Selanjutnya / Selesai */}
@@ -1579,51 +1804,57 @@ export default function LembarUjianPage({
             <button
               type="button"
               onClick={() => setShowSubmitModal(true)}
-              className="min-h-[40px] xs:min-h-[44px] flex items-center justify-center gap-1 xs:gap-1.5 px-3 xs:px-4 sm:px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-xs font-extrabold text-white shadow-sm shadow-emerald-600/20 transition cursor-pointer active:scale-95 touch-manipulation shrink-0"
+              className="min-h-[46px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-xs sm:text-sm font-extrabold text-white shadow-sm shadow-emerald-600/20 transition cursor-pointer active:scale-95 touch-manipulation"
             >
-              <Send className="w-3.5 h-3.5" />
-              <span>Selesai</span>
+              <Send className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Selesai</span>
             </button>
           ) : (
             <button
               type="button"
-              onClick={() => setCurrentIndex((prev) => Math.min(soalList.length - 1, prev + 1))}
-              className="min-h-[40px] xs:min-h-[44px] flex items-center justify-center gap-1 xs:gap-1.5 px-3 xs:px-4 sm:px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs shadow-emerald-600/20 transition cursor-pointer active:scale-95 touch-manipulation shrink-0"
+              onClick={() => navigateToQuestion(currentIndex + 1)}
+              className="min-h-[46px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs sm:text-sm font-bold text-white shadow-xs shadow-emerald-600/20 transition cursor-pointer active:scale-95 touch-manipulation"
             >
-              <span className="hidden xs:inline">Selanjutnya</span>
-              <span className="xs:hidden">Lanjut</span>
-              <ChevronRight className="w-4 h-4" />
+              <span className="truncate">Selanjutnya</span>
+              <ChevronRight className="w-4 h-4 shrink-0" />
             </button>
           )}
         </div>
       </main>
 
-      {/* Grid Nomor Soal Drawer / Modal */}
+      {/* Grid Nomor Soal Bottom-Sheet / Modal (Momentum Scroll & 44px+ Buttons) */}
       {showNavGrid && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-6 sm:zoom-in duration-200 max-h-[85vh] flex flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div
+          className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150 overscroll-contain"
+          onClick={() => setShowNavGrid(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-6 sm:zoom-in duration-200 max-h-[85dvh] flex flex-col pb-[max(1rem,env(safe-area-inset-bottom))] overscroll-contain"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/10 pb-3 shrink-0">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Grid className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                Navigasi Nomor Soal Ujian
+                <span>Daftar Nomor Soal ({totalTerjawab}/{soalList.length})</span>
               </h3>
               <button
+                type="button"
                 onClick={() => setShowNavGrid(false)}
-                className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold cursor-pointer transition"
+                className="min-h-[40px] text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-3.5 py-1.5 rounded-xl text-slate-700 dark:text-slate-200 font-bold cursor-pointer transition touch-manipulation"
               >
-                Tutup [X]
+                Tutup
               </button>
             </div>
 
-            {/* Grid Soal */}
-            <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-2.5 overflow-y-auto p-1 custom-scrollbar flex-1">
+            <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 sm:gap-2.5 overflow-y-auto overscroll-contain p-1 custom-scrollbar flex-1">
               {soalList.map((s, idx) => {
                 const j = jawabanMap[s.id];
-                const isAnswered = Boolean(j?.jawabanDipilih);
+                const isAnswered = isSoalAnswered(s, j?.jawabanDipilih);
                 const isRagu = Boolean(j?.raguRagu);
                 const isCurrent = idx === currentIndex;
 
-                let btnBg = 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800'; // Belum dijawab
+                let btnBg =
+                  'bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800';
                 if (isRagu) {
                   btnBg = 'bg-amber-500 text-white font-black border-amber-600 shadow-2xs';
                 } else if (isAnswered) {
@@ -1633,56 +1864,68 @@ export default function LembarUjianPage({
                 return (
                   <button
                     key={s.id}
+                    type="button"
                     onClick={() => {
-                      setCurrentIndex(idx);
+                      navigateToQuestion(idx);
                       setShowNavGrid(false);
                     }}
-                    className={`h-11 rounded-xl flex flex-col items-center justify-center border text-xs transition cursor-pointer font-bold ${btnBg} ${
+                    className={`min-h-[46px] rounded-xl flex flex-col items-center justify-center border text-xs transition cursor-pointer font-bold active:scale-95 touch-manipulation ${btnBg} ${
                       isCurrent ? 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-900' : ''
                     }`}
                   >
                     <span>{idx + 1}</span>
-                    {isRagu && <span className="text-[9px] font-normal">Ragu</span>}
+                    {isRagu && <span className="text-[9px] font-normal leading-none">Ragu</span>}
                   </button>
                 );
               })}
             </div>
 
-            {/* Legend */}
-            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 dark:border-white/10 text-[11px] text-slate-600 dark:text-slate-400">
-              <div className="flex items-center gap-2">
-                <div className="w-3.5 h-3.5 rounded bg-emerald-600" />
-                <span className="font-medium">Sudah Dijawab</span>
+            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 dark:border-white/10 text-[11px] text-slate-600 dark:text-slate-400 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3.5 h-3.5 rounded bg-emerald-600 shrink-0" />
+                <span className="font-medium truncate">Dijawab ({totalTerjawab})</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3.5 h-3.5 rounded bg-amber-500" />
-                <span className="font-medium">Ragu-Ragu</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3.5 h-3.5 rounded bg-amber-500 shrink-0" />
+                <span className="font-medium truncate">Ragu ({totalRagu})</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3.5 h-3.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-white/10" />
-                <span className="font-medium">Belum Dijawab</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3.5 h-3.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-white/10 shrink-0" />
+                <span className="font-medium truncate">Kosong ({soalList.length - totalTerjawab})</span>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowNavGrid(false);
+                setShowSubmitModal(true);
+              }}
+              className="min-h-[46px] w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm cursor-pointer active:scale-98 touch-manipulation shrink-0"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Kumpulkan / Selesaikan Ujian</span>
+            </button>
           </div>
         </div>
       )}
 
       {/* Confirmation Submit Modal */}
       {showSubmitModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl space-y-5 text-center animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto overscroll-contain">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl max-w-md w-full p-5 sm:p-7 shadow-2xl space-y-4 sm:space-y-5 text-center animate-in fade-in zoom-in duration-200 my-auto">
             <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-2xs">
               <CheckCircle2 className="w-8 h-8" />
             </div>
 
             <div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white">Konfirmasi Pengumpulan Ujian</h3>
+              <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">Konfirmasi Pengumpulan Ujian</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
                 Apakah Anda yakin ingin mengakhiri dan mengumpulkan lembar jawaban ujian ini?
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs">
+            <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs">
               <div className="text-left">
                 <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Sudah Dijawab:</span>
                 <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
@@ -1697,30 +1940,31 @@ export default function LembarUjianPage({
               </div>
             </div>
 
-            {/* Informasi & Peringatan Minimal Jawaban */}
-            {ujianInfo?.minJawaban && Number(ujianInfo.minJawaban) > 0 && (
-              <div
-                className={`p-3 rounded-2xl border text-left text-xs ${
-                  totalTerjawab < Number(ujianInfo.minJawaban)
-                    ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-rose-800 dark:text-rose-300'
-                    : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 font-bold">
-                  {totalTerjawab < Number(ujianInfo.minJawaban) ? (
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  )}
-                  <span>Syarat Minimal Jawaban: {ujianInfo.minJawaban} Soal</span>
-                </div>
-                <p className="mt-1 text-[11px] leading-relaxed">
-                  {totalTerjawab < Number(ujianInfo.minJawaban)
-                    ? `⚠️ Anda belum dapat mengumpulkan ujian karena baru menjawab ${totalTerjawab} butir soal (Kurang ${Number(ujianInfo.minJawaban) - totalTerjawab} soal lagi).`
-                    : `✓ Syarat minimal jawaban telah terpenuhi (${totalTerjawab}/${ujianInfo.minJawaban} soal).`}
-                </p>
+            <div
+              className={`p-3 rounded-2xl border text-left text-xs ${
+                !isAllRequiredAnswered
+                  ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-rose-800 dark:text-rose-300'
+                  : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-bold">
+                {!isAllRequiredAnswered ? (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                )}
+                <span>
+                  {!isAllRequiredAnswered
+                    ? `Wajib Mengisi Seluruh Soal (${belumDijawabCount} Soal Belum Diisi)`
+                    : 'Seluruh Soal Telah Terisi Lengkap'}
+                </span>
               </div>
-            )}
+              <p className="mt-1 text-[11px] leading-relaxed">
+                {!isAllRequiredAnswered
+                  ? `⚠️ Anda belum dapat menyelesaikan ujian dan keluar dari layar penuh karena masih ada ${belumDijawabCount} butir soal yang kosong. Ketuk "Cek Soal Kosong" untuk melengkapinya.`
+                  : '✓ Semua butir soal telah dijawab. Mode layar penuh akan otomatis keluar setelah Anda menekan tombol kumpulkan.'}
+              </p>
+            </div>
 
             {totalRagu > 0 && (
               <p className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 text-left font-medium">
@@ -1728,37 +1972,48 @@ export default function LembarUjianPage({
               </p>
             )}
 
-            {/* Tombol Cadangan Darurat IndexedDB */}
             <div className="pt-1">
               <button
                 type="button"
                 onClick={handleDownloadEmergencyBackup}
-                className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-white/10 text-[11px] font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center gap-1.5 transition cursor-pointer"
-                title="Cadangan jawaban yang tersimpan di IndexedDB komputer ini"
+                className="min-h-[42px] w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-white/10 text-[11px] font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation"
               >
                 <HardDriveDownload className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
                 <span>Unduh Cadangan Jawaban Offline (.json)</span>
               </button>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-2.5 pt-2">
+              {!isAllRequiredAnswered ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const firstEmptyIdx = soalList.findIndex(
+                      (s) => !isSoalAnswered(s, jawabanMap[s.id]?.jawabanDipilih)
+                    );
+                    setShowSubmitModal(false);
+                    if (firstEmptyIdx >= 0) navigateToQuestion(firstEmptyIdx);
+                  }}
+                  className="min-h-[46px] flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-xs font-extrabold text-white transition cursor-pointer touch-manipulation"
+                >
+                  Cek Soal Kosong
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowSubmitModal(false)}
+                  className="min-h-[46px] flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-slate-300 transition cursor-pointer touch-manipulation"
+                >
+                  Kembali Periksa
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setShowSubmitModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-slate-300 transition cursor-pointer"
-              >
-                Kembali Periksa
-              </button>
-              <button
-                type="button"
-                disabled={
-                  submitting ||
-                  (ujianInfo?.minJawaban && Number(ujianInfo.minJawaban) > 0 && totalTerjawab < Number(ujianInfo.minJawaban))
-                }
+                disabled={submitting || !isAllRequiredAnswered}
                 onClick={() => handleSelesaiUjian(false)}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold text-white shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center justify-center gap-1.5"
+                className="min-h-[46px] flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-45 disabled:cursor-not-allowed text-xs font-bold text-white shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center justify-center gap-1.5 touch-manipulation"
               >
-                {submitting ? 'Mengumpulkan...' : 'Ya, Kumpulkan Jawaban'}
+                {submitting ? 'Mengumpulkan...' : 'Ya, Selesai & Keluar'}
               </button>
             </div>
           </div>

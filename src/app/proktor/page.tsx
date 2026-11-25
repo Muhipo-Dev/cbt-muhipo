@@ -7,6 +7,7 @@ import { SchoolBrandHeader } from '@/components/SchoolBrandHeader';
 import { AppFooter } from '@/components/layout/AppFooter';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { NotificationModal, NotificationType } from '@/components/NotificationModal';
+import { MathRenderer } from '@/components/MathRenderer';
 import {
   MonitorPlay,
   RotateCcw,
@@ -309,6 +310,63 @@ export default function ProktorPage() {
     );
   };
 
+  // Reset Pelanggaran Siswa Individual
+  const handleResetPelanggaran = async (pesertaUjianId: string, namaSiswa: string) => {
+    showConfirm(
+      'Reset Pelanggaran & Buka Kunci',
+      `Reset seluruh pelanggaran siswa "${namaSiswa}" ke 0 dan buka kembali kunci ujiannya?`,
+      async () => {
+        try {
+          const res = await fetch('/api/proktor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'RESET_PELANGGARAN', pesertaUjianId }),
+          });
+          const resJson = await res.json();
+          if (resJson.success) {
+            showNotification('Pelanggaran Direset', resJson.message, 'success');
+            fetchMonitorData(true);
+          } else {
+            showNotification('Gagal', resJson.message || 'Gagal mereset pelanggaran', 'error');
+          }
+        } catch {
+          showNotification('Error', 'Gagal mereset pelanggaran siswa', 'error');
+        }
+      },
+      'warning',
+      'Ya, Reset ke 0'
+    );
+  };
+
+  // Reset Semua Pelanggaran di Sesi Aktif
+  const handleResetAllPelanggaran = async () => {
+    if (!data?.activeUjian?.id) return;
+    showConfirm(
+      'Reset Semua Pelanggaran Ruangan',
+      `Reset seluruh catatan pelanggaran semua peserta pada ujian "${data.activeUjian.judul}" dan buka semua ujian yang terkunci?`,
+      async () => {
+        try {
+          const res = await fetch('/api/proktor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'RESET_ALL_PELANGGARAN', ujianId: data.activeUjian.id }),
+          });
+          const resJson = await res.json();
+          if (resJson.success) {
+            showNotification('Reset Pelanggaran Massal', resJson.message, 'success');
+            fetchMonitorData(true);
+          } else {
+            showNotification('Gagal', resJson.message || 'Gagal mereset pelanggaran massal', 'error');
+          }
+        } catch {
+          showNotification('Error', 'Gagal mereset pelanggaran massal', 'error');
+        }
+      },
+      'warning',
+      'Ya, Reset Semua'
+    );
+  };
+
   // Kunci Ujian Siswa
   const handleLockExam = async (pesertaUjianId: string, namaSiswa: string) => {
     showConfirm(
@@ -508,7 +566,7 @@ export default function ProktorPage() {
                 {data?.activeUjian?.judul || 'Tidak Ada Jadwal Ujian Aktif'}
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Mapel: <b>{data?.activeUjian?.bankSoal?.mataPelajaran?.nama || '-'}</b> • Durasi: <b>{data?.activeUjian?.durasiMenit || 0} Menit</b>
+                Mapel: <b>{data?.activeUjian?.mataPelajaran?.nama || data?.activeUjian?.bankSoal?.mataPelajaran?.nama || '-'}</b> • Durasi: <b>{data?.activeUjian?.durasiMenit || 0} Menit</b>
               </p>
             </div>
 
@@ -611,7 +669,16 @@ export default function ProktorPage() {
             </div>
 
             {/* Actions & Search Input */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-wrap">
+              <button
+                type="button"
+                onClick={handleResetAllPelanggaran}
+                className="px-3.5 py-2 rounded-xl bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Reset Semua Pelanggaran</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleResetAllLogins}
@@ -770,17 +837,31 @@ export default function ProktorPage() {
                             Spectator
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => handleResetLogin(peserta.pesertaUjianId, peserta.name)}
-                            title="Reset Login Siswa"
-                            className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-semibold transition cursor-pointer"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5 inline mr-0.5" />
-                            Reset
-                          </button>
+                          {(peserta.jumlahPelanggaran > 0 || isTerkunci) && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetPelanggaran(peserta.pesertaUjianId, peserta.name)}
+                              title="Reset Pelanggaran ke 0 & Buka Kunci"
+                              className="px-2 py-1 rounded-lg bg-rose-950/70 hover:bg-rose-900 border border-rose-700 text-rose-200 text-[11px] font-semibold transition cursor-pointer"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 inline mr-0.5" />
+                              Reset Plgr
+                            </button>
+                          )}
 
-                          {isMengerjakan && (
+                          {!isSelesai && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetLogin(peserta.pesertaUjianId, peserta.name)}
+                              title="Reset Login Siswa (Jawaban & Waktu Aman)"
+                              className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-semibold transition cursor-pointer"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5 inline mr-0.5" />
+                              Reset Login
+                            </button>
+                          )}
+
+                          {!isSelesai && (
                             <button
                               type="button"
                               onClick={() => setExtraTimeModal(peserta)}
@@ -943,17 +1024,22 @@ export default function ProktorPage() {
                       </div>
                     </div>
 
-                    {/* Pertanyaan */}
-                    <div
-                      className="text-xs sm:text-sm text-slate-200 mb-3 prose prose-invert max-w-none"
-                      dangerouslySetInnerHTML={{ __html: soal.pertanyaan }}
-                    />
+                    {/* Pertanyaan dengan MathRenderer KaTeX */}
+                    <div className="text-xs sm:text-sm text-slate-200 mb-3">
+                      <MathRenderer content={soal.pertanyaan || ''} />
+                    </div>
 
                     {/* Opsi / Jawaban Peserta */}
-                    {soal.tipeSoal === 'PG' && soal.opsiJawaban && (
+                    {(soal.tipeSoal === 'PG' || soal.tipeSoal === 'BENAR_SALAH' || soal.tipeSoal === 'PG_KOMPLEKS') && soal.opsiJawaban && (
                       <div className="space-y-1.5 pl-2 border-l-2 border-slate-800">
                         {soal.opsiJawaban.map((opsi: any) => {
-                          const isSelected = soal.jawabanSiswa === opsi.id;
+                          let isSelected = soal.jawabanSiswa === opsi.id;
+                          if (soal.tipeSoal === 'PG_KOMPLEKS' && soal.jawabanSiswa) {
+                            try {
+                              const arr = JSON.parse(soal.jawabanSiswa);
+                              if (Array.isArray(arr)) isSelected = arr.includes(opsi.id);
+                            } catch {}
+                          }
                           return (
                             <div
                               key={opsi.id}
@@ -964,18 +1050,17 @@ export default function ProktorPage() {
                               }`}
                             >
                               <span
-                                className={`w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-bold ${
+                                className={`w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${
                                   isSelected ? 'bg-cyan-500 text-slate-950' : 'bg-slate-800 text-slate-400'
                                 }`}
                               >
                                 {opsi.label}
                               </span>
-                              <div
-                                className="flex-1"
-                                dangerouslySetInnerHTML={{ __html: opsi.konten }}
-                              />
+                              <div className="flex-1 min-w-0">
+                                <MathRenderer content={opsi.konten || ''} />
+                              </div>
                               {isSelected && (
-                                <span className="text-[10px] uppercase font-bold text-cyan-400 bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-800">
+                                <span className="text-[10px] uppercase font-bold text-cyan-400 bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-800 shrink-0">
                                   Pilihan Siswa
                                 </span>
                               )}
@@ -985,8 +1070,8 @@ export default function ProktorPage() {
                       </div>
                     )}
 
-                    {/* Non PG: Esai / Isian */}
-                    {soal.tipeSoal !== 'PG' && (
+                    {/* Non PG: Esai / Isian / Menjodohkan */}
+                    {soal.tipeSoal !== 'PG' && soal.tipeSoal !== 'BENAR_SALAH' && soal.tipeSoal !== 'PG_KOMPLEKS' && (
                       <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs">
                         <span className="text-slate-400 block text-[11px] mb-1">Teks Jawaban Siswa:</span>
                         <div className="font-mono text-cyan-300 whitespace-pre-wrap">
@@ -1243,16 +1328,26 @@ export default function ProktorPage() {
               ))}
             </div>
 
-            <div className="flex gap-2 pt-2 border-t border-slate-800">
+            <div className="flex gap-2 pt-2 border-t border-slate-800 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  handleResetPelanggaran(securityModalData.pesertaUjianId, securityModalData.name);
+                  setSecurityModalData(null);
+                }}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800 text-emerald-200 text-xs font-bold transition cursor-pointer"
+              >
+                Reset Pelanggaran (0)
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   handleLockExam(securityModalData.pesertaUjianId, securityModalData.name);
                   setSecurityModalData(null);
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-200 text-xs font-bold transition"
+                className="flex-1 py-2.5 px-3 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-200 text-xs font-bold transition cursor-pointer"
               >
-                Kunci Ujian Siswa Ini
+                Kunci Ujian
               </button>
               <button
                 type="button"
@@ -1260,7 +1355,7 @@ export default function ProktorPage() {
                   handleResetLogin(securityModalData.pesertaUjianId, securityModalData.name);
                   setSecurityModalData(null);
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition"
+                className="flex-1 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition cursor-pointer"
               >
                 Reset Sesi Login
               </button>

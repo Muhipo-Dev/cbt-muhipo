@@ -44,6 +44,7 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import { MathRenderer } from '@/components/MathRenderer'
+import { convertEquationToKatex } from '@/lib/katexConverter'
 
 interface ModulSoalViewProps {
   mapelList?: any[]
@@ -1279,7 +1280,7 @@ export function ModulSoalView({
                     <span>Live Pratinjau Render KaTeX &amp; Teks Soal:</span>
                   </div>
                   <div className="p-2 bg-white dark:bg-slate-900 rounded border border-blue-100 dark:border-blue-900/50 text-xs text-slate-900 dark:text-white prose dark:prose-invert max-w-none">
-                    <MathRenderer content={pertanyaan} />
+                    <MathRenderer content={convertEquationToKatex(pertanyaan)} />
                   </div>
                 </div>
               )}

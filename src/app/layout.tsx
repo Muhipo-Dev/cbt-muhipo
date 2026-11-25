@@ -83,7 +83,7 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
-                  var CBT_BUILD_VERSION = 'cbt-ai-math-engine-v3.0';
+                  var CBT_BUILD_VERSION = 'cbt-ai-math-engine-v4.0';
                   var cachedVer = localStorage.getItem('cbt_client_cache_ver');
                   if (cachedVer !== CBT_BUILD_VERSION) {
                     if ('caches' in window) {

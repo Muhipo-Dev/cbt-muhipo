@@ -2,7 +2,7 @@
  * CBT Security & Cross-Platform Anti-Cheat Engine
  * Dukungan Lintas Platform & Browser:
  * - Desktop: Chrome, Firefox (Mozilla), Brave, Edge, Safari (macOS)
- * - Mobile & Tablet: Android (Chrome, Brave, Firefox), iOS/iPadOS (Safari, Chrome for iOS)
+ * - Mobile & Tablet: Android (Chrome, Brave, Firefox, Exambro WebView), iOS/iPadOS (Safari, Chrome for iOS, SEB)
  */
 
 export interface DeviceSecurityInfo {
@@ -13,6 +13,7 @@ export interface DeviceSecurityInfo {
   isSafari: boolean;
   isFirefox: boolean;
   isBrave: boolean;
+  isExambroOrSEB: boolean;
   hasDisplayMedia: boolean;
   hasFullscreen: boolean;
   deviceName: string;
@@ -28,6 +29,7 @@ export function detectDeviceSecurityInfo(): DeviceSecurityInfo {
       isSafari: false,
       isFirefox: false,
       isBrave: false,
+      isExambroOrSEB: false,
       hasDisplayMedia: false,
       hasFullscreen: false,
       deviceName: 'Server Environment',
@@ -35,34 +37,52 @@ export function detectDeviceSecurityInfo(): DeviceSecurityInfo {
   }
 
   const ua = navigator.userAgent || navigator.vendor || (window as any).opera || '';
-  const isIOS =
-    /iPad|iPhone|iPod/.test(ua) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS 13+
+  const isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || isIPadOS;
   const isAndroid = /Android/i.test(ua);
-  const isMobile = /Mobi|Android/i.test(ua) || (isIOS && !/iPad/.test(ua));
-  const isTablet =
-    /Tablet|iPad/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isTablet = /Tablet|iPad/i.test(ua) || isIPadOS || (isAndroid && !/Mobile/i.test(ua));
+  const isMobile = (/Mobi|Android/i.test(ua) || isIOS) && !isTablet;
 
   const isFirefox = /Firefox|FxiOS/i.test(ua);
-  const isSafari =
-    /Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS|Brave/i.test(ua);
+  const isSafari = /Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS|Brave/i.test(ua);
   const isBrave = Boolean((navigator as any).brave && typeof (navigator as any).brave.isBrave === 'function');
 
-  const hasDisplayMedia = Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function');
-  
-  // Deteksi Fullscreen API:
-  // Catatan: Pada desktop PC/laptop dan tablet (iPadOS/Android Tablet) serta Android Chrome modern,
-  // Fullscreen API didukung. Kita cek ketersediaan native API.
-  const doc: any = typeof document !== 'undefined' ? document : {};
-  const hasNativeFullscreen = Boolean(
-    doc.fullscreenEnabled ||
-    doc.webkitFullscreenEnabled ||
-    doc.mozFullScreenEnabled ||
-    doc.msFullscreenEnabled
+  const w: any = window;
+  const isExambroOrSEB = Boolean(
+    /SEB|SafeExamBrowser|Exambro|ExamBrowser|CBTExambro|Examora|FlyExam|CandyExambro|MuhipoExambro/i.test(ua) ||
+      w.Exambro ||
+      w.Android ||
+      w.cbtBridge ||
+      w.SafeExamBrowser
   );
-  // Di iPhone (iOS Safari), Apple tidak menyediakan requestFullscreen pada HTML body/document element.
-  // Di Android dan Desktop, Fullscreen API berfungsi penuh.
-  const hasFullscreen = Boolean(hasNativeFullscreen && !isIOS);
+
+  const hasDisplayMedia = Boolean(
+    navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function'
+  );
+
+  // Deteksi Fullscreen API:
+  // Di iPhone (iOS Safari / Chrome iOS), Apple tidak menyediakan requestFullscreen pada elemen HTML biasa.
+  // Di iPadOS Safari modern, Android Chrome, dan Desktop, kita cek dukungan nyata pada documentElement.
+  const doc: any = typeof document !== 'undefined' ? document : {};
+  const docEl: any = doc.documentElement || {};
+  const canElementRequestFs = Boolean(
+    docEl.requestFullscreen ||
+      docEl.webkitRequestFullscreen ||
+      docEl.mozRequestFullScreen ||
+      docEl.msRequestFullscreen
+  );
+  const hasNativeFullscreen = Boolean(
+    canElementRequestFs &&
+      (doc.fullscreenEnabled ||
+        doc.webkitFullscreenEnabled ||
+        doc.mozFullScreenEnabled ||
+        doc.msFullscreenEnabled)
+  );
+
+  // Pada iPhone (isIOS && !isTablet) serta aplikasi Exambro/SEB yang sudah berjalan dalam native Kiosk Mode penuh,
+  // jangan memaksa HTML Fullscreen overlay yang dapat terputus ketika keyboard virtual on-screen muncul.
+  const isIPhone = isIOS && !isTablet;
+  const hasFullscreen = Boolean(hasNativeFullscreen && !isIPhone && !isExambroOrSEB);
 
   let deviceName = 'Desktop PC / Laptop';
   if (isIOS) {
@@ -81,11 +101,44 @@ export function detectDeviceSecurityInfo(): DeviceSecurityInfo {
     isSafari,
     isFirefox,
     isBrave,
+    isExambroOrSEB,
     hasDisplayMedia,
     hasFullscreen,
     deviceName,
   };
 }
+
+/**
+ * Screen Wake Lock Manager (Mencegah layar smartphone mati otomatis / terkunci saat membaca soal panjang)
+ * Didukung di Chrome Android, Safari iOS 16.4+, Chrome/Edge Desktop.
+ */
+class CBTWakeLockManager {
+  private sentinel: any = null;
+
+  public async requestWakeLock(): Promise<boolean> {
+    if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return false;
+    try {
+      if (this.sentinel && !this.sentinel.released) return true;
+      this.sentinel = await (navigator as any).wakeLock.request('screen');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  public async releaseWakeLock(): Promise<void> {
+    try {
+      if (this.sentinel) {
+        await this.sentinel.release();
+        this.sentinel = null;
+      }
+    } catch {
+      this.sentinel = null;
+    }
+  }
+}
+
+export const cbtWakeLock = new CBTWakeLockManager();
 
 class CBTSecurityAudio {
   private audioCtx: AudioContext | null = null;
@@ -97,9 +150,7 @@ class CBTSecurityAudio {
   public unlockAudio() {
     if (typeof window === 'undefined') return;
     try {
-      const AudioContextClass =
-        window.AudioContext ||
-        (window as any).webkitAudioContext;
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
 
       if (!this.audioCtx && AudioContextClass) {
         this.audioCtx = new AudioContextClass();
@@ -129,10 +180,13 @@ class CBTSecurityAudio {
   }
 
   /**
-   * Mainkan Suara Alarm Peringatan Berulang (Buzzer Alert Synth Cross-Platform)
+   * Mainkan Suara Alarm Peringatan Berulang (Buzzer Alert Synth Cross-Platform + Getar Haptic HP)
    */
   public playWarningBuzzer() {
     try {
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate([120, 60, 120]);
+      }
       this.unlockAudio();
       if (!this.audioCtx) return;
 
@@ -167,13 +221,12 @@ class CBTSecurityAudio {
 
   /**
    * Suara Peringatan Bahasa Indonesia via Web Speech API
-   * Didukung di Safari macOS, iOS, Android Chrome, Firefox, Brave
    */
   public speakWarning(text = 'Peringatan! Anda terdeteksi meninggalkan halaman ujian!') {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
     try {
-      window.speechSynthesis.cancel(); // batalkan ucapan lama
+      window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'id-ID';
       utterance.rate = 1.0;
@@ -203,7 +256,7 @@ class CBTSecurityAudio {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
     try {
-      window.speechSynthesis.cancel(); // batalkan ucapan lama
+      window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'id-ID';
       utterance.rate = 1.0;
@@ -241,7 +294,8 @@ export const cbtSecurityAudio = new CBTSecurityAudio();
 
 /**
  * Helper Universal Request Fullscreen Cross-Browser (Safari webkit, Firefox moz, Chrome/Edge)
- * Menggunakan element atau document.documentElement
+ * PENTING: Gunakan document.documentElement secara default agar portal modal (seperti ImageZoomModal di body)
+ * tetap terlihat saat mode layar penuh aktif!
  */
 export async function requestUniversalFullscreen(element?: HTMLElement): Promise<boolean> {
   if (typeof document === 'undefined') return false;
@@ -252,7 +306,6 @@ export async function requestUniversalFullscreen(element?: HTMLElement): Promise
       await target.requestFullscreen({ navigationUI: 'hide' } as any).catch(async () => {
         await target.requestFullscreen();
       });
-      // Aktifkan juga Chrome Keyboard Lock API jika tersedia
       enableChromeKeyboardLock();
       return true;
     } else if (target.webkitRequestFullscreen) {
@@ -273,19 +326,17 @@ export async function requestUniversalFullscreen(element?: HTMLElement): Promise
 
 /**
  * Mengunci tombol-tombol sistem (Escape, Fullscreen exit, dll) menggunakan Chrome Keyboard Lock API
- * Sangat efektif di Google Chrome & Edge untuk mencegah siswa keluar dari fullscreen via tombol Escape.
  */
 export async function enableChromeKeyboardLock(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   try {
     const nav: any = navigator;
     if (nav.keyboard && typeof nav.keyboard.lock === 'function') {
-      // Kunci tombol Escape dan kombinasi navigasi
       await nav.keyboard.lock(['Escape', 'F11', 'Tab', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']);
       return true;
     }
-  } catch (e) {
-    console.warn('Keyboard lock API not permitted or unsupported:', e);
+  } catch {
+    // silent on mobile browsers where Keyboard Lock API is unsupported
   }
   return false;
 }
@@ -300,7 +351,7 @@ export function unlockChromeKeyboardLock(): void {
     if (nav.keyboard && typeof nav.keyboard.unlock === 'function') {
       nav.keyboard.unlock();
     }
-  } catch (e) {
+  } catch {
     // silent
   }
 }
@@ -310,20 +361,23 @@ export function unlockChromeKeyboardLock(): void {
  */
 export async function exitUniversalFullscreen(): Promise<void> {
   unlockChromeKeyboardLock();
+  cbtWakeLock.releaseWakeLock();
   if (typeof document === 'undefined') return;
   const doc: any = document;
 
   try {
-    if (doc.exitFullscreen) {
-      await doc.exitFullscreen();
-    } else if (doc.webkitExitFullscreen) {
-      await doc.webkitExitFullscreen();
-    } else if (doc.mozCancelFullScreen) {
-      await doc.mozCancelFullScreen();
-    } else if (doc.msExitFullscreen) {
-      await doc.msExitFullscreen();
+    if (isCurrentlyFullscreen()) {
+      if (doc.exitFullscreen) {
+        await doc.exitFullscreen();
+      } else if (doc.webkitExitFullscreen) {
+        await doc.webkitExitFullscreen();
+      } else if (doc.mozCancelFullScreen) {
+        await doc.mozCancelFullScreen();
+      } else if (doc.msExitFullscreen) {
+        await doc.msExitFullscreen();
+      }
     }
-  } catch (err) {
+  } catch {
     // silent
   }
 }
@@ -336,21 +390,32 @@ export function isCurrentlyFullscreen(): boolean {
   const doc: any = document;
   return Boolean(
     doc.fullscreenElement ||
-    doc.webkitFullscreenElement ||
-    doc.webkitCurrentFullScreenElement ||
-    doc.mozFullScreenElement ||
-    doc.msFullscreenElement
+      doc.webkitFullscreenElement ||
+      doc.webkitCurrentFullScreenElement ||
+      doc.mozFullScreenElement ||
+      doc.msFullscreenElement
   );
 }
 
 /**
- * Mencegah tombol kombinasi keyboard berbahaya selama ujian (Windows & macOS Command key)
+ * Periksa apakah elemen fokus aktif saat ini adalah kolom input jawaban (ISIAN / ESAI / SELECT)
+ * Digunakan agar kemunculan keyboard virtual di HP Android/iOS tidak memicu false-positive keluar Fullscreen,
+ * serta mengizinkan peserta mengedit teks jawabannya sendiri tanpa memicu sanksi pelanggaran.
+ */
+export function isEditableExamInput(el: EventTarget | Element | null): boolean {
+  if (!el || !(el instanceof HTMLElement)) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+}
+
+/**
+ * Mencegah tombol kombinasi keyboard berbahaya selama ujian (Windows & macOS Command key & Bluetooth Keyboard)
  */
 export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => void) {
   if (typeof window === 'undefined') return () => {};
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    const isCmd = e.metaKey; // Command di macOS Safari/Chrome
+    const isCmd = e.metaKey;
     const isCtrl = e.ctrlKey;
     const isAlt = e.altKey;
 
@@ -363,16 +428,20 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
       e.code === 'Escape' ||
       ((isCtrl || isCmd) && e.key.toLowerCase() === 'r')
     ) {
+      // Jika sedang membuka modal zoom gambar, Escape menutup modal zoom tanpa sanksi
+      if ((e.key === 'Escape' || e.code === 'Escape') && document.getElementById('cbt-image-zoom-lightbox')) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       onViolation?.(`Tombol ${e.key} dicegah (Layar Penuh Terkunci)`);
       return false;
     }
 
-    // 2. Tab Navigation & Close Tab Shortcuts (Ctrl+W, Ctrl+T, Ctrl+N, Ctrl+Q, Cmd+W, Cmd+Q, Cmd+T, Cmd+N)
+    // 2. Tab Navigation & Close Tab Shortcuts
     if (
       (isCtrl || isCmd) &&
-      ['w', 'W', 't', 'T', 'n', 'N', 'q', 'Q', 'h', 'H'].includes(e.key)
+      ['w', 'W', 't', 'T', 'n', 'N', 'q', 'Q', 'h', 'H', 'l', 'L'].includes(e.key)
     ) {
       e.preventDefault();
       e.stopPropagation();
@@ -380,7 +449,7 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
       return false;
     }
 
-    // 3. Alt+Tab / Alt+F4 / Alt+Left / Alt+Right (Navigasi kembali / tutup window)
+    // 3. Alt+Tab / Alt+F4 / Alt+Left / Alt+Right
     if (isAlt && ['ArrowLeft', 'ArrowRight', 'F4', 'Home'].includes(e.key)) {
       e.preventDefault();
       e.stopPropagation();
@@ -388,7 +457,7 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
       return false;
     }
 
-    // 4. DevTools Shortcuts (Chrome/Firefox/Safari: Cmd+Option+I / Cmd+Option+C / Cmd+Option+J / Ctrl+Shift+I)
+    // 4. DevTools Shortcuts
     if (
       ((isCtrl || isCmd) && e.shiftKey && ['I', 'J', 'C', 'i', 'j', 'c'].includes(e.key)) ||
       (isCmd && e.altKey && ['i', 'j', 'c', 'I', 'J', 'C'].includes(e.key))
@@ -399,9 +468,9 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
       return false;
     }
 
-    // 5. View Source / Print / Save (Cmd+Option+U, Ctrl+U, Cmd+P, Ctrl+P, Ctrl+S, Cmd+S)
+    // 5. View Source / Print / Save / Find
     if (
-      ((isCtrl || isCmd) && ['u', 'U', 'p', 'P', 's', 'S'].includes(e.key)) ||
+      ((isCtrl || isCmd) && ['u', 'U', 'p', 'P', 's', 'S', 'f', 'F', 'g', 'G'].includes(e.key)) ||
       (isCmd && e.altKey && ['u', 'U'].includes(e.key))
     ) {
       e.preventDefault();
@@ -420,17 +489,16 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
     ) {
       e.preventDefault();
       e.stopPropagation();
-      // Segera bersihkan clipboard agar screenshot buffer OS tidak berisi data soal
       if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
         try {
           navigator.clipboard.writeText('');
-        } catch (_) {}
+        } catch {}
       }
       onViolation?.('Tangkapan Layar (Screenshot) / Rekam Layar dilarang keras selama ujian!');
       return false;
     }
 
-    // 6. Clipboard & Selection Protection (Blokir Cut, Copy, Paste, Select All)
+    // 6. Clipboard & Selection Protection (Blokir TOTAL Cut, Copy, Paste, Select All di seluruh halaman ujian!)
     if ((isCtrl || isCmd) && ['c', 'v', 'a', 'x', 'C', 'V', 'A', 'X'].includes(e.key)) {
       e.preventDefault();
       e.stopPropagation();
@@ -442,7 +510,7 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
           : e.key.toLowerCase() === 'x'
           ? 'Potong (Cut)'
           : 'Tempel (Paste)';
-      onViolation?.(`Fitur ${actionName} dilarang selama ujian!`);
+      onViolation?.(`Fitur ${actionName} diblokir total selama ujian!`);
       return false;
     }
 
@@ -460,17 +528,21 @@ export function setupExamKeyboardLockdown(onViolation?: (keyCombo: string) => vo
 }
 
 /**
- * Mengunci History Browser (History Trap) agar tombol Back / Gesture Swipe Back dicegah total
+ * Mengunci History Browser (History Trap) agar tombol Back / Gesture Swipe Back HP Android & iOS Safari dicegah total
  */
 export function setupBrowserNavigationLock(onBackAttempt?: () => void) {
   if (typeof window === 'undefined') return () => {};
 
-  // Dorong entri history awal
-  window.history.pushState({ cbtLocked: true }, '', window.location.href);
+  // Dorong 2 lapis buffer history agar swipe-back cepat di Chrome Android / Safari iOS tidak langsung keluar halaman
+  try {
+    window.history.pushState({ cbtLocked: 1 }, '', window.location.href);
+    window.history.pushState({ cbtLocked: 2 }, '', window.location.href);
+  } catch {}
 
-  const handlePopState = (e: PopStateEvent) => {
-    // Paksa dorong kembali history state agar tetap berada di halaman ujian
-    window.history.pushState({ cbtLocked: true }, '', window.location.href);
+  const handlePopState = () => {
+    try {
+      window.history.pushState({ cbtLocked: 2 }, '', window.location.href);
+    } catch {}
     onBackAttempt?.();
   };
 
@@ -482,15 +554,43 @@ export function setupBrowserNavigationLock(onBackAttempt?: () => void) {
 }
 
 /**
+ * Deteksi Split-Screen / Multi-Window / Floating Pop-Up Window pada Smartphone & Tablet (Android Chrome & iPadOS Safari)
+ * Membedakan perubahan ukuran layar akibat keyboard virtual on-screen vs pembagian layar curang (Split-Screen).
+ */
+export function isMobileSplitScreenDetected(): boolean {
+  if (typeof window === 'undefined' || !window.screen) return false;
+  const dev = detectDeviceSecurityInfo();
+  if (!dev.isMobile && !dev.isTablet) return false;
+
+  // Jangan anggap split-screen jika pengguna sedang mengetik di input/textarea (keyboard on-screen mengecilkan innerHeight)
+  if (typeof document !== 'undefined' && isEditableExamInput(document.activeElement)) {
+    return false;
+  }
+
+  const screenW = window.screen.availWidth || window.screen.width || 0;
+  const screenH = window.screen.availHeight || window.screen.height || 0;
+  if (!screenW || !screenH) return false;
+
+  const winW = window.outerWidth || window.innerWidth;
+  const winH = window.innerHeight;
+
+  // Di ponsel portrait: jika lebar jendela menyusut drastis (< 72% lebar fisik layar) -> Floating Window / Pop-up View
+  // Di ponsel portrait tanpa keyboard aktif: jika tinggi viewport menyusut drastis (< 52% tinggi layar) -> Split Screen atas-bawah
+  const widthRatio = winW / screenW;
+  const heightRatio = winH / screenH;
+
+  if (widthRatio < 0.72) return true;
+  if (dev.isMobile && heightRatio < 0.50) return true;
+
+  return false;
+}
+
+/**
  * Anti-Screenshot & Screen-Recording Protection Engine
- * 1. Memblokir Web API Screen Capture (navigator.mediaDevices.getDisplayMedia)
- * 2. Membersihkan clipboard saat tombol PrintScreen ditekan / dilepas
- * 3. Menghalangi perekaman layar dari extension pihak ketiga
  */
 export function setupAntiScreenshotAndRecording(onViolation?: (detail: string) => void) {
   if (typeof window === 'undefined') return () => {};
 
-  // 1. Monkey patch getDisplayMedia untuk menolak Screen Share / Recording dari Web API
   let originalGetDisplayMedia: any = null;
   if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
     originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
@@ -500,7 +600,6 @@ export function setupAntiScreenshotAndRecording(onViolation?: (detail: string) =
     };
   }
 
-  // 2. Intercept PrintScreen keyup/keydown dan bersihkan clipboard buffer seketika
   const handlePrintScreen = (e: KeyboardEvent) => {
     if (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44) {
       e.preventDefault();
@@ -508,7 +607,7 @@ export function setupAntiScreenshotAndRecording(onViolation?: (detail: string) =
       if (navigator.clipboard && navigator.clipboard.writeText) {
         try {
           navigator.clipboard.writeText('');
-        } catch (_) {}
+        } catch {}
       }
       onViolation?.('Tangkapan Layar (PrintScreen / Screenshot) diblokir!');
     }

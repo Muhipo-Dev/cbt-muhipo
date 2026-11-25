@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import NextImage from 'next/image';
 import { AppNavbar } from '@/components/layout/AppNavbar';
 import { AppFooter } from '@/components/layout/AppFooter';
+import { useRealtimeServerClock } from '@/lib/time-sync';
 import {
   Clock,
   ChevronRight,
@@ -63,6 +64,7 @@ export default function SiswaPortalPage() {
   const [pengaturan, setPengaturan] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
+  const serverClock = useRealtimeServerClock(30000);
 
   useEffect(() => {
     fetchSiswaData();
@@ -292,7 +294,7 @@ export default function SiswaPortalPage() {
                 Peringatan!
               </span>
               <span>
-                Dilarang keluar dari lembar ujian. Ujian akan <b>langsung terkunci</b> jika berpindah tab/aplikasi.
+                Dilarang berpindah tab/aplikasi selama ujian. Akun otomatis terkunci jika mencapai batas maksimal <b>10x pelanggaran</b>.
               </span>
             </div>
           </div>
@@ -348,8 +350,8 @@ export default function SiswaPortalPage() {
             </div>
           </div>
 
-          {/* Isi Kotak yang Dapat Di-Scroll */}
-          <div className="max-h-[520px] overflow-y-auto pr-1 sm:pr-1.5 space-y-4">
+          {/* Isi Kotak yang Dapat Di-Scroll Lancar di Ponsel */}
+          <div className="max-h-[68dvh] sm:max-h-[560px] overflow-y-auto overscroll-contain custom-scrollbar pr-1 sm:pr-1.5 space-y-4">
             {loading ? (
               <div className="text-center py-16 text-slate-400 text-xs animate-pulse space-y-2">
                 <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-500" />
@@ -386,12 +388,12 @@ export default function SiswaPortalPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 pb-1">
                 {paginatedList.map((ujian) => {
                   const isFinished = ujian.statusPeserta === 'SELESAI';
-                  const isWorking = ujian.statusPeserta === 'SEDANG_MENGERJAKAN';
+                  const isWorking = ujian.statusPeserta === 'SEDANG_MENGERJAKAN' && (ujian.sisaDetik === undefined || ujian.sisaDetik > 0);
                   const scheduledStart = ujian.waktuMulai ? new Date(ujian.waktuMulai) : null;
                   const scheduledEnd = ujian.waktuSelesai ? new Date(ujian.waktuSelesai) : null;
-                  const now = new Date();
+                  const now = serverClock.date;
                   const isNotStartedYet = scheduledStart ? now < scheduledStart : false;
-                  const isExpired = scheduledEnd ? now > scheduledEnd : false;
+                  const isExpired = !isWorking && (scheduledEnd ? now > scheduledEnd : false);
 
                   // Format date & time
                   const dateStartStr = scheduledStart
@@ -574,7 +576,7 @@ export default function SiswaPortalPage() {
                             type="button"
                             onClick={() => handleStartExam(ujian.ujianId || ujian.id)}
                             disabled={actionLoading}
-                            className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 cursor-pointer transition disabled:opacity-50 active:scale-[0.99]"
+                            className="min-h-[44px] w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 cursor-pointer transition disabled:opacity-50 active:scale-[0.98] touch-manipulation"
                           >
                             <Play className="w-3.5 h-3.5 fill-white" />
                             <span>{isWorking ? 'Lanjutkan Ujian' : 'Kerjakan Ujian'}</span>

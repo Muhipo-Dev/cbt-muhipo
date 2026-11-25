@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { StatusPeserta } from '@/lib/enums';
+import { getCalibratedServerNow, computeAccurateExamRemainingSeconds } from '@/lib/exam-time';
 
-// API Autosave Jawaban Siswa
+// API Autosave Jawaban Siswa & Sinkronisasi Sisa Waktu Server
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -16,7 +17,7 @@ export async function POST(
 
     const { id: ujianId } = await context.params;
     const body = await request.json();
-    const { soalId, jawabanDipilih, raguRagu, sisaDetik, batchJawaban } = body;
+    const { soalId, jawabanDipilih, raguRagu, batchJawaban } = body;
 
     const pesertaUjian = await prisma.pesertaUjian.findUnique({
       where: {
@@ -30,12 +31,45 @@ export async function POST(
       },
     });
 
-    if (!pesertaUjian || pesertaUjian.status !== StatusPeserta.SEDANG_MENGERJAKAN) {
+    if (!pesertaUjian) {
       return NextResponse.json(
-        { success: false, message: 'Sesi ujian tidak sedang aktif' },
+        { success: false, message: 'Data sesi peserta tidak ditemukan' },
+        { status: 404 }
+      );
+    }
+
+    if (pesertaUjian.status === StatusPeserta.TERKUNCI) {
+      return NextResponse.json(
+        { success: false, isLocked: true, message: 'Ujian Anda telah dikunci oleh Pengawas/Proktor.' },
+        { status: 403 }
+      );
+    }
+
+    if (pesertaUjian.status === StatusPeserta.RESET_LOGIN) {
+      return NextResponse.json(
+        { success: false, isResetLogin: true, message: 'Sesi login Anda telah direset oleh Pengawas. Silakan login kembali di perangkat aktif.' },
+        { status: 409 }
+      );
+    }
+
+    if (pesertaUjian.status === StatusPeserta.SELESAI) {
+      return NextResponse.json(
+        { success: false, isFinished: true, message: 'Ujian ini sudah diselesaikan.' },
         { status: 400 }
       );
     }
+
+    // Hitung sisa waktu otoritatif dari server (mencegah client menimpa extra time yang baru ditambahkan Proktor!)
+    const now = await getCalibratedServerNow();
+    const serverRemainingSeconds = computeAccurateExamRemainingSeconds({
+      now,
+      durasiMenit: pesertaUjian.ujian.durasiMenit,
+      jadwalSelesai: pesertaUjian.ujian.waktuSelesai,
+      pesertaWaktuMulai: pesertaUjian.waktuMulai,
+      pesertaSisaDetikTersimpan: pesertaUjian.sisaDetik,
+      pesertaUpdatedAt: pesertaUjian.updatedAt,
+      pesertaStatus: pesertaUjian.status,
+    });
 
     // 1. Batch sync dari IndexedDB Client Caching
     if (Array.isArray(batchJawaban) && batchJawaban.length > 0) {
@@ -61,20 +95,20 @@ export async function POST(
         });
       }
 
-      if (sisaDetik !== undefined) {
-        await prisma.pesertaUjian.update({
-          where: { id: pesertaUjian.id },
-          data: { sisaDetik: Number(sisaDetik) },
-        });
-      }
+      await prisma.pesertaUjian.update({
+        where: { id: pesertaUjian.id },
+        data: { sisaDetik: serverRemainingSeconds },
+      });
 
       return NextResponse.json({
         success: true,
+        sisaDetik: serverRemainingSeconds,
+        serverTimestampMs: now.getTime(),
         message: `${batchJawaban.length} jawaban berhasil disinkronisasi dari IndexedDB ke Server`,
       });
     }
 
-    // 2. Single item autosave
+    // 2. Single item autosave (atau heartbeat sinkronisasi waktu jika tanpa soalId)
     if (soalId) {
       await prisma.jawabanPeserta.upsert({
         where: {
@@ -96,15 +130,17 @@ export async function POST(
       });
     }
 
-    // Update sisa detik
-    if (sisaDetik !== undefined) {
-      await prisma.pesertaUjian.update({
-        where: { id: pesertaUjian.id },
-        data: { sisaDetik: Number(sisaDetik) },
-      });
-    }
+    await prisma.pesertaUjian.update({
+      where: { id: pesertaUjian.id },
+      data: { sisaDetik: serverRemainingSeconds },
+    });
 
-    return NextResponse.json({ success: true, message: 'Jawaban tersimpan' });
+    return NextResponse.json({
+      success: true,
+      sisaDetik: serverRemainingSeconds,
+      serverTimestampMs: now.getTime(),
+      message: 'Jawaban tersimpan',
+    });
   } catch (error: any) {
     console.error('Save jawaban error:', error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });

@@ -41,24 +41,30 @@ def normalize_math_katex(text):
 
     # 3. Format pecahan biasa yang berdampingan dengan akar: 1/4 √14 -> $\frac{1}{4}\sqrt{14}$
     t = re.sub(
-        r'(\d+)/(\d+)\s*(\$\\sqrt\{[^}]+\}\$|√\s*([0-9a-zA-Z]+))',
-        lambda m: r'$\frac{' + m.group(1) + '}{' + m.group(2) + r'}\sqrt{' + (m.group(4) or '') + '}$',
+        r'([+\-]?\d+)/(\d+)\s*(?:\$\\sqrt\{([^}]+)\}\$|\\sqrt\{([^}]+)\}|√\s*\{([^}]+)\}|√\s*\(([^)]+)\)|√\s*([0-9]+(?:[.,][0-9]+)?|[0-9a-zA-Z]+))',
+        lambda m: r'$\frac{' + m.group(1) + '}{' + m.group(2) + r'}\sqrt{' + (m.group(3) or m.group(4) or m.group(5) or m.group(6) or m.group(7) or '') + '}$',
         t
     )
 
-    # 4. Akar kuadrat dan akar pangkat n Unicode
-    t = re.sub(r'(?<![\$\w])([0-9a-zA-Z]+)√\s*\{([^}]+)\}', r'$\\sqrt[\1]{\2}$', t)
-    t = re.sub(r'(?<![\$\w])([0-9a-zA-Z]+)√\s*\(([^)]+)\)', r'$\\sqrt[\1]{\2}$', t)
-    t = re.sub(r'(?<![\$\w])([0-9a-zA-Z]+)√\s*([0-9a-zA-Z]+)', r'$\\sqrt[\1]{\2}$', t)
+    # 4. Akar pangkat n eksplisit (√[3]{8}, ³√8, ∛8, ∜16) & akar kuadrat dengan/tanpa koefisien (2√3 -> $2\sqrt{3}$, √14 -> $\sqrt{14}$, √2,25 -> $\sqrt{2,25}$)
+    sup_map = {'²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', 'ⁿ': 'n'}
+    t = re.sub(r'√\s*\[([^\]]+)\]\s*\{([^}]+)\}', r'$\\sqrt[\1]{\2}$', t)
+    t = re.sub(r'√\s*\[([^\]]+)\]\s*\(([^)]+)\)', r'$\\sqrt[\1]{\2}$', t)
+    t = re.sub(r'√\s*\[([^\]]+)\]\s*([0-9]+(?:[.,][0-9]+)?|[0-9a-zA-Z]+)', r'$\\sqrt[\1]{\2}$', t)
+    t = re.sub(
+        r'([²³⁴⁵⁶⁷⁸⁹ⁿ]+)\s*√\s*(?:\{([^}]+)\}|\(([^)]+)\)|([0-9]+(?:[.,][0-9]+)?|[0-9a-zA-Z]+))',
+        lambda m: '$\\sqrt[' + ''.join(sup_map.get(ch, ch) for ch in m.group(1)) + ']{' + (m.group(2) or m.group(3) or m.group(4) or '') + '}$',
+        t
+    )
     t = re.sub(r'∛\s*\{([^}]+)\}', r'$\\sqrt[3]{\1}$', t)
     t = re.sub(r'∛\s*\(([^)]+)\)', r'$\\sqrt[3]{\1}$', t)
-    t = re.sub(r'∛\s*([0-9a-zA-Z]+)', r'$\\sqrt[3]{\1}$', t)
+    t = re.sub(r'∛\s*([0-9]+(?:[.,][0-9]+)?|[0-9a-zA-Z]+)', r'$\\sqrt[3]{\1}$', t)
     t = re.sub(r'∜\s*\{([^}]+)\}', r'$\\sqrt[4]{\1}$', t)
     t = re.sub(r'∜\s*\(([^)]+)\)', r'$\\sqrt[4]{\1}$', t)
-    t = re.sub(r'∜\s*([0-9a-zA-Z]+)', r'$\\sqrt[4]{\1}$', t)
-    t = re.sub(r'(?<![\$\w])√\s*\{([^}]+)\}', r'$\\sqrt{\1}$', t)
-    t = re.sub(r'(?<![\$\w])√\s*\(([^)]+)\)', r'$\\sqrt{\1}$', t)
-    t = re.sub(r'(?<![\$\w])√\s*([0-9a-zA-Z]+)', r'$\\sqrt{\1}$', t)
+    t = re.sub(r'∜\s*([0-9]+(?:[.,][0-9]+)?|[0-9a-zA-Z]+)', r'$\\sqrt[4]{\1}$', t)
+    t = re.sub(r'(?<![\$\w])([+\-]?\d+(?:[.,]\d+)?)?\s*√\s*\{([^}]+)\}', lambda m: '$' + (m.group(1).strip() if m.group(1) else '') + r'\sqrt{' + m.group(2) + '}$', t)
+    t = re.sub(r'(?<![\$\w])([+\-]?\d+(?:[.,]\d+)?)?\s*√\s*\(([^)]+)\)', lambda m: '$' + (m.group(1).strip() if m.group(1) else '') + r'\sqrt{' + m.group(2) + '}$', t)
+    t = re.sub(r'(?<![\$\w])([+\-]?\d+(?:[.,]\d+)?)?\s*√\s*([0-9]+(?:[.,][0-9]+)?|[0-9a-zA-Z]+)', lambda m: '$' + (m.group(1).strip() if m.group(1) else '') + r'\sqrt{' + m.group(2) + '}$', t)
 
     # 5. Segmented LaTeX Auto-Wrapper untuk ekspresi LaTeX mentah tanpa pembungkus $
     segments = re.split(r'(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)', t)
@@ -66,10 +72,10 @@ def normalize_math_katex(text):
         seg = segments[i]
         if not seg:
             continue
-        seg = re.sub(r'\\sqrt\s+([0-9a-zA-Z]+)', r'\\sqrt{\1}', seg)
+        seg = re.sub(r'\\sqrt(?!\[|\{)\s*([0-9a-zA-Z]+)', r'\\sqrt{\1}', seg)
         seg = re.sub(
-            r'(\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{[^{}]*\}|[a-zA-Z0-9\+\-\*/\=\(\)\,\s\\])*)',
-            r'$\1$',
+            r'((?:[+\-]?\d+(?:[.,]\d+)?\s*)?\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{[^{}]*\}|[a-zA-Z0-9\+\-\*/\=\(\)\,\.^_\\])*)',
+            lambda m: '$' + m.group(1).strip() + '$',
             seg
         )
         segments[i] = seg

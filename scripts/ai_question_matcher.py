@@ -37,6 +37,12 @@ def normalize_math_expression(expr: str) -> str:
     if not expr:
         return ""
     m = expr.strip()
+    m = re.sub(r'&radic;|&#8730;|&#x221a;', '√', m, flags=re.IGNORECASE)
+    m = re.sub(r'&lt;', '<', m, flags=re.IGNORECASE)
+    m = re.sub(r'&gt;', '>', m, flags=re.IGNORECASE)
+    m = re.sub(r'&amp;', '&', m, flags=re.IGNORECASE)
+    m = re.sub(r'&times;', 'x', m, flags=re.IGNORECASE)
+    m = re.sub(r'&divide;', '/', m, flags=re.IGNORECASE)
     # Lepas pembungkus $...$ atau $$...$$ jika ada
     m = re.sub(r'^\$+|\$+$', '', m).strip()
     # Hapus spasi di dalam formula
@@ -49,13 +55,19 @@ def normalize_math_expression(expr: str) -> str:
     m = re.sub(r'(\d+),(\d+)', r'\1.\2', m)
     # Konversi pecahan KaTeX: \frac{a}{b} -> (a)/(b) atau a/b jika single digit
     m = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', r'(\1)/(\2)', m)
-    # Konversi akar KaTeX: \sqrt{14} -> sqrt(14)
+    # Konversi akar pangkat n & akar kuadrat KaTeX/Unicode: \sqrt[3]{8} -> root(3,8), 2√3 -> 2sqrt(3)
+    sup_map = {'²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', 'ⁿ': 'n'}
+    m = re.sub(r'\\sqrt\[([^\]]+)\]\{([^}]+)\}', r'root(\1,\2)', m)
+    m = re.sub(r'√\[([^\]]+)\]\{([^}]+)\}', r'root(\1,\2)', m)
+    m = re.sub(r'([²³⁴⁵⁶⁷⁸⁹ⁿ]+)√(?:\{([^}]+)\}|\(([^)]+)\)|([0-9a-zA-Z.]+))', lambda x: 'root(' + ''.join(sup_map.get(c, c) for c in x.group(1)) + ',' + (x.group(2) or x.group(3) or x.group(4) or '') + ')', m)
+    m = re.sub(r'∛(?:\{([^}]+)\}|\(([^)]+)\)|([0-9a-zA-Z.]+))', lambda x: 'root(3,' + (x.group(1) or x.group(2) or x.group(3) or '') + ')', m)
+    m = re.sub(r'∜(?:\{([^}]+)\}|\(([^)]+)\)|([0-9a-zA-Z.]+))', lambda x: 'root(4,' + (x.group(1) or x.group(2) or x.group(3) or '') + ')', m)
     m = re.sub(r'\\sqrt\{([^}]+)\}', r'sqrt(\1)', m)
     m = re.sub(r'\\sqrt\(([^)]+)\)', r'sqrt(\1)', m)
-    m = re.sub(r'\\sqrt([0-9a-zA-Z]+)', r'sqrt(\1)', m)
+    m = re.sub(r'\\sqrt([0-9a-zA-Z.]+)', r'sqrt(\1)', m)
     m = re.sub(r'√\{([^}]+)\}', r'sqrt(\1)', m)
     m = re.sub(r'√\(([^)]+)\)', r'sqrt(\1)', m)
-    m = re.sub(r'√([0-9a-zA-Z]+)', r'sqrt(\1)', m)
+    m = re.sub(r'√([0-9a-zA-Z.]+)', r'sqrt(\1)', m)
     # Hapus modifier latex seperti \left, \right, \text
     m = re.sub(r'\\(?:left|right|mathrm|mathbf|text)', '', m)
     # Sederhanakan kurung luar numerik tunggal: (1)/(4) -> 1/4

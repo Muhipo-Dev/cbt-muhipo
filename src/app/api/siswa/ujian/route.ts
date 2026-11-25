@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getCalibratedServerNow, computeAccurateExamRemainingSeconds } from '@/lib/exam-time';
 
 export async function GET(request: NextRequest) {
   try {
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
     const pesertaMap = new Map<string, (typeof existingPesertaList)[0]>();
     existingPesertaList.forEach((p) => pesertaMap.set(p.ujianId, p));
 
-    const now = new Date();
+    const now = await getCalibratedServerNow();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
@@ -79,15 +80,15 @@ export async function GET(request: NextRequest) {
       const scheduledEnd = u.waktuSelesai ? new Date(u.waktuSelesai) : null;
 
       const statusPeserta = p?.status || 'BELUM_MULAI';
-      const totalMaxDetik = u.durasiMenit * 60;
-      let realSisaDetik = p?.sisaDetik ?? totalMaxDetik;
-
-      if (statusPeserta === 'SEDANG_MENGERJAKAN' && p?.waktuMulai) {
-        const elapsed = Math.floor((now.getTime() - new Date(p.waktuMulai).getTime()) / 1000);
-        realSisaDetik = Math.max(0, totalMaxDetik - elapsed);
-      } else if (statusPeserta === 'BELUM_MULAI') {
-        realSisaDetik = totalMaxDetik;
-      }
+      const realSisaDetik = computeAccurateExamRemainingSeconds({
+        now,
+        durasiMenit: u.durasiMenit,
+        jadwalSelesai: u.waktuSelesai,
+        pesertaWaktuMulai: p?.waktuMulai,
+        pesertaSisaDetikTersimpan: p?.sisaDetik,
+        pesertaUpdatedAt: p?.updatedAt,
+        pesertaStatus: statusPeserta,
+      });
 
       const guruPengampuNama =
         u.mataPelajaran?.gurus?.[0]?.guru?.name ||
@@ -122,8 +123,8 @@ export async function GET(request: NextRequest) {
       const isFuture = scheduledStart ? scheduledStart > now : false;
       const isPast = (scheduledEnd ? now > scheduledEnd : false) || isArchived;
       
-      const isReady = isStarted && !isEnded && !isArchived && statusPeserta !== 'SELESAI';
-      const isWorking = statusPeserta === 'SEDANG_MENGERJAKAN';
+      const isReady = isStarted && (!isEnded || (statusPeserta === 'SEDANG_MENGERJAKAN' && realSisaDetik > 0)) && !isArchived && statusPeserta !== 'SELESAI';
+      const isWorking = statusPeserta === 'SEDANG_MENGERJAKAN' && realSisaDetik > 0;
       const isFinished = statusPeserta === 'SELESAI';
       const isArsip = isArchived || isPast || (isFinished && isPast);
 

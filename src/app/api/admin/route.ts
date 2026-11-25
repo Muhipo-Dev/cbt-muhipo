@@ -1478,6 +1478,14 @@ export async function POST(request: NextRequest) {
         } as any,
       });
 
+      // Jika durasiMenit diubah oleh Admin/Guru, sinkronkan sisaDetik untuk peserta yang BELUM_MULAI
+      if (durasiMenit && Number(durasiMenit) !== existingUjian.durasiMenit) {
+        await prisma.pesertaUjian.updateMany({
+          where: { ujianId, status: 'BELUM_MULAI' },
+          data: { sisaDetik: Number(durasiMenit) * 60 },
+        });
+      }
+
       if (kelasIds && Array.isArray(kelasIds)) {
         await prisma.ujianKelas.deleteMany({ where: { ujianId } });
         const uniqueKelasIds = Array.from(new Set(kelasIds.filter(Boolean)));
