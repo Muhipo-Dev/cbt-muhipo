@@ -54,6 +54,12 @@ export default function RootLayout({
         <meta httpEquiv="Expires" content="0" />
         <meta name="renderer" content="webkit" />
         <meta name="force-rendering" content="webkit" />
+        <link
+          rel="help"
+          type="text/plain"
+          href="/llms.txt"
+          title="CBT Muhipo AI Agent & Admin Automation Guide (ChatGPT Task / Gemini Task)"
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -83,7 +89,7 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
-                  var CBT_BUILD_VERSION = 'cbt-ai-math-engine-v4.0';
+                  var CBT_BUILD_VERSION = 'cbt-ai-math-engine-v4.1';
                   var cachedVer = localStorage.getItem('cbt_client_cache_ver');
                   if (cachedVer !== CBT_BUILD_VERSION) {
                     if ('caches' in window) {

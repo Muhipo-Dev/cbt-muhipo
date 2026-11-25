@@ -165,6 +165,8 @@ export function TesTambahView({
               Pilih Topik / Mata Pelajaran *
             </label>
             <select
+              id="select-tes-topik"
+              data-ai-field="mataPelajaranId"
               required
               value={form.mataPelajaranId}
               onChange={(e) => {
@@ -176,7 +178,7 @@ export function TesTambahView({
                   durasiMenit: target?.durasiMenit || 90,
                 })
               }}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
             >
               {items.map((bs) => {
                 const isArchived = bs.status === 'NONAKTIF'
@@ -194,12 +196,14 @@ export function TesTambahView({
               Judul Lengkap Tes Ujian *
             </label>
             <input
+              id="input-tes-judul"
+              data-ai-field="judul"
               type="text"
               required
               value={form.judul}
               onChange={(e) => setForm({ ...form, judul: e.target.value })}
               placeholder="Contoh: Penilaian Akhir Semester Ganjil - Matematika Wajib Kelas X"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
             />
           </div>
         </div>
@@ -211,11 +215,13 @@ export function TesTambahView({
               Durasi Pengerjaan (Menit) *
             </label>
             <input
+              id="input-tes-durasi"
+              data-ai-field="durasiMenit"
               type="number"
               required
               value={form.durasiMenit}
               onChange={(e) => setForm({ ...form, durasiMenit: parseInt(e.target.value) || 90 })}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
             />
           </div>
 
@@ -224,12 +230,14 @@ export function TesTambahView({
               Jadwal Waktu Mulai *
             </label>
             <input
+              id="input-tes-waktu-mulai"
+              data-ai-field="waktuMulai"
               type="datetime-local"
               step="60"
               required
               value={form.waktuMulai}
               onChange={(e) => setForm({ ...form, waktuMulai: e.target.value })}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
             />
           </div>
 
@@ -238,12 +246,14 @@ export function TesTambahView({
               Jadwal Waktu Selesai *
             </label>
             <input
+              id="input-tes-waktu-selesai"
+              data-ai-field="waktuSelesai"
               type="datetime-local"
               step="60"
               required
               value={form.waktuSelesai}
               onChange={(e) => setForm({ ...form, waktuSelesai: e.target.value })}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
             />
           </div>
         </div>
@@ -363,9 +373,11 @@ export function TesTambahView({
               Pilih Group / Kelas yang Mengikuti Tes * ({form.kelasIds.length} Dipilih)
             </label>
             <button
+              id="btn-select-all-kelas"
+              data-ai-action="select-all-kelas"
               type="button"
               onClick={handleSelectAllKelas}
-              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer touch-manipulation"
             >
               {form.kelasIds.length === kelasList.length ? 'Batal Pilih Semua' : 'Pilih Semua Group'}
             </button>
@@ -375,17 +387,21 @@ export function TesTambahView({
             {kelasList.map((k) => {
               const isSelected = form.kelasIds.includes(k.id)
               return (
-                <div
+                <button
+                  type="button"
                   key={k.id}
+                  data-ai-kelas-id={k.id}
+                  data-ai-kelas-nama={k.nama}
+                  aria-pressed={isSelected}
                   onClick={() => handleToggleKelas(k.id)}
-                  className={`p-2.5 rounded-xl border flex items-center gap-2 transition cursor-pointer text-xs font-semibold ${
+                  className={`min-h-[44px] p-2.5 rounded-xl border flex items-center gap-2 transition cursor-pointer text-xs font-semibold text-left touch-manipulation ${
                     isSelected
                       ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                       : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-blue-400'
                   }`}
                 >
                   <span className="truncate">{k.nama}</span>
-                </div>
+                </button>
               )
             })}
           </div>
@@ -394,6 +410,8 @@ export function TesTambahView({
         {/* Submit */}
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200/80 dark:border-white/10">
           <button
+            id="btn-simpan-tes"
+            data-ai-action="submit-create-ujian"
             type="submit"
             disabled={saving}
             className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"

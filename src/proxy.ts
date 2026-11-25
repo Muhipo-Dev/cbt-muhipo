@@ -7,11 +7,19 @@ export function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Bypass routes: static files, Next.js internals, waiting-room APIs, public assets, logo/favicons
+  // Bypass routes: static files, Next.js internals, waiting-room APIs, Admin/Proktor/Guru & AI Guide routes, public assets
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/waiting-room') ||
     pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/admin') ||
+    pathname.startsWith('/api/guru') ||
+    pathname.startsWith('/api/proktor') ||
+    pathname.startsWith('/api/ai-guide') ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/guru') ||
+    pathname.startsWith('/proktor') ||
+    pathname.startsWith('/llms.txt') ||
     pathname.startsWith('/favicon.ico') ||
     pathname.startsWith('/pic_logo.png') ||
     pathname.includes('.')

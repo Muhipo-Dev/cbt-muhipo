@@ -164,7 +164,13 @@ function replaceInlineRadicalsInMath(mathExpr: string, displayMode = false): str
     let canSplitSafely = true;
     let matchCheck: RegExpExecArray | null;
     while ((matchCheck = sqrtTokenRegex.exec(trimmed)) !== null) {
-      if (matchCheck[2].includes('\\frac') || matchCheck[2].includes('\\sqrt') || isInsideBraces(trimmed, matchCheck.index)) {
+      if (
+        matchCheck[2].includes('\\frac') ||
+        matchCheck[2].includes('\\dfrac') ||
+        matchCheck[2].includes('\\tfrac') ||
+        matchCheck[2].includes('\\sqrt') ||
+        isInsideBraces(trimmed, matchCheck.index)
+      ) {
         canSplitSafely = false;
         break;
       }
@@ -332,9 +338,9 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
           (_, a, b, rad) => `$\\frac{${a}}{${b}}${rad}$`
         );
 
-        // Bungkus ekspresi LaTeX mentah yang belum diapit $...$ (termasuk koefisien di depan \sqrt seperti 2\sqrt{3}, -5\sqrt{2})
+        // Bungkus ekspresi LaTeX mentah yang belum diapit $...$ (termasuk koefisien di depan \sqrt seperti 2\sqrt{3}, -5\sqrt{2}, \dfrac, \tfrac)
         seg = seg.replace(
-          /((?:[+\-]?\d+(?:[.,]\d+)?\s*|[a-zA-Z]\s*)?\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{(?:[^{}]|\{[^{}]*\})*\}|[a-zA-Z0-9+\-*/=(),.^_\\])*)/g,
+          /((?:[+\-]?\d+(?:[.,]\d+)?\s*|[a-zA-Z]\s*)?\\(?:frac|dfrac|tfrac|cfrac|sqrt|sum|int|lim|prod|pm|times|cdot|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{(?:[^{}]|\{[^{}]*\})*\}|[a-zA-Z0-9+\-*/=(),.^_\\])*)/g,
           (match) => `$${match.trim()}$`
         );
 

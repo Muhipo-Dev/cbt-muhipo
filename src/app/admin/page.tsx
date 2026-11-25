@@ -208,6 +208,17 @@ export default function ComprehensiveAdminDashboard() {
   }
 
   useEffect(() => {
+    // Sinkronisasi awal URL ?tab=... & ?topikId=... agar AI Agent (ChatGPT Task / Gemini Task) dapat membuka modul secara deterministik
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const tabParam = params.get('tab')
+      const topikParam = params.get('topikId') || params.get('mataPelajaranId')
+      const ujianParam = params.get('ujianId')
+      if (tabParam) setActiveTab(tabParam)
+      if (topikParam) setSelectedMapelId(topikParam)
+      if (ujianParam) setSelectedProktorUjianId(ujianParam)
+    } catch {}
+
     fetchAllData()
 
     // Polling Proktor Live every 5 seconds if on proktor tab
@@ -227,6 +238,93 @@ export default function ComprehensiveAdminDashboard() {
 
     return () => clearInterval(timer)
   }, [activeTab, selectedProktorUjianId])
+
+  // Sinkronisasi URL query parameter ketika tab atau topik berubah + ekspos window.cbtAdminAI bagi ChatGPT Task / Gemini Task
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.set('tab', activeTab)
+      if (selectedMapelId) {
+        url.searchParams.set('topikId', selectedMapelId)
+      }
+      window.history.replaceState({}, '', url.toString())
+    } catch {}
+  }, [activeTab, selectedMapelId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !currentUser) return
+    ;(window as any).cbtAdminAI = {
+      version: '4.1',
+      guideUrl: '/llms.txt',
+      manifestEndpoint: '/api/ai-guide',
+      navigate: (tabId: string, topikId?: string) => {
+        if (topikId) setSelectedMapelId(topikId)
+        setActiveTab(tabId)
+      },
+      getContext: async () => {
+        const res = await fetch('/api/ai-guide')
+        return res.json()
+      },
+      createTopik: async (payload: {
+        kode: string
+        nama: string
+        tingkat?: number
+        durasiMenit?: number
+        kkm?: number
+      }) => {
+        const res = await fetch('/api/guru/soal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'CREATE_TOPIK', ...payload }),
+        })
+        const json = await res.json()
+        if (json.success) await fetchAllData()
+        return json
+      },
+      importSoalText: async (mataPelajaranIdOrKode: string, rawText: string, autoCreateTopik = false) => {
+        const res = await fetch('/api/guru/soal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'IMPORT_SOAL',
+            mataPelajaranId: mataPelajaranIdOrKode,
+            kodeTopik: mataPelajaranIdOrKode,
+            autoCreateTopik,
+            rawText,
+          }),
+        })
+        const json = await res.json()
+        if (json.success) await fetchAllData()
+        return json
+      },
+      importSoalJson: async (mataPelajaranIdOrKode: string, soalItems: any[], autoCreateTopik = false) => {
+        const res = await fetch('/api/guru/soal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'IMPORT_SOAL',
+            mataPelajaranId: mataPelajaranIdOrKode,
+            kodeTopik: mataPelajaranIdOrKode,
+            autoCreateTopik,
+            soalItems,
+          }),
+        })
+        const json = await res.json()
+        if (json.success) await fetchAllData()
+        return json
+      },
+      createUjian: async (payload: any) => {
+        const res = await fetch('/api/admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'CREATE_UJIAN', ...payload }),
+        })
+        const json = await res.json()
+        if (json.success) await fetchAllData()
+        return json
+      },
+    }
+  }, [currentUser])
 
   // Logout Handler
   const handleLogout = async () => {
@@ -552,11 +650,72 @@ export default function ComprehensiveAdminDashboard() {
                 {getTabTitle(activeTab)}
               </h1>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                id="btn-ai-protocol-info"
+                data-ai-action="show-ai-guide"
+                onClick={() =>
+                  showNotification(
+                    'Protokol Otomasi AI Admin (ChatGPT Task & Gemini Task)',
+                    <div className="space-y-2 text-left text-xs leading-relaxed">
+                      <p>
+                        Sistem <strong>CBT Muhipo</strong> siap dioperasikan secara dua arah oleh{' '}
+                        <strong>ChatGPT Task / Operator</strong> maupun <strong>Gemini Task</strong> sebagai Admin:
+                      </p>
+                      <ul className="list-disc pl-4 space-y-1">
+                        <li>
+                          <strong>Manifest &amp; ID Aktif:</strong> AI dapat membaca{' '}
+                          <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">/llms.txt</code> dan{' '}
+                          <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">GET /api/ai-guide</code>{' '}
+                          untuk melihat seluruh ID Topik, Kelas, dan Jadwal secara real-time.
+                        </li>
+                        <li>
+                          <strong>Input Soal 1-Langkah &amp; Batch AI:</strong> Di menu{' '}
+                          <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">Data Modul &gt; Input Soal</code>,
+                          AI dapat mengisi soal + opsi A–E + kunci jawaban sekaligus, atau menempelkan naskah soal bernomor / JSON pada panel{' '}
+                          <strong>Input Cepat AI</strong>.
+                        </li>
+                        <li>
+                          <strong>Fidelitas Matematika 100%:</strong> Notasi{' '}
+                          <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">\(...\)</code>,{' '}
+                          <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">\[...\]</code>,{' '}
+                          <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">$2\sqrt&#123;3&#125;$</code>,{' '}
+                          <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">2√3</code>, dan{' '}
+                          <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">\sqrt[3]&#123;8&#125;</code>{' '}
+                          otomatis tampil identik di layar peserta.
+                        </li>
+                      </ul>
+                    </div>,
+                    'info'
+                  )
+                }
+                className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50/90 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/70 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-lg transition cursor-pointer touch-manipulation"
+                title="Panduan & Protokol Otomasi untuk ChatGPT Task / Gemini Task"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>AI Task Ready</span>
+              </button>
               <span className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-100/90 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2.5 py-1 rounded-lg font-medium backdrop-blur-sm">
                 T.A {settingsForm.academicYear} • Semester {settingsForm.semester}
               </span>
             </div>
+            <script
+              id="cbt-ai-agent-manifest"
+              type="application/json"
+              dangerouslySetInnerHTML={{
+                __html: JSON.stringify({
+                  system: 'CBT v2 SMA Muhipo',
+                  guideUrl: '/llms.txt',
+                  liveContextEndpoint: '/api/ai-guide',
+                  activeTab,
+                  selectedTopikId: selectedMapelId || null,
+                  topikCount: mapelList.length,
+                  kelasCount: kelasList.length,
+                  browserBridge: 'window.cbtAdminAI',
+                }),
+              }}
+            />
           </div>
 
           {/* TAB 1: DASHBOARD */}

@@ -35,6 +35,14 @@ export default function SingleSignInLoginPage() {
   const clock = useRealtimeServerClock(60000);
 
   useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const portalParam = (params.get('portal') || params.get('role') || '').toUpperCase();
+      if (['ADMIN', 'GURU', 'PROKTOR', 'SUPERADMIN', 'MANAGEMENT'].includes(portalParam)) {
+        setActivePortal('ADMIN');
+      }
+    } catch {}
+
     fetch('/api/pengaturan')
       .then((res) => res.json())
       .then((json) => {
@@ -68,18 +76,14 @@ export default function SingleSignInLoginPage() {
         throw new Error(data.message || 'Login gagal. Periksa kembali Username / ID dan Kata Sandi.');
       }
 
+      // Routing otomatis berdasarkan role terotentikasi (ramah pengguna mobile & AI Automation seperti ChatGPT/Gemini Task)
       const role = data.user.role;
-      if (activePortal === 'SISWA') {
-        if (role !== 'SISWA') {
-          throw new Error('Akun ini terdaftar sebagai Admin/Guru/Proktor. Silakan beralih ke Portal Admin CBT.');
-        }
-        router.push('/siswa');
+      if (role === 'SUPERADMIN' || role === 'ADMIN' || role === 'PROKTOR') {
+        router.push('/admin');
+      } else if (role === 'GURU') {
+        router.push('/guru');
       } else {
-        if (role === 'SISWA') {
-          throw new Error('Akun ini adalah akun Siswa. Silakan pilih tab Portal Siswa.');
-        }
-        if (role === 'SUPERADMIN' || role === 'ADMIN' || role === 'PROKTOR') router.push('/admin');
-        else if (role === 'GURU') router.push('/guru');
+        router.push('/siswa');
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Terjadi kesalahan saat masuk');
@@ -126,15 +130,23 @@ export default function SingleSignInLoginPage() {
       {/* Main Login Card */}
       <main className="flex-1 flex items-center justify-center p-2 sm:p-4 z-10 min-h-0">
         <div className="w-full max-w-[350px] sm:max-w-[375px] bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-6 shadow-2xl backdrop-blur-xl space-y-3.5 sm:space-y-4">
-          {/* Toggle Tab Portal: Siswa vs Admin/Guru (Disembunyikan di Mobile, khusus Desktop/Tablet) */}
-          <div className="hidden sm:grid grid-cols-2 gap-1 bg-slate-100/90 dark:bg-slate-950/80 p-1 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold backdrop-blur-sm">
+          {/* Toggle Tab Portal: Siswa vs Admin/Guru (Tampil di semua ukuran layar & ramah AI Automation) */}
+          <div
+            role="tablist"
+            aria-label="Pilih Portal Masuk CBT"
+            className="grid grid-cols-2 gap-1 bg-slate-100/90 dark:bg-slate-950/80 p-1 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold backdrop-blur-sm"
+          >
             <button
+              id="login-portal-siswa"
               type="button"
+              role="tab"
+              aria-selected={activePortal === 'SISWA'}
+              data-ai-action="switch-portal-siswa"
               onClick={() => {
                 setActivePortal('SISWA');
                 setErrorMessage('');
               }}
-              className={`py-1.5 sm:py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs ${activePortal === 'SISWA'
+              className={`min-h-[44px] py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs touch-manipulation ${activePortal === 'SISWA'
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
@@ -143,12 +155,16 @@ export default function SingleSignInLoginPage() {
               <span>Portal Siswa</span>
             </button>
             <button
+              id="login-portal-admin"
               type="button"
+              role="tab"
+              aria-selected={activePortal === 'ADMIN'}
+              data-ai-action="switch-portal-admin"
               onClick={() => {
                 setActivePortal('ADMIN');
                 setErrorMessage('');
               }}
-              className={`py-1.5 sm:py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs ${activePortal === 'ADMIN'
+              className={`min-h-[44px] py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs touch-manipulation ${activePortal === 'ADMIN'
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
@@ -178,26 +194,30 @@ export default function SingleSignInLoginPage() {
           )}
 
           {/* Form Inputs */}
-          <form onSubmit={handleLogin} className="space-y-3 sm:space-y-3.5 text-xs">
+          <form onSubmit={handleLogin} data-ai-form="cbt-login" className="space-y-3 sm:space-y-3.5 text-xs">
             <div className="space-y-1.5">
-              <label className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+              <label htmlFor="login-username" className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
                 <div className="w-5 h-5 rounded-md bg-blue-50 dark:bg-blue-500/20 flex items-center justify-center border border-blue-200 dark:border-blue-400/30 shrink-0">
                   <User className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <span>{activePortal === 'SISWA' ? 'Nomor Peserta' : 'Username / NIP'}</span>
               </label>
               <input
+                id="login-username"
+                name="username"
+                data-ai-field="username"
+                autoComplete="username"
                 type="text"
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder={activePortal === 'SISWA' ? 'Masukkan nomor peserta' : 'Masukkan username atau NIP'}
-                className="w-full h-11 px-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white text-sm font-medium focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500/20 transition shadow-2xs placeholder:text-slate-400"
+                className="w-full h-11 px-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white text-base sm:text-sm font-medium focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500/20 transition shadow-2xs placeholder:text-slate-400"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+              <label htmlFor="login-password" className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
                 <div className="w-5 h-5 rounded-md bg-cyan-50 dark:bg-cyan-500/20 flex items-center justify-center border border-cyan-200 dark:border-cyan-400/30 shrink-0">
                   <KeyRound className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
                 </div>
@@ -205,17 +225,22 @@ export default function SingleSignInLoginPage() {
               </label>
               <div className="relative flex items-center">
                 <input
+                  id="login-password"
+                  name="password"
+                  data-ai-field="password"
+                  autoComplete="current-password"
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={activePortal === 'SISWA' ? 'Masukkan kata sandi peserta' : 'Masukkan kata sandi'}
-                  className="w-full h-11 px-3.5 pr-11 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white text-sm font-medium focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500/20 transition shadow-2xs placeholder:text-slate-400"
+                  className="w-full h-11 px-3.5 pr-11 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white text-base sm:text-sm font-medium focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500/20 transition shadow-2xs placeholder:text-slate-400"
                 />
                 <button
                   type="button"
+                  aria-label={showPassword ? 'Sembunyikan Kata Sandi' : 'Lihat Kata Sandi'}
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-lg transition cursor-pointer z-10"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition cursor-pointer z-10 touch-manipulation"
                   title={showPassword ? 'Sembunyikan Kata Sandi' : 'Lihat Kata Sandi'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -224,9 +249,11 @@ export default function SingleSignInLoginPage() {
             </div>
 
             <button
+              id="login-submit"
+              data-ai-action="submit-login"
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 sm:py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 cursor-pointer transition disabled:opacity-50 active:scale-[0.99] mt-1"
+              className="w-full min-h-[44px] py-2.5 sm:py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 cursor-pointer transition disabled:opacity-50 active:scale-[0.99] mt-1 touch-manipulation"
             >
               <LogIn className="w-4 h-4" />
               <span>{loading ? 'Memverifikasi Akun...' : 'Masuk Sekarang'}</span>

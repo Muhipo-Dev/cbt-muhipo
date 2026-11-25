@@ -35,7 +35,10 @@ def normalize_math_katex(text):
     t = re.sub(r'&ne;', '≠', t, flags=re.I)
     t = re.sub(r'&deg;', '°', t, flags=re.I)
 
-    # 2. Deteksi sintaks math tag [tex]...[/tex] atau <math>...</math> dari ZyaCBT / Moodle
+    # 2. Deteksi sintaks math tag [tex]...[/tex], <math>...</math>, serta delimiter ChatGPT/Gemini \[...\] dan \(...\)
+    t = re.sub(r'```(?:latex|math|tex)\s*([\s\S]*?)```', lambda m: '$$' + m.group(1).strip() + '$$', t, flags=re.IGNORECASE)
+    t = re.sub(r'\\\[([\s\S]*?)\\\]', lambda m: '$$' + m.group(1).strip() + '$$', t)
+    t = re.sub(r'\\\(([\s\S]*?)\\\)', lambda m: '$' + m.group(1).strip() + '$', t)
     t = re.sub(r'\[tex\](.*?)\[/tex\]', r'$\1$', t, flags=re.IGNORECASE | re.DOTALL)
     t = re.sub(r'<math>(.*?)</math>', r'$\1$', t, flags=re.IGNORECASE | re.DOTALL)
 

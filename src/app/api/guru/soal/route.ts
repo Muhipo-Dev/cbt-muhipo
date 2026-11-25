@@ -4,6 +4,10 @@ import { prisma } from '@/lib/prisma';
 import { TipeSoal } from '@/lib/enums';
 import { convertEquationToKatex } from '@/lib/katexConverter';
 import { extractAndCompressBase64Media } from '@/lib/mediaCompression';
+import {
+  normalizeIncomingSoalItem,
+  parseAIQuestionsFromTextOrJson,
+} from '@/lib/ai-automation';
 
 // Helper untuk kalkulasi otomatis poin butir soal secara seimbang dan proporsional dalam sebuah Topik / Mata Pelajaran
 async function recalculateTopikPoints(mataPelajaranId: string) {
@@ -375,13 +379,91 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 1d. Import Soal Massal Langsung ke Topik / Mata Pelajaran
-    if (action === 'IMPORT_SOAL') {
-      const { mataPelajaranId, topikId, bankSoalId, soalItems, durasiMenit } = body;
-      const targetMapelId = mataPelajaranId || topikId || bankSoalId;
+    // 1d. Import Soal Massal Langsung ke Topik / Mata Pelajaran (Mendukung Excel, JSON AI, maupun Teks/Markdown ChatGPT & Gemini Task)
+    if (action === 'IMPORT_SOAL' || action === 'IMPORT_AI_SOAL' || action === 'BULK_CREATE_SOAL') {
+      const {
+        mataPelajaranId,
+        topikId,
+        bankSoalId,
+        kodeTopik,
+        namaTopik,
+        autoCreateTopik,
+        soalItems,
+        questions,
+        items,
+        rawText,
+        markdown,
+        durasiMenit,
+      } = body;
 
-      if (!targetMapelId || !Array.isArray(soalItems) || soalItems.length === 0) {
-        return NextResponse.json({ success: false, message: 'Pilih Topik tujuan dan data soal import yang valid' }, { status: 400 });
+      let targetMapelId = mataPelajaranId || topikId || bankSoalId;
+
+      // Resolusi otomatis Topik berdasarkan kodeTopik atau namaTopik jika AI Agent belum memegang cuid mataPelajaranId
+      if (!targetMapelId && (kodeTopik || namaTopik)) {
+        const cleanKode = kodeTopik ? String(kodeTopik).trim().toUpperCase() : undefined;
+        const cleanNama = namaTopik ? String(namaTopik).trim() : undefined;
+
+        const existingMapel = await prisma.mataPelajaran.findFirst({
+          where: {
+            status: { not: 'TERHAPUS' },
+            OR: [
+              ...(cleanKode ? [{ kode: cleanKode }] : []),
+              ...(cleanNama ? [{ nama: { equals: cleanNama } }] : []),
+            ],
+          },
+        });
+
+        if (existingMapel) {
+          targetMapelId = existingMapel.id;
+        } else if (autoCreateTopik && (cleanKode || cleanNama)) {
+          const generatedKode =
+            cleanKode ||
+            `AI-${(cleanNama || 'TOPIK')
+              .replace(/[^a-zA-Z0-9]/g, '')
+              .slice(0, 6)
+              .toUpperCase()}-${Date.now().toString().slice(-4)}`;
+          const createdMapel = await prisma.mataPelajaran.create({
+            data: {
+              kode: generatedKode,
+              nama: cleanNama || generatedKode,
+              tingkat: Number(body.tingkat) || 10,
+              jurusan: body.jurusan || 'UMUM',
+              durasiMenit: Number(durasiMenit) || 90,
+              status: 'AKTIF',
+              kkm: 75.0,
+              pembuatId: user.userId,
+            },
+          });
+          targetMapelId = createdMapel.id;
+        }
+      }
+
+      // Kumpulkan daftar soal baik dari array objek fleksibel maupun dari rawText/markdown AI
+      const rawArrayInput = Array.isArray(soalItems)
+        ? soalItems
+        : Array.isArray(questions)
+          ? questions
+          : Array.isArray(items)
+            ? items
+            : null;
+
+      const normalizedList = rawArrayInput
+        ? rawArrayInput
+            .map((it: any) => normalizeIncomingSoalItem(it))
+            .filter((x): x is NonNullable<typeof x> => Boolean(x))
+        : typeof (rawText ?? markdown) === 'string' && String(rawText ?? markdown).trim()
+          ? parseAIQuestionsFromTextOrJson(String(rawText ?? markdown))
+          : [];
+
+      if (!targetMapelId || normalizedList.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'Pilih Topik tujuan (mataPelajaranId / kodeTopik) dan sertakan data soal yang valid (soalItems JSON atau rawText bernomor).',
+          },
+          { status: 400 }
+        );
       }
 
       if (durasiMenit && Number(durasiMenit) > 0) {
@@ -394,26 +476,23 @@ export async function POST(request: NextRequest) {
       let startOrder = (await prisma.soal.count({ where: { mataPelajaranId: targetMapelId } })) + 1;
       let importedCount = 0;
 
-      for (const item of soalItems) {
-        const tipe = (item.tipeSoal || 'PG').toUpperCase();
-        let pertanyaan = convertEquationToKatex(String(item.pertanyaan || '').trim());
-        pertanyaan = await extractAndCompressBase64Media(pertanyaan);
+      for (const item of normalizedList) {
+        const tipe = item.tipeSoal;
+        const pertanyaan = await extractAndCompressBase64Media(item.pertanyaan);
         if (!pertanyaan) continue;
 
         const bobot = Number(item.bobot) || 1.0;
-        let kunciTeks = item.kunciJawabanTeks ? convertEquationToKatex(String(item.kunciJawabanTeks)) : null;
+        let kunciTeks = item.kunciJawabanTeks;
         if (kunciTeks) {
           kunciTeks = await extractAndCompressBase64Media(kunciTeks);
         }
 
         const opsiList: { label: string; konten: string; isBenar: boolean }[] = [];
         if (tipe === 'PG' || tipe === 'PG_KOMPLEKS' || tipe === 'BENAR_SALAH') {
-          const rawOpsi = item.opsi || [];
-          if (Array.isArray(rawOpsi)) {
-            for (const o of rawOpsi) {
+          if (item.opsi.length > 0) {
+            for (const o of item.opsi) {
               if (o.konten && String(o.konten).trim()) {
-                let convertedKonten = convertEquationToKatex(String(o.konten).trim());
-                convertedKonten = await extractAndCompressBase64Media(convertedKonten);
+                const convertedKonten = await extractAndCompressBase64Media(o.konten);
                 opsiList.push({
                   label: String(o.label || '').toUpperCase(),
                   konten: convertedKonten,
@@ -421,27 +500,23 @@ export async function POST(request: NextRequest) {
                 });
               }
             }
+          } else if (tipe === 'BENAR_SALAH') {
+            opsiList.push(
+              { label: 'A', konten: 'Benar', isBenar: true },
+              { label: 'B', konten: 'Salah', isBenar: false }
+            );
           }
         }
 
         let rawMatching: string | null = null;
-        if (item.matchingData) {
-          try {
-            const parsed = typeof item.matchingData === 'string' ? JSON.parse(item.matchingData) : item.matchingData;
-            if (Array.isArray(parsed)) {
-              const convertedPairs = [];
-              for (const p of parsed) {
-                const leftConverted = await extractAndCompressBase64Media(convertEquationToKatex(String(p.left || '')));
-                const rightConverted = await extractAndCompressBase64Media(convertEquationToKatex(String(p.right || '')));
-                convertedPairs.push({ left: leftConverted, right: rightConverted });
-              }
-              rawMatching = JSON.stringify(convertedPairs);
-            } else {
-              rawMatching = typeof item.matchingData === 'string' ? item.matchingData : JSON.stringify(item.matchingData);
-            }
-          } catch {
-            rawMatching = typeof item.matchingData === 'string' ? item.matchingData : JSON.stringify(item.matchingData);
+        if (item.matchingData && item.matchingData.length > 0) {
+          const convertedPairs = [];
+          for (const p of item.matchingData) {
+            const leftConverted = await extractAndCompressBase64Media(p.left);
+            const rightConverted = await extractAndCompressBase64Media(p.right);
+            convertedPairs.push({ left: leftConverted, right: rightConverted });
           }
+          rawMatching = JSON.stringify(convertedPairs);
         }
 
         await prisma.soal.create({
@@ -467,6 +542,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: `Berhasil mengimport ${importedCount} butir soal ke dalam Topik / Mata Pelajaran!`,
         importedCount,
+        mataPelajaranId: targetMapelId,
       });
     }
 
@@ -575,9 +651,31 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 2. Tambah / Simpan Butir Soal
-    if (action === 'SAVE_SOAL') {
-      const { mataPelajaranId, topikId, bankSoalId, soalId, nomorUrut, tipeSoal, pertanyaan, bobot, opsiJawaban, kunciJawabanTeks, matchingData, mediaGambar, mediaAudio } = body;
+    // 2. Tambah / Simpan Butir Soal (Mendukung payload standar UI maupun variasi JSON AI Agent)
+    if (action === 'SAVE_SOAL' || action === 'CREATE_SOAL' || action === 'UPDATE_SOAL') {
+      const normalizedAI = normalizeIncomingSoalItem(body);
+      const {
+        mataPelajaranId,
+        topikId,
+        bankSoalId,
+        soalId,
+        nomorUrut,
+        bobot,
+        mediaGambar,
+        mediaAudio,
+      } = body;
+      const tipeSoal = normalizedAI?.tipeSoal || body.tipeSoal || 'PG';
+      const pertanyaan = normalizedAI?.pertanyaan || body.pertanyaan || '';
+      const opsiJawaban =
+        Array.isArray(body.opsiJawaban) && body.opsiJawaban.length > 0
+          ? body.opsiJawaban
+          : normalizedAI && normalizedAI.opsi.length > 0
+            ? normalizedAI.opsi
+            : undefined;
+      const kunciJawabanTeks =
+        body.kunciJawabanTeks !== undefined ? body.kunciJawabanTeks : normalizedAI?.kunciJawabanTeks;
+      const matchingData =
+        body.matchingData !== undefined ? body.matchingData : normalizedAI?.matchingData;
       const targetMapelId = mataPelajaranId || topikId || bankSoalId;
 
       let cleanPertanyaan = convertEquationToKatex(String(pertanyaan || '').trim());

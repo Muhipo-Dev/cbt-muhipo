@@ -1,0 +1,130 @@
+# CBT v2 SMA Muhipo — Panduan & Protokol Otomasi AI Agent (ChatGPT Task / Operator & Gemini Task)
+
+Dokumen resmi ini (`llms.txt`) disediakan agar agen AI otonom (seperti **ChatGPT Tasks / Operator**, **Gemini Tasks / Computer Use**, maupun agen otomasi browser/API) yang diberi mandat oleh pengguna untuk mengakses sistem sebagai **Administrator / Guru / Proktor** dapat memahami struktur UI, aturan rumus matematika KaTeX, jenis soal, penjadwalan tes, dan endpoint API CBT Muhipo secara akurat 100%.
+
+---
+
+## 1. Alur Login & Otentikasi Sesi Admin
+- **URL Login**: `/login?portal=admin` (atau `/login`)
+- **Selektor DOM Login**:
+  - Tab Portal Admin: `#login-portal-admin` (`[data-ai-action="switch-portal-admin"]`)
+  - Input Username / NIP: `#login-username` (`[data-ai-field="username"]`)
+  - Input Password: `#login-password` (`[data-ai-field="password"]`)
+  - Tombol Masuk: `#login-submit` (`[data-ai-action="submit-login"]`)
+- **Catatan Penting bagi AI**:
+  - Anda tidak wajib menekan tab `Admin / Guru` terlebih dahulu; apabila kredensial akun memiliki role `SUPERADMIN`, `ADMIN`, atau `PROKTOR`, sistem otomatis mengarahkan ke `/admin` (dan `GURU` ke `/guru`).
+  - Setelah berhasil login, seluruh sesi disimpan dalam HTTP-only cookie `cbt_token`.
+  - Panggil `GET /api/ai-guide` (atau baca `window.cbtAdminAI.getContext()` di console browser `/admin`) untuk melihat daftar ID aktif seluruh **Modul**, **Topik (`mataPelajaranId`)**, **Kelas (`kelasId`)**, dan **Jadwal Tes (`ujianId`)**.
+
+---
+
+## 2. Navigasi Langsung Panel Admin via URL (`?tab=...`) & Selektor DOM
+AI Agent dapat berpindah halaman di `/admin` langsung melalui URL query parameter atau klik menu sidebar `[data-ai-nav="<tab_id>"]`:
+- `/admin?tab=dashboard` — Ringkasan statistik sistem
+- `/admin?tab=modul_topik` — Kelola Modul & Topik Mata Pelajaran (Bank Soal)
+- `/admin?tab=modul_soal&topikId=<ID_TOPIK>` — Buat/Edit Soal 1-Langkah & Panel **Input Cepat AI (Teks / Markdown / JSON)**
+- `/admin?tab=modul_import` — Import Soal via File Excel (`.xlsx`)
+- `/admin?tab=modul_daftar` — Daftar & Pratinjau Seluruh Soal
+- `/admin?tab=peserta_group` — Kelola Kelas / Rombel Peserta
+- `/admin?tab=peserta_daftar` — Kelola Akun Peserta Ujian
+- `/admin?tab=tes_tambah` — Buat & Terbitkan Jadwal Tes Ujian Baru
+- `/admin?tab=tes_daftar` — Daftar Jadwal Tes Aktif / Arsip
+- `/admin?tab=proktor_live` — Area Pengawasan Ujian Live (Reset Pelanggaran, Reset Login, Kunci/Buka, Tambah Waktu, Paksa Selesai)
+
+---
+
+## 3. Cara Tercepat & Paling Akurat Menginput Soal bagi AI (ChatGPT Task / Gemini Task)
+
+Terdapat **3 metode resmi** yang didukung penuh dan saling kompatibel:
+
+### Metode A — Panel "Input Cepat AI (Teks / Markdown / JSON)" di UI (`/admin?tab=modul_soal`)
+1. Buka `/admin?tab=modul_soal` dan pilih Topik pada `#select-topik-soal` (`[data-ai-field="mataPelajaranId"]`).
+2. Klik tombol `#btn-toggle-ai-quick-import` (`[data-ai-action="open-ai-import"]`) untuk membuka panel input AI.
+3. Tempelkan soal dalam bentuk **Teks Bernomor standar ChatGPT/Gemini** ATAU **JSON** ke `#ai-quick-import-textarea` (`[data-ai-field="aiRawInput"]`).
+4. Klik `#ai-quick-import-submit` (`[data-ai-action="submit-ai-import"]`). Sistem otomatis mem-parsing soal, pilihan A–E, kunci jawaban, pasangan menjodohkan, dan rumus KaTeX dalam 1 klik!
+
+Contoh format Teks / Markdown yang langsung dipahami:
+```text
+1. Hasil dari $2\sqrt{3} + \sqrt{12}$ adalah...
+A. $3\sqrt{3}$
+B. $4\sqrt{3}$
+C. $5\sqrt{3}$
+D. $6\sqrt{3}$
+E. $7\sqrt{3}$
+Kunci: B
+
+2. [PG_KOMPLEKS] Manakah pernyataan berikut yang benar mengenai $\sqrt[3]{8}$?
+A. Nilainya sama dengan 2
+B. Merupakan bilangan rasional
+C. Nilainya sama dengan $2\sqrt{3}$
+D. Hasil kuadratnya adalah 4
+Kunci: A, B, D
+
+3. [ISIAN] Berapakah nilai dari $\sqrt{2,25}$?
+Kunci: 1,5
+
+4. [BENAR_SALAH] Nilai dari $\frac{1}{4}\sqrt{16}$ sama dengan 1.
+Kunci: Benar
+
+5. [MENJODOHKAN] Pasangkan besaran fisika berikut dengan satuannya!
+Gaya => Newton
+Usaha => Joule
+Daya => Watt
+```
+
+### Metode B — Form Buat Soal 1-Langkah di UI (`/admin?tab=modul_soal`)
+- Pilih Topik di `#select-topik-soal`.
+- Pilih Tipe Soal di `#select-tipe-soal` (`PG`, `PG_KOMPLEKS`, `ISIAN`, `ESAI`, `BENAR_SALAH`, `MENJODOHKAN`).
+- Ketik pertanyaan di `#soal-pertanyaan-editor` (atau aktifkan mode Source `#btn-source-mode` lalu isi `<textarea id="soal-pertanyaan-source">`).
+- Isi langsung Pilihan Jawaban A–E di `#inline-opsi-A` s.d. `#inline-opsi-E` dan pilih kunci jawaban benar `#inline-kunci-A` s.d. `#inline-kunci-E` (tidak perlu menunggu popup modal dua tahap!).
+- Klik tombol `#btn-simpan-soal` (`Simpan`).
+
+### Metode C — Pemanggilan API Terotentikasi / Bridge `window.cbtAdminAI`
+Saat sudah login sebagai Admin di browser:
+- Panggil `await window.cbtAdminAI.getContext()` untuk mengambil daftar Topik & Kelas.
+- Panggil `await window.cbtAdminAI.importSoalText(mataPelajaranId, rawMarkdownOrJson)` atau kirim `POST /api/guru/soal`:
+```json
+{
+  "action": "IMPORT_SOAL",
+  "mataPelajaranId": "<id_topik_atau_kosongkan_jika_pakai_kodeTopik>",
+  "kodeTopik": "MTK-X",
+  "namaTopik": "Matematika Kelas X",
+  "autoCreateTopik": true,
+  "soalItems": [
+    {
+      "tipeSoal": "PG",
+      "pertanyaan": "Nilai dari $2\\sqrt{3} \\times \\sqrt{3}$ adalah...",
+      "opsi": {
+        "A": "3",
+        "B": "6",
+        "C": "$6\\sqrt{3}$",
+        "D": "9",
+        "E": "12"
+      },
+      "kunci": "B",
+      "bobot": 1
+    }
+  ]
+}
+```
+
+---
+
+## 4. Aturan Penulisan Rumus Matematika (KaTeX Fidelity 1:1)
+Sistem CBT Muhipo menjamin kesamaan 100% antara input Admin dan tampilan peserta ujian:
+1. **Delimiter yang Didukung**: `$ ... $` (inline), `$$ ... $$` (display), `\( ... \)` (inline ChatGPT), dan `\[ ... \]` (display ChatGPT). Semuanya otomatis dinormalisasi ke KaTeX standar.
+2. **Aturan Simbol Akar (PENTING!)**:
+   - Koefisien kali akar kuadrat: tulis `$2\sqrt{3}$` atau `2√3` → artinya **2 dikali akar kuadrat 3** ($2\sqrt{3}$).
+   - Akar pangkat $n$: tulis `$\sqrt[3]{8}$`, `√[3]{8}`, `³√8`, atau `∛8` → artinya **akar pangkat 3 dari 8** ($\sqrt[3]{8}$).
+   - Akar desimal & aljabar: `$\sqrt{2,25}$` atau `√2,25` serta `$\sqrt{x^2 + 1}$` didukung penuh.
+   - Pecahan dengan akar: `$\frac{1}{4}\sqrt{14}$` atau `1/4 √14`.
+3. **Jangan membuang simbol akar atau mengubah angka koefisien** dari naskah asli pengguna.
+
+---
+
+## 5. Aturan Pembuatan Jadwal Tes Ujian (`/admin?tab=tes_tambah` atau `POST /api/admin`)
+Saat menjadwalkan tes ujian (`action: "CREATE_UJIAN"`):
+- Wajib memilih `mataPelajaranId` (Topik) dan minimal 1 `kelasIds` (array ID Kelas/Group peserta).
+- **Validasi Logika Waktu**: Selisih antara `waktuSelesai` dan `waktuMulai` (dalam menit) **WAJIB >= `durasiMenit`**. Contoh: jika `durasiMenit: 90`, maka `waktuSelesai` minimal 90 menit setelah `waktuMulai`.
+- `lockBrowser: true` (default) mengaktifkan fitur **Anti-Cheat Kiosk Layar Penuh** di perangkat peserta (blokir copy/paste/select, peringatan keluar fullscreen maksimal 10x pelanggaran, dan keluar layar penuh otomatis setelah peserta menyelesaikan seluruh soal).
+

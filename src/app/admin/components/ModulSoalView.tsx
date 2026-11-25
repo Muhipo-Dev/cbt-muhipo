@@ -45,6 +45,7 @@ import {
 } from 'lucide-react'
 import { MathRenderer } from '@/components/MathRenderer'
 import { convertEquationToKatex } from '@/lib/katexConverter'
+import { parseAIQuestionsFromTextOrJson } from '@/lib/ai-automation'
 
 interface ModulSoalViewProps {
   mapelList?: any[]
@@ -115,6 +116,41 @@ export function ModulSoalView({
   const [tingkatKesulitan, setTingkatKesulitan] = useState('1')
   const [bobot, setBobot] = useState(1.0)
   const [isSourceMode, setIsSourceMode] = useState(false)
+
+  // Inline 1-Step Answer Options State (Memudahkan Admin & AI Automation ChatGPT/Gemini Task menyimpan soal + jawaban dalam 1 langkah)
+  const defaultInlineOpsi = () => [
+    { label: 'A', konten: '', isBenar: true },
+    { label: 'B', konten: '', isBenar: false },
+    { label: 'C', konten: '', isBenar: false },
+    { label: 'D', konten: '', isBenar: false },
+    { label: 'E', konten: '', isBenar: false },
+  ]
+  const defaultInlinePairs = () => [
+    { left: '', right: '' },
+    { left: '', right: '' },
+    { left: '', right: '' },
+  ]
+  const [inlineOpsiList, setInlineOpsiList] = useState<{ label: string; konten: string; isBenar: boolean }[]>(
+    defaultInlineOpsi
+  )
+  const [inlineKunciTeks, setInlineKunciTeks] = useState('')
+  const [inlineBenarSalah, setInlineBenarSalah] = useState<'BENAR' | 'SALAH'>('BENAR')
+  const [inlineMatchingPairs, setInlineMatchingPairs] = useState<{ left: string; right: string }[]>(
+    defaultInlinePairs
+  )
+
+  // Panel Input Cepat AI (ChatGPT Task / Gemini Task — Teks / Markdown / JSON)
+  const [showAIQuickImport, setShowAIQuickImport] = useState(false)
+  const [aiQuickText, setAiQuickText] = useState('')
+  const [aiImporting, setAiImporting] = useState(false)
+  const aiParsedPreview = useMemo(() => {
+    if (!aiQuickText.trim()) return []
+    try {
+      return parseAIQuestionsFromTextOrJson(aiQuickText)
+    } catch {
+      return []
+    }
+  }, [aiQuickText])
 
   // KaTeX Assistant & Live Preview
   const [showKatexAssistant, setShowKatexAssistant] = useState(true)
@@ -204,6 +240,19 @@ export function ModulSoalView({
     }
   }, [isMathTopic])
 
+  // Sinkronisasi MutationObserver pada editor contentEditable agar injeksi DOM langsung oleh AI Browser Agent (ChatGPT Operator / Gemini Task) selalu terbaca React state
+  useEffect(() => {
+    if (isSourceMode || !editorRef.current) return
+    const el = editorRef.current
+    const syncFromDom = () => {
+      const html = el.innerHTML
+      setPertanyaan((prev) => (prev === html ? prev : html))
+    }
+    const observer = new MutationObserver(syncFromDom)
+    observer.observe(el, { childList: true, subtree: true, characterData: true })
+    return () => observer.disconnect()
+  }, [isSourceMode, activeMapelId])
+
   // Reset form
   const handleResetForm = () => {
     setEditingSoalId(null)
@@ -214,6 +263,10 @@ export function ModulSoalView({
     setTingkatKesulitan('1')
     setBobot(1.0)
     setIsSourceMode(false)
+    setInlineOpsiList(defaultInlineOpsi())
+    setInlineKunciTeks('')
+    setInlineBenarSalah('BENAR')
+    setInlineMatchingPairs(defaultInlinePairs())
     if (editorRef.current) {
       editorRef.current.innerHTML = ''
     }
@@ -231,6 +284,41 @@ export function ModulSoalView({
     setTingkatKesulitan(String(soal.tingkatKesulitan || 1))
     setBobot(Number(soal.bobot) || 1.0)
     setIsSourceMode(false)
+    setInlineKunciTeks(soal.kunciJawabanTeks || '')
+
+    if (Array.isArray(soal.opsiJawaban) && soal.opsiJawaban.length > 0) {
+      if (soal.tipeSoal === 'BENAR_SALAH') {
+        const salahOpt = soal.opsiJawaban.find(
+          (o: any) => o.isBenar && /salah|false/i.test(String(o.konten || o.label))
+        )
+        setInlineBenarSalah(salahOpt ? 'SALAH' : 'BENAR')
+      } else {
+        setInlineOpsiList(
+          soal.opsiJawaban.map((o: any, idx: number) => ({
+            label: o.label || String.fromCharCode(65 + idx),
+            konten: o.konten || '',
+            isBenar: Boolean(o.isBenar),
+          }))
+        )
+      }
+    } else {
+      setInlineOpsiList(defaultInlineOpsi())
+    }
+
+    if (soal.tipeSoal === 'MENJODOHKAN' && soal.matchingData) {
+      try {
+        const parsed = typeof soal.matchingData === 'string' ? JSON.parse(soal.matchingData) : soal.matchingData
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setInlineMatchingPairs(parsed.map((p: any) => ({ left: p.left || '', right: p.right || '' })))
+        } else {
+          setInlineMatchingPairs(defaultInlinePairs())
+        }
+      } catch {
+        setInlineMatchingPairs(defaultInlinePairs())
+      }
+    } else {
+      setInlineMatchingPairs(defaultInlinePairs())
+    }
 
     if (editorRef.current) {
       editorRef.current.innerHTML = soal.pertanyaan || ''
@@ -571,7 +659,57 @@ export function ModulSoalView({
     }
   }
 
-  // Save Soal Handler
+  // Handler Simpan Batch Soal dari Input Cepat AI (ChatGPT Task / Gemini Task)
+  const handleSaveAIQuickImport = async () => {
+    if (!activeMapelId) {
+      showNotification('Peringatan', 'Pilih Topik terlebih dahulu sebelum mengimpor soal AI.', 'warning')
+      return
+    }
+    if (!aiQuickText.trim()) {
+      showNotification('Peringatan', 'Tempelkan naskah soal bernomor atau JSON dari ChatGPT / Gemini terlebih dahulu.', 'warning')
+      return
+    }
+    if (aiParsedPreview.length === 0) {
+      showNotification(
+        'Format Belum Terbaca',
+        'Tidak ditemukan butir soal valid. Pastikan setiap soal diawali nomor (contoh: "1. Pertanyaan...") atau berupa JSON array.',
+        'warning'
+      )
+      return
+    }
+
+    try {
+      setAiImporting(true)
+      const res = await fetch('/api/guru/soal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'IMPORT_SOAL',
+          mataPelajaranId: activeMapelId,
+          rawText: aiQuickText,
+        }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        showNotification(
+          'Berhasil Diimpor',
+          json.message || `Berhasil menyimpan ${json.importedCount} butir soal ke topik terpilih!`,
+          'success'
+        )
+        setAiQuickText('')
+        setShowAIQuickImport(false)
+        await fetchMapelDetail(activeMapelId)
+      } else {
+        showNotification('Gagal', json.message || 'Gagal mengimpor soal AI', 'error')
+      }
+    } catch (err: any) {
+      showNotification('Error', 'Gagal mengimpor soal AI: ' + err.message, 'error')
+    } finally {
+      setAiImporting(false)
+    }
+  }
+
+  // Save Soal Handler (Mendukung penyimpanan 1-langkah beserta opsi jawaban langsung maupun fallback modal Kelola Jawaban)
   const handleSaveSoal = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
 
@@ -580,10 +718,40 @@ export function ModulSoalView({
       return
     }
 
-    const finalPertanyaan = isSourceMode ? pertanyaan : (editorRef.current?.innerHTML || pertanyaan).trim()
+    const domEditorHtml = editorRef.current?.innerHTML?.trim() || ''
+    const finalPertanyaan = isSourceMode ? pertanyaan.trim() : (domEditorHtml || pertanyaan.trim())
     if (!finalPertanyaan || finalPertanyaan === '<p><br></p>' || finalPertanyaan === '<br>') {
       showNotification('Peringatan', 'Teks pertanyaan soal wajib diisi!', 'warning')
       return
+    }
+
+    // Periksa apakah pengguna / AI Agent telah mengisi opsi jawaban inline langsung pada form
+    const filledInlineOpsi = inlineOpsiList.filter((o) => o.konten.trim() !== '')
+    const hasInlineChoiceFilled =
+      (tipeSoal === 'PG' || tipeSoal === 'PG_KOMPLEKS') && filledInlineOpsi.length >= 2
+    const filledInlinePairs = inlineMatchingPairs.filter((p) => p.left.trim() !== '' || p.right.trim() !== '')
+    const hasInlineMatchingFilled = tipeSoal === 'MENJODOHKAN' && filledInlinePairs.length >= 1
+
+    let payloadOpsiJawaban: { label: string; konten: string; isBenar: boolean }[] | undefined = undefined
+    if (hasInlineChoiceFilled) {
+      payloadOpsiJawaban = filledInlineOpsi.map((o, idx) => ({
+        label: o.label || String.fromCharCode(65 + idx),
+        konten: o.konten.trim(),
+        isBenar: Boolean(o.isBenar),
+      }))
+    } else if (tipeSoal === 'BENAR_SALAH') {
+      payloadOpsiJawaban = [
+        { label: 'A', konten: 'Benar', isBenar: inlineBenarSalah === 'BENAR' },
+        { label: 'B', konten: 'Salah', isBenar: inlineBenarSalah === 'SALAH' },
+      ]
+    } else if (['PG', 'PG_KOMPLEKS'].includes(tipeSoal) && !editingSoalId) {
+      payloadOpsiJawaban = [
+        { label: 'A', konten: 'Pilihan Jawaban A', isBenar: true },
+        { label: 'B', konten: 'Pilihan Jawaban B', isBenar: false },
+        { label: 'C', konten: 'Pilihan Jawaban C', isBenar: false },
+        { label: 'D', konten: 'Pilihan Jawaban D', isBenar: false },
+        { label: 'E', konten: 'Pilihan Jawaban E', isBenar: false },
+      ]
     }
 
     try {
@@ -600,16 +768,10 @@ export function ModulSoalView({
           bobot: Number(bobot) || 1.0,
           mediaAudio: mediaAudio || null,
           mediaGambar: null,
-          opsiJawaban:
-            ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal) && !editingSoalId
-              ? [
-                  { label: 'A', konten: 'Pilihan Jawaban A', isBenar: true },
-                  { label: 'B', konten: 'Pilihan Jawaban B', isBenar: false },
-                  { label: 'C', konten: 'Pilihan Jawaban C', isBenar: false },
-                  { label: 'D', konten: 'Pilihan Jawaban D', isBenar: false },
-                  { label: 'E', konten: 'Pilihan Jawaban E', isBenar: false },
-                ]
-              : undefined,
+          opsiJawaban: payloadOpsiJawaban,
+          kunciJawabanTeks:
+            tipeSoal === 'ISIAN' || tipeSoal === 'ESAI' ? inlineKunciTeks.trim() || null : undefined,
+          matchingData: hasInlineMatchingFilled ? JSON.stringify(filledInlinePairs) : undefined,
         }),
       })
 
@@ -619,9 +781,19 @@ export function ModulSoalView({
         await fetchMapelDetail(activeMapelId)
 
         const savedSoal = json.data
+        const wasEditing = Boolean(editingSoalId)
         handleResetForm()
 
-        if (['PG', 'PG_KOMPLEKS', 'BENAR_SALAH', 'MENJODOHKAN'].includes(tipeSoal) && savedSoal) {
+        // Buka modal Kelola Jawaban HANYA jika soal baru bertipe pilihan/menjodohkan belum diisi opsinya secara inline
+        const alreadyCompleteInline =
+          wasEditing ||
+          hasInlineChoiceFilled ||
+          tipeSoal === 'BENAR_SALAH' ||
+          hasInlineMatchingFilled ||
+          tipeSoal === 'ISIAN' ||
+          tipeSoal === 'ESAI'
+
+        if (!alreadyCompleteInline && ['PG', 'PG_KOMPLEKS', 'MENJODOHKAN'].includes(tipeSoal) && savedSoal) {
           handleOpenKelolaJawaban(savedSoal)
         }
       } else {
@@ -779,6 +951,9 @@ export function ModulSoalView({
               </label>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <select
+                  id="select-topik-soal"
+                  data-ai-field="mataPelajaranId"
+                  aria-label="Pilih Topik Mata Pelajaran"
                   value={activeMapelId}
                   onChange={(e) => {
                     const newId = e.target.value
@@ -786,7 +961,7 @@ export function ModulSoalView({
                     if (onSelectMapel) onSelectMapel(newId)
                     handleResetForm()
                   }}
-                  className="flex-1 px-3 py-2 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                  className="flex-1 px-3 py-2 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-base sm:text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
                 >
                   {filteredMapelByModul.length === 0 && <option value="">(Belum ada topik pada modul ini)</option>}
                   {filteredMapelByModul.map((bs) => {
@@ -800,7 +975,22 @@ export function ModulSoalView({
                   })}
                 </select>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    id="btn-toggle-ai-quick-import"
+                    data-ai-action="open-ai-import"
+                    type="button"
+                    onClick={() => setShowAIQuickImport((prev) => !prev)}
+                    className={`px-3 py-2 rounded border text-xs font-bold flex items-center gap-1.5 cursor-pointer transition touch-manipulation ${
+                      showAIQuickImport
+                        ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                        : 'border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300'
+                    }`}
+                    title="Tempel naskah soal bernomor atau JSON langsung dari ChatGPT Task / Gemini Task"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Input Cepat AI</span>
+                  </button>
                   {onNavigateToTopik && (
                     <button
                       type="button"
@@ -826,8 +1016,103 @@ export function ModulSoalView({
             </div>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            Pilih <strong>Modul</strong> dan <strong>Topik</strong> sebelum menulis atau mengedit butir soal. Anda dapat membuat topik mapel baru melalui tombol <strong>Kelola Topik</strong>.
+            Pilih <strong>Modul</strong> dan <strong>Topik</strong> sebelum menulis atau mengedit butir soal. Untuk otomasi <strong>ChatGPT Task / Gemini Task</strong>, gunakan tombol <strong>Input Cepat AI</strong> atau isi opsi jawaban langsung di bawah editor dalam 1 langkah.
           </p>
+
+          {/* PANEL INPUT CEPAT AI (CHATGPT TASK / GEMINI TASK — TEKS BERNOMOR / MARKDOWN / JSON) */}
+          {showAIQuickImport && (
+            <div
+              id="ai-quick-import-panel"
+              data-ai-section="ai-quick-import"
+              className="mt-3 p-4 rounded-lg bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 space-y-3"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span>Input Cepat Otomasi AI (ChatGPT Task / Gemini Task — Teks, Markdown &amp; JSON)</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                    Tempelkan daftar soal bernomor (<code>1. ... A. ... Kunci: B</code>) atau array JSON. Mendukung penuh rumus{' '}
+                    <code>\(...\)</code>, <code>\[...\]</code>, <code>$2\sqrt&#123;3&#125;$</code>, <code>2√3</code>, <code>√[3]&#123;8&#125;</code>, PG, PG Kompleks, Isian, Esai, Benar/Salah, &amp; Menjodohkan.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 shrink-0">
+                  Terdeteksi: {aiParsedPreview.length} Soal Valid
+                </span>
+              </div>
+
+              <textarea
+                id="ai-quick-import-textarea"
+                data-ai-field="aiRawInput"
+                rows={8}
+                value={aiQuickText}
+                onChange={(e) => setAiQuickText(e.target.value)}
+                placeholder={`Contoh Teks / Markdown ChatGPT atau Gemini:\n1. Nilai dari 2√3 + √12 adalah...\nA. 3√3\nB. 4√3\nC. 5√3\nD. 6√3\nE. 7√3\nKunci: B\n\n2. [ISIAN] Berapakah hasil dari √2,25?\nKunci: 1,5`}
+                className="w-full p-3 rounded-md bg-white dark:bg-slate-950 border border-indigo-300 dark:border-indigo-800 font-mono text-base sm:text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-600"
+              />
+
+              {aiParsedPreview.length > 0 && (
+                <div className="max-h-52 overflow-y-auto p-3 rounded-md bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-900 space-y-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                    Pratinjau Hasil Parsing &amp; Render KaTeX ({aiParsedPreview.length} Butir Soal):
+                  </div>
+                  {aiParsedPreview.slice(0, 10).map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 rounded border border-slate-200 dark:border-slate-800 text-xs space-y-1"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-[10px] font-bold text-slate-500">
+                        <span>#{idx + 1} • {item.tipeSoal}</span>
+                        <span>
+                          {item.opsi.length > 0
+                            ? `Kunci: ${item.opsi.filter((o) => o.isBenar).map((o) => o.label).join(', ')}`
+                            : item.kunciJawabanTeks
+                              ? `Kunci: ${item.kunciJawabanTeks}`
+                              : item.matchingData
+                                ? `${item.matchingData.length} Pasangan`
+                                : 'Uraian'}
+                        </span>
+                      </div>
+                      <div className="text-slate-900 dark:text-white">
+                        <MathRenderer content={item.pertanyaan} />
+                      </div>
+                    </div>
+                  ))}
+                  {aiParsedPreview.length > 10 && (
+                    <div className="text-[11px] text-slate-500 italic">
+                      ...dan {aiParsedPreview.length - 10} butir soal lainnya siap disimpan.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAIQuickImport(false)}
+                  className="px-3.5 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer touch-manipulation"
+                >
+                  Tutup
+                </button>
+                <button
+                  id="ai-quick-import-submit"
+                  data-ai-action="submit-ai-import"
+                  type="button"
+                  disabled={aiImporting || aiParsedPreview.length === 0}
+                  onClick={handleSaveAIQuickImport}
+                  className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs touch-manipulation"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>
+                    {aiImporting
+                      ? 'Menyimpan Soal AI...'
+                      : `Proses & Simpan ${aiParsedPreview.length || ''} Soal ke Topik Ini`}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -870,6 +1155,8 @@ export function ModulSoalView({
               <div className="border border-slate-300 dark:border-white/20 rounded-t-md bg-slate-100 dark:bg-slate-800/90 p-1.5 flex flex-wrap items-center gap-1 text-slate-700 dark:text-slate-200 select-none">
                 {/* Source toggle */}
                 <button
+                  id="btn-source-mode"
+                  data-ai-action="toggle-source-mode"
                   type="button"
                   onClick={() => {
                     if (isSourceMode && editorRef.current) {
@@ -1246,14 +1533,22 @@ export function ModulSoalView({
               {/* Editor Workspace Area */}
               {isSourceMode ? (
                 <textarea
+                  id="soal-pertanyaan-source"
+                  data-ai-field="pertanyaan-source"
+                  aria-label="Editor Source HTML / KaTeX Pertanyaan Soal"
                   rows={8}
                   value={pertanyaan}
                   onChange={(e) => setPertanyaan(e.target.value)}
-                  placeholder="Ketikkan kode HTML / KaTeX rumus ($...$) di sini..."
-                  className="w-full p-3 font-mono text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 rounded-b-none focus:outline-none focus:border-blue-500"
+                  placeholder="Ketikkan kode HTML / KaTeX rumus ($...$ atau \(...\)) di sini..."
+                  className="w-full p-3 font-mono text-base sm:text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 rounded-b-none focus:outline-none focus:border-blue-500"
                 />
               ) : (
                 <div
+                  id="soal-pertanyaan-editor"
+                  data-ai-field="pertanyaan"
+                  role="textbox"
+                  aria-multiline="true"
+                  aria-label="Editor Teks Pertanyaan Soal"
                   ref={editorRef}
                   contentEditable
                   onInput={() => {
@@ -1261,7 +1556,24 @@ export function ModulSoalView({
                       setPertanyaan(editorRef.current.innerHTML)
                     }
                   }}
-                  className="w-full min-h-[160px] p-3 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 rounded-b-none focus:outline-none focus:border-blue-500 overflow-y-auto leading-relaxed"
+                  onKeyUp={() => {
+                    if (editorRef.current) {
+                      setPertanyaan(editorRef.current.innerHTML)
+                    }
+                  }}
+                  onBlur={() => {
+                    if (editorRef.current) {
+                      setPertanyaan(editorRef.current.innerHTML)
+                    }
+                  }}
+                  onPaste={() => {
+                    setTimeout(() => {
+                      if (editorRef.current) {
+                        setPertanyaan(editorRef.current.innerHTML)
+                      }
+                    }, 20)
+                  }}
+                  className="w-full min-h-[160px] p-3 text-base sm:text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 rounded-b-none focus:outline-none focus:border-blue-500 overflow-y-auto leading-relaxed"
                   style={{ minHeight: '160px' }}
                 />
               )}
@@ -1359,9 +1671,12 @@ export function ModulSoalView({
             <div className="flex-1 flex flex-col md:flex-row md:items-center gap-4">
               <div className="flex-1">
                 <select
+                  id="select-tipe-soal"
+                  data-ai-field="tipeSoal"
+                  aria-label="Pilih Tipe Soal"
                   value={tipeSoal}
                   onChange={(e) => setTipeSoal(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
+                  className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-base sm:text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-xs"
                 >
                   <option value="PG">Pilihan Ganda</option>
                   <option value="PG_KOMPLEKS">Pilihan Ganda Kompleks</option>
@@ -1391,25 +1706,199 @@ export function ModulSoalView({
             </div>
           </div>
 
-          {/* Row 5: Pilihan Jawaban Notice */}
+          {/* Row 5: Pilihan Jawaban & Kunci Jawaban 1-Langkah (Ramah Admin & AI Automation ChatGPT/Gemini Task) */}
           <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-            <label className="sm:w-44 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0 pt-0.5">
-              Pilihan Jawaban
+            <label className="sm:w-44 text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0 pt-1.5">
+              Pilihan &amp; Kunci Jawaban
             </label>
-            <div className="flex-1">
-              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                Pilihan Jawaban ditambahkan <span className="text-rose-600 dark:text-rose-400 font-bold">setelah</span>{' '}
-                soal disimpan. Jendela Kelola Jawaban akan terbuka otomatis setelah Anda menekan tombol Simpan.
-              </p>
+            <div className="flex-1 space-y-2.5">
+              {(tipeSoal === 'PG' || tipeSoal === 'PG_KOMPLEKS') && (
+                <div className="p-3 rounded-md bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-600 dark:text-slate-400">
+                    <span>
+                      Isi langsung pilihan jawaban di bawah ini untuk menyimpan dalam <strong>1 langkah</strong> (atau kosongkan jika ingin mengisi lewat jendela <em>Kelola Jawaban</em> setelah Simpan).
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setInlineOpsiList((prev) => [
+                          ...prev,
+                          { label: String.fromCharCode(65 + prev.length), konten: '', isBenar: false },
+                        ])
+                      }
+                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      + Tambah Opsi
+                    </button>
+                  </div>
+
+                  {inlineOpsiList.map((opt, idx) => (
+                    <div key={opt.label} className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <label
+                          className="flex items-center gap-1.5 shrink-0 cursor-pointer select-none min-w-[56px]"
+                          title="Tandai sebagai Kunci Jawaban Benar"
+                        >
+                          <input
+                            id={`inline-kunci-${opt.label}`}
+                            data-ai-field={`kunci-${opt.label}`}
+                            type={tipeSoal === 'PG' ? 'radio' : 'checkbox'}
+                            name="inline_kunci_jawaban"
+                            checked={opt.isBenar}
+                            onChange={(e) => {
+                              const checked = e.target.checked
+                              setInlineOpsiList((prev) =>
+                                prev.map((item, i) => {
+                                  if (tipeSoal === 'PG') {
+                                    return { ...item, isBenar: i === idx }
+                                  }
+                                  return i === idx ? { ...item, isBenar: checked } : item
+                                })
+                              )
+                            }}
+                            className="w-4 h-4 accent-emerald-600 cursor-pointer"
+                          />
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-bold ${
+                              opt.isBenar
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            {opt.label}
+                          </span>
+                        </label>
+                        <input
+                          id={`inline-opsi-${opt.label}`}
+                          data-ai-field={`opsi-${opt.label}`}
+                          type="text"
+                          value={opt.konten}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            setInlineOpsiList((prev) =>
+                              prev.map((item, i) => (i === idx ? { ...item, konten: val } : item))
+                            )
+                          }}
+                          placeholder={`Teks / Rumus Pilihan ${opt.label} (contoh: $2\\sqrt{3}$ atau 2√3)`}
+                          className="flex-1 px-3 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/20 text-base sm:text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      {showLivePreview && opt.konten.trim() && (
+                        <div className="ml-16 px-2.5 py-1 rounded bg-white/80 dark:bg-slate-900/80 border border-indigo-100 dark:border-indigo-900/50 text-xs text-slate-800 dark:text-slate-200">
+                          <MathRenderer content={convertEquationToKatex(opt.konten)} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {tipeSoal === 'BENAR_SALAH' && (
+                <div className="p-3 rounded-md bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 flex items-center gap-4 text-xs">
+                  <span className="font-bold text-slate-700 dark:text-slate-300">Kunci Pernyataan:</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer font-semibold text-emerald-700 dark:text-emerald-400">
+                    <input
+                      id="inline-kunci-BENAR"
+                      data-ai-field="kunci-BENAR"
+                      type="radio"
+                      name="inline_bs"
+                      checked={inlineBenarSalah === 'BENAR'}
+                      onChange={() => setInlineBenarSalah('BENAR')}
+                      className="w-4 h-4 accent-emerald-600"
+                    />
+                    <span>Benar</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer font-semibold text-rose-700 dark:text-rose-400">
+                    <input
+                      id="inline-kunci-SALAH"
+                      data-ai-field="kunci-SALAH"
+                      type="radio"
+                      name="inline_bs"
+                      checked={inlineBenarSalah === 'SALAH'}
+                      onChange={() => setInlineBenarSalah('SALAH')}
+                      className="w-4 h-4 accent-rose-600"
+                    />
+                    <span>Salah</span>
+                  </label>
+                </div>
+              )}
+
+              {(tipeSoal === 'ISIAN' || tipeSoal === 'ESAI') && (
+                <div className="p-3 rounded-md bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 space-y-1.5">
+                  <label htmlFor="inline-kunci-teks" className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    {tipeSoal === 'ISIAN'
+                      ? 'Kunci Jawaban Singkat (pisahkan dengan koma / titik koma jika ada alternatif jawaban benar):'
+                      : 'Pedoman / Kunci Jawaban Esai (Opsional untuk referensi koreksi AI/Guru):'}
+                  </label>
+                  <input
+                    id="inline-kunci-teks"
+                    data-ai-field="kunciJawabanTeks"
+                    type="text"
+                    value={inlineKunciTeks}
+                    onChange={(e) => setInlineKunciTeks(e.target.value)}
+                    placeholder={tipeSoal === 'ISIAN' ? 'Contoh: 1,5; 3/2; 2√3' : 'Ketik kata kunci atau rubrik jawaban esai...'}
+                    className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/20 text-base sm:text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              )}
+
+              {tipeSoal === 'MENJODOHKAN' && (
+                <div className="p-3 rounded-md bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
+                    <span>Pasangan Premis (Kiri) &amp; Respons (Kanan):</span>
+                    <button
+                      type="button"
+                      onClick={() => setInlineMatchingPairs((prev) => [...prev, { left: '', right: '' }])}
+                      className="font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      + Tambah Pasangan
+                    </button>
+                  </div>
+                  {inlineMatchingPairs.map((pair, idx) => (
+                    <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        id={`inline-matching-left-${idx}`}
+                        data-ai-field={`matching-left-${idx}`}
+                        type="text"
+                        value={pair.left}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setInlineMatchingPairs((prev) =>
+                            prev.map((p, i) => (i === idx ? { ...p, left: val } : p))
+                          )
+                        }}
+                        placeholder={`Premis Kiri #${idx + 1}`}
+                        className="px-3 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/20 text-base sm:text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                      />
+                      <input
+                        id={`inline-matching-right-${idx}`}
+                        data-ai-field={`matching-right-${idx}`}
+                        type="text"
+                        value={pair.right}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setInlineMatchingPairs((prev) =>
+                            prev.map((p, i) => (i === idx ? { ...p, right: val } : p))
+                          )
+                        }}
+                        placeholder={`Pasangan Kanan #${idx + 1}`}
+                        className="px-3 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/20 text-base sm:text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Row 6: Action Buttons (Simpan / Batal) */}
           <div className="flex items-center gap-2 pt-2 border-t border-slate-200/80 dark:border-white/10">
             <button
+              id="btn-simpan-soal"
+              data-ai-action="submit-save-soal"
               type="submit"
               disabled={saving}
-              className="px-5 py-2 rounded bg-[#337ab7] hover:bg-[#286090] text-white font-semibold text-xs transition cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+              className="min-h-[40px] px-5 py-2 rounded bg-[#337ab7] hover:bg-[#286090] text-white font-semibold text-xs transition cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5 touch-manipulation"
             >
               <Save className="w-3.5 h-3.5" />
               <span>{saving ? 'Menyimpan...' : 'Simpan'}</span>

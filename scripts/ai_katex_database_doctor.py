@@ -51,6 +51,9 @@ def normalize_math_ai(text: str) -> str:
         chunk = re.sub(r'\\\s+times\b', r'\\times', chunk)
         chunk = re.sub(r'\\\s+div\b', r'\\div', chunk)
 
+        chunk = re.sub(r'```(?:latex|math|tex)\s*([\s\S]*?)```', lambda m: '$$' + m.group(1).strip() + '$$', chunk, flags=re.IGNORECASE)
+        chunk = re.sub(r'\\\[([\s\S]*?)\\\]', lambda m: '$$' + m.group(1).strip() + '$$', chunk)
+        chunk = re.sub(r'\\\(([\s\S]*?)\\\)', lambda m: '$' + m.group(1).strip() + '$', chunk)
         chunk = re.sub(r'\[tex\](.*?)\[/tex\]', r'$\1$', chunk, flags=re.IGNORECASE | re.DOTALL)
 
         # Akar pangkat n eksplisit: √[3]{8}, ³√8, ∛8, ∜16

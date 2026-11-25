@@ -62,3 +62,14 @@ pm run build) tanpa error sintaksis.
   - Dependencies harus secara berkala diperiksa via 
 pm audit untuk memastikan tidak ada celah keamanan kritis/high pada pustaka produksi.
   - Setiap API Route di /api/ wajib memverifikasi otentikasi sesi melalui getSessionUser() sebelum memproses manipulasi database.
+
+---
+
+### 7. Standar Wajib Pemahaman Dua Arah AI Automation (ChatGPT Task / Operator & Gemini Task sebagai Admin)
+- **Sistem Wajib Memahami Input AI Agent (`src/lib/ai-automation.ts` & `src/lib/katexConverter.ts`)**:
+  - Ketika **ChatGPT Task / Operator** atau **Gemini Task** mengambil alih akses sebagai Admin, sistem wajib menerima variasi format soal secara toleran tanpa kehilangan karakter/simbol apa pun:
+    - Delimiter matematika LaTeX `\( ... \)`, `\[ ... \]`, `$ ... $`, `$$ ... $$`, `\dfrac`, `\tfrac`, serta simbol Unicode (`2√3` → $2\sqrt{3}$, `³√8` / `√[3]{8}` → $\sqrt[3]{8}$, `√2,25` → $\sqrt{2,25}$).
+    - Berbagai variasi JSON (`pertanyaan`/`soal`/`question`, `opsi`/`opsiJawaban`/`options`/`A..E`, `kunci`/`kunciJawaban`/`answer`) maupun naskah teks/Markdown soal bernomor (`1. ... A. ... Kunci: B`).
+  - Editor `contentEditable` (`#soal-pertanyaan-editor`) wajib selalu tersinkronisasi dengan `MutationObserver` & mode Source (`#soal-pertanyaan-source`), disertai opsi jawaban *inline* 1-langkah dan panel **Input Cepat AI** (`#ai-quick-import-textarea`).
+- **AI Agent Wajib Memahami Sistem Kita (`/llms.txt`, `/api/ai-guide`, & Selektor `data-ai-*`)**:
+  - Pertahankan dokumentasi `/llms.txt` (tanpa rahasia/kredensial), endpoint terotentikasi `GET /api/ai-guide`, bridge `window.cbtAdminAI`, navigasi URL `/admin?tab=...`, serta atribut semantik `id`, `aria-label`, `data-ai-nav`, `data-ai-field`, dan `data-ai-action` agar AI eksternal tidak salah membaca elemen atau logika sistem.

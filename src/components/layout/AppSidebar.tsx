@@ -118,8 +118,10 @@ export function AppSidebar({
                   {/* Group Header Button */}
                   <button
                     type="button"
+                    data-ai-nav-group={item.id}
+                    aria-expanded={isGroupExpanded}
                     onClick={() => toggleGroup(item.id)}
-                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg transition-all duration-150 text-xs font-semibold cursor-pointer ${
+                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg transition-all duration-150 text-xs font-semibold cursor-pointer touch-manipulation ${
                       isChildActive
                         ? 'bg-blue-600/20 text-white font-bold border border-blue-500/30'
                         : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
@@ -148,12 +150,15 @@ export function AppSidebar({
                         return (
                           <button
                             key={sub.id}
+                            id={`nav-tab-${sub.id}`}
+                            data-ai-nav={sub.id}
+                            aria-current={isSubActive ? 'page' : undefined}
                             type="button"
                             onClick={() => {
                               onSelect(sub.id)
                               onClose()
                             }}
-                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md text-[11px] font-medium transition-all duration-150 cursor-pointer ${
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] font-medium transition-all duration-150 cursor-pointer touch-manipulation ${
                               isSubActive
                                 ? 'bg-blue-600 text-white font-bold shadow-xs'
                                 : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -178,12 +183,15 @@ export function AppSidebar({
             return (
               <button
                 key={item.id}
+                id={`nav-tab-${item.id}`}
+                data-ai-nav={item.id}
+                aria-current={isDirectActive ? 'page' : undefined}
                 type="button"
                 onClick={() => {
                   onSelect(item.id)
                   onClose()
                 }}
-                className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg transition-all duration-150 text-xs font-semibold cursor-pointer ${
+                className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg transition-all duration-150 text-xs font-semibold cursor-pointer touch-manipulation ${
                   isDirectActive
                     ? 'bg-blue-600 text-white font-bold shadow-sm shadow-blue-600/30'
                     : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'

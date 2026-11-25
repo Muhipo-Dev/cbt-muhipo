@@ -145,6 +145,12 @@ export function convertEquationToKatex(text: string | null | undefined): string 
     });
   }
 
+  // 1b. Konversi delimiter LaTeX bawaan ChatGPT / Gemini: \[...\] -> $$...$$, \(...\) -> $...$, dan ```latex ... ``` -> $$...$$
+  str = str
+    .replace(/```(?:latex|math|tex)\s*([\s\S]*?)```/gi, (_, m) => `$$${m.trim()}$$`)
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_, m) => `$$${m.trim()}$$`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_, m) => `$${m.trim()}$`);
+
   // Pisahkan berdasarkan tag HTML agar tidak merusak tag <img src="...">, <b>, <p>, dll
   const htmlParts = str.split(/(<[^>]+>)/g);
   for (let pIdx = 0; pIdx < htmlParts.length; pIdx += 2) {
@@ -251,48 +257,60 @@ export function convertEquationToKatex(text: string | null | undefined): string 
         // Jika ada simbol √ berdiri sendiri (misal "lambang akar (√)"), ubah menjadi $\sqrt{\phantom{x}}$ atau biarkan aman tanpa hilang
         outside = outside.replace(/√(?![a-zA-Z0-9{(\[])/g, '$\\surd$');
 
-        // Rapikan \sqrt 14 -> \sqrt{14}
-        outside = outside.replace(/\\sqrt(?!\[|\{)\s*([0-9]+|[a-zA-Z])(?![a-zA-Z0-9])/g, (_, val) => `\\sqrt{${val}}`);
+        // Rapikan \sqrt 14 -> \sqrt{14} & bungkus ekspresi LaTeX mentah HANYA di segmen yang belum terbungkus $...$
+        const innerSegs = outside.split(/(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)/g);
+        for (let iIdx = 0; iIdx < innerSegs.length; iIdx += 2) {
+          let sub = innerSegs[iIdx];
+          if (!sub) continue;
 
-        // Bungkus ekspresi LaTeX mentah yang belum dibungkus $...$
-        outside = outside.replace(
-          /((?:[+\-]?\d+(?:[.,]\d+)?\s*)?\\(?:frac|sqrt|sum|int|lim|prod|pm|times|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{(?:[^{}]|\{[^{}]*\})*\}|[a-zA-Z0-9+\-*/=(),.^_\\])*)/g,
-          (match) => `$${match.trim()}$`
-        );
+          sub = sub.replace(/\\sqrt(?!\[|\{)\s*([0-9]+|[a-zA-Z])(?![a-zA-Z0-9])/g, (_, val) => `\\sqrt{${val}}`);
 
-        // Pecahan Unicode: ½, ⅓, ¼, ¾, dsb.
-        Object.entries(FRACTION_MAP).forEach(([char, latex]) => {
-          if (outside.includes(char)) {
-            outside = outside.replaceAll(char, `$${latex}$`);
-          }
-        });
+          // Bungkus ekspresi LaTeX mentah yang belum dibungkus $...$
+          sub = sub.replace(
+            /((?:[+\-]?\d+(?:[.,]\d+)?\s*)?\\(?:frac|dfrac|tfrac|cfrac|sqrt|sum|int|lim|prod|pm|times|cdot|div|le|ge|neq|approx|alpha|beta|gamma|delta|theta|pi|sigma|omega)(?:\[[^\[\]]*\]|\{(?:[^{}]|\{[^{}]*\})*\}|[a-zA-Z0-9+\-*/=(),.^_\\])*)/g,
+            (match) => `$${match.trim()}$`
+          );
 
-        // Word/Excel Superscripts (Pangkat): x², x³, 10⁵
-        const supChars = Object.keys(SUPERSCRIPT_MAP).join('');
-        const supRegex = new RegExp(`([a-zA-Z0-9)]+)([${supChars}]+)`, 'g');
-        outside = outside.replace(supRegex, (_, base, sups) => {
-          const converted = Array.from(sups).map((c: any) => SUPERSCRIPT_MAP[c] || c).join('');
-          return `$${base}^{${converted}}$`;
-        });
+          // Pecahan Unicode: ½, ⅓, ¼, ¾, dsb.
+          Object.entries(FRACTION_MAP).forEach(([char, latex]) => {
+            if (sub.includes(char)) {
+              sub = sub.replaceAll(char, `$${latex}$`);
+            }
+          });
 
-        // Word/Excel Subscripts (Indeks): x₁, x₂, H₂O
-        const subChars = Object.keys(SUBSCRIPT_MAP).join('');
-        const subRegex = new RegExp(`([a-zA-Z0-9)]+)([${subChars}]+)`, 'g');
-        outside = outside.replace(subRegex, (_, base, subs) => {
-          const converted = Array.from(subs).map((c: any) => SUBSCRIPT_MAP[c] || c).join('');
-          return `$${base}_{${converted}}$`;
-        });
+          // Word/Excel Superscripts (Pangkat): x², x³, 10⁵
+          const supChars = Object.keys(SUPERSCRIPT_MAP).join('');
+          const supRegex = new RegExp(`([a-zA-Z0-9)]+)([${supChars}]+)`, 'g');
+          sub = sub.replace(supRegex, (_, base, sups) => {
+            const converted = Array.from(sups).map((c: any) => SUPERSCRIPT_MAP[c] || c).join('');
+            return `$${base}^{${converted}}$`;
+          });
 
-        // Simbol Derajat Suhu: 100°C, 360°, 45°
-        outside = outside.replace(/(\d+)\s*°\s*C\b/gi, (_, n) => `$${n}^\\circ\\text{C}$`);
-        outside = outside.replace(/(\d+)\s*°/g, (_, n) => `$${n}^\\circ$`);
+          // Word/Excel Subscripts (Indeks): x₁, x₂, H₂O
+          const subChars = Object.keys(SUBSCRIPT_MAP).join('');
+          const subRegex = new RegExp(`([a-zA-Z0-9)]+)([${subChars}]+)`, 'g');
+          sub = sub.replace(subRegex, (_, base, subs) => {
+            const converted = Array.from(subs).map((c: any) => SUBSCRIPT_MAP[c] || c).join('');
+            return `$${base}_{${converted}}$`;
+          });
 
-        // Simbol Khusus (Greek, Operasi)
-        Object.entries(SYMBOL_MAP).forEach(([char, latex]) => {
-          if (outside.includes(char)) {
-            outside = outside.replaceAll(char, ` $${latex}$ `);
-          }
-        });
+          // Simbol Derajat Suhu: 100°C, 360°, 45°
+          sub = sub.replace(/(\d+)\s*°\s*C\b/gi, (_, n) => `$${n}^\\circ\\text{C}$`);
+          sub = sub.replace(/(\d+)\s*°/g, (_, n) => `$${n}^\\circ$`);
+
+          // Simbol Khusus (Greek, Operasi)
+          Object.entries(SYMBOL_MAP).forEach(([char, latex]) => {
+            if (sub.includes(char)) {
+              sub = sub.replaceAll(char, ` $${latex}$ `);
+            }
+          });
+
+          // Format tebal Markdown **teks** bawaan ChatGPT / Gemini di luar rumus $...$ menjadi <strong>teks</strong>
+          sub = sub.replace(/\*\*([^\*\n]+?)\*\*/g, '<strong>$1</strong>');
+
+          innerSegs[iIdx] = sub;
+        }
+        outside = innerSegs.join('');
 
         segsBeforeWrap[sIdx] = outside;
       }
