@@ -399,10 +399,11 @@ export async function POST(request: NextRequest) {
 
       // 1.1 Restore Pengaturan
       for (const p of pengaturanSistem) {
+        const { id: pId, createdAt: _c, updatedAt: _u, ...pData } = p;
         await (prisma as any).pengaturanSistem.upsert({
-          where: { id: p.id || 'default-settings' },
-          update: { ...p },
-          create: { ...p },
+          where: { id: pId || 'default-settings' },
+          update: pData,
+          create: { id: pId || 'default-settings', ...pData },
         });
       }
 
@@ -446,7 +447,11 @@ export async function POST(request: NextRequest) {
 
       // 1.3 Restore / Merge Users
       for (const u of users) {
-        const resolvedKelasId = u.kelasId ? (kelasIdMap.get(u.kelasId) ?? u.kelasId) : null;
+        let resolvedKelasId: string | null = u.kelasId ? (kelasIdMap.get(u.kelasId) ?? u.kelasId) : null;
+        if (resolvedKelasId && !kelasIdMap.has(u.kelasId)) {
+          const kelasExists = await prisma.kelas.findUnique({ where: { id: resolvedKelasId }, select: { id: true } });
+          if (!kelasExists) resolvedKelasId = null;
+        }
         const orConditions: any[] = [{ id: u.id }, { username: u.username }];
         if (u.nip) orConditions.push({ nip: u.nip });
         if (u.nomorPeserta) orConditions.push({ nomorPeserta: u.nomorPeserta });
@@ -486,8 +491,16 @@ export async function POST(request: NextRequest) {
 
       // 1.4 Restore / Merge Mata Pelajaran (Topik) & Nested Soal jika ada
       for (const m of mataPelajaran) {
-        const resolvedModulId = m.modulId ? (modulIdMap.get(m.modulId) ?? m.modulId) : null;
-        const resolvedPembuatId = m.pembuatId ? (userIdMap.get(m.pembuatId) ?? m.pembuatId) : null;
+        let resolvedModulId: string | null = m.modulId ? (modulIdMap.get(m.modulId) ?? m.modulId) : null;
+        if (resolvedModulId && !modulIdMap.has(m.modulId)) {
+          const modExists = await prisma.modul.findUnique({ where: { id: resolvedModulId }, select: { id: true } });
+          if (!modExists) resolvedModulId = null;
+        }
+        let resolvedPembuatId: string | null = m.pembuatId ? (userIdMap.get(m.pembuatId) ?? m.pembuatId) : null;
+        if (resolvedPembuatId && !userIdMap.has(m.pembuatId)) {
+          const userExists = await prisma.user.findUnique({ where: { id: resolvedPembuatId }, select: { id: true } });
+          if (!userExists) resolvedPembuatId = null;
+        }
         const existingMapel = await prisma.mataPelajaran.findFirst({
           where: { OR: [{ id: m.id }, { kode: m.kode }] },
         });
@@ -583,6 +596,11 @@ export async function POST(request: NextRequest) {
       // 1.5 Restore Soal (Flat list)
       for (const s of soal) {
         const resolvedMapelId = mapelIdMap.get(s.mataPelajaranId) ?? s.mataPelajaranId;
+        if (!resolvedMapelId) continue;
+        if (!mapelIdMap.has(s.mataPelajaranId)) {
+          const mapelExists = await prisma.mataPelajaran.findUnique({ where: { id: resolvedMapelId }, select: { id: true } });
+          if (!mapelExists) continue;
+        }
         const upsertedSoal = await prisma.soal.upsert({
           where: { id: s.id },
           update: {
@@ -615,6 +633,11 @@ export async function POST(request: NextRequest) {
       // 1.6 Restore Opsi Jawaban (Flat list)
       for (const o of opsiJawaban) {
         const resolvedSoalId = soalIdMap.get(o.soalId) ?? o.soalId;
+        if (!resolvedSoalId) continue;
+        if (!soalIdMap.has(o.soalId)) {
+          const soalExists = await prisma.soal.findUnique({ where: { id: resolvedSoalId }, select: { id: true } });
+          if (!soalExists) continue;
+        }
         await prisma.opsiJawaban.upsert({
           where: { id: o.id },
           update: {
@@ -640,6 +663,11 @@ export async function POST(request: NextRequest) {
         const startDt = u.waktuMulai ? new Date(u.waktuMulai) : new Date();
         const endDt = u.waktuSelesai ? new Date(u.waktuSelesai) : new Date(Date.now() + 86400000);
         const resolvedMapelId = mapelIdMap.get(u.mataPelajaranId) ?? u.mataPelajaranId;
+        if (!resolvedMapelId) continue;
+        if (!mapelIdMap.has(u.mataPelajaranId)) {
+          const mapelExists = await prisma.mataPelajaran.findUnique({ where: { id: resolvedMapelId }, select: { id: true } });
+          if (!mapelExists) continue;
+        }
 
         const existingUjian = await prisma.ujian.findFirst({
           where: { OR: [{ id: u.id }, { kodeUjian: u.kodeUjian }] },
@@ -680,6 +708,15 @@ export async function POST(request: NextRequest) {
       for (const uk of ujianKelas) {
         const resolvedUjianId = ujianIdMap.get(uk.ujianId) ?? uk.ujianId;
         const resolvedKelasId = kelasIdMap.get(uk.kelasId) ?? uk.kelasId;
+        if (!resolvedUjianId || !resolvedKelasId) continue;
+        if (!ujianIdMap.has(uk.ujianId)) {
+          const uExists = await prisma.ujian.findUnique({ where: { id: resolvedUjianId }, select: { id: true } });
+          if (!uExists) continue;
+        }
+        if (!kelasIdMap.has(uk.kelasId)) {
+          const kExists = await prisma.kelas.findUnique({ where: { id: resolvedKelasId }, select: { id: true } });
+          if (!kExists) continue;
+        }
         const existingUk = await prisma.ujianKelas.findFirst({
           where: {
             OR: [
@@ -699,6 +736,15 @@ export async function POST(request: NextRequest) {
       for (const p of pesertaUjian) {
         const resolvedUjianId = ujianIdMap.get(p.ujianId) ?? p.ujianId;
         const resolvedSiswaId = userIdMap.get(p.siswaId) ?? p.siswaId;
+        if (!resolvedUjianId || !resolvedSiswaId) continue;
+        if (!ujianIdMap.has(p.ujianId)) {
+          const uExists = await prisma.ujian.findUnique({ where: { id: resolvedUjianId }, select: { id: true } });
+          if (!uExists) continue;
+        }
+        if (!userIdMap.has(p.siswaId)) {
+          const sExists = await prisma.user.findUnique({ where: { id: resolvedSiswaId }, select: { id: true } });
+          if (!sExists) continue;
+        }
         const existingPu = await prisma.pesertaUjian.findFirst({
           where: {
             OR: [
@@ -741,6 +787,15 @@ export async function POST(request: NextRequest) {
       for (const j of jawabanPeserta) {
         const resolvedPuId = pesertaUjianIdMap.get(j.pesertaUjianId) ?? j.pesertaUjianId;
         const resolvedSoalId = soalIdMap.get(j.soalId) ?? j.soalId;
+        if (!resolvedPuId || !resolvedSoalId) continue;
+        if (!pesertaUjianIdMap.has(j.pesertaUjianId)) {
+          const puExists = await prisma.pesertaUjian.findUnique({ where: { id: resolvedPuId }, select: { id: true } });
+          if (!puExists) continue;
+        }
+        if (!soalIdMap.has(j.soalId)) {
+          const sExists = await prisma.soal.findUnique({ where: { id: resolvedSoalId }, select: { id: true } });
+          if (!sExists) continue;
+        }
         const existingJwb = await prisma.jawabanPeserta.findFirst({
           where: {
             OR: [

@@ -4,11 +4,11 @@ setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 cd /d "%~dp0"
 set "ROOT_DIR=%~dp0"
-title INSTALLER CBT v2 SMA MUHIPO - Windows Server 2025
+title INSTALLER CBT v2 SMA MUHIPO - Windows 10 / 11 / Server
 color 0B
 
 echo ==============================================================================
-echo       INSTALLER & SETUP OTOMATIS CBT v2 SMA MUHIPO (WINDOWS SERVER 2025)
+echo       INSTALLER ^& SETUP OTOMATIS CBT v2 SMA MUHIPO (WINDOWS 10 / 11 / SERVER)
 echo       SMA Muhammadiyah 1 Ponorogo - Muhipo Dev (C) 2026
 echo ==============================================================================
 echo.
@@ -16,13 +16,9 @@ echo Pemeriksaan hak akses Administrator...
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo [PERINGATAN] Script ini tidak dijalankan sebagai Administrator.
-    echo Beberapa fitur otomatisasi (Firewall, Windows Service, auto-install Node/PostgreSQL)
-    echo memerlukan hak Administrator.
+    echo Beberapa fitur otomatisasi ^(Firewall, Windows Service, auto-install^)
+    echo memerlukan hak Administrator. Melanjutkan instalasi...
     echo.
-    echo Disarankan: Klik kanan file ini dan pilih 'Run as Administrator'.
-    echo.
-    set /p "CONT_ADMIN=Lanjutkan dengan hak akses saat ini? (y/n) [y]: "
-    if /i "!CONT_ADMIN!"=="n" exit /b 1
 )
 
 :: Pindahkan eksekusi ke installer PowerShell komprehensif

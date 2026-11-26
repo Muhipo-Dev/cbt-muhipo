@@ -5,6 +5,16 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
   reactStrictMode: true,
+  webpack: (config) => {
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      {
+        module: /@opentelemetry\/instrumentation/,
+        message: /Critical dependency: the request of a dependency is an expression/,
+      },
+    ];
+    return config;
+  },
   // Mengizinkan semua origin dinamis (semua IP lokal, semua domain tunnel, localhost, dsb)
   allowedDevOrigins: [
     '*',

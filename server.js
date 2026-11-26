@@ -37,7 +37,6 @@ app.prepare().then(() => {
   httpServer.keepAliveTimeout = 65000;
   httpServer.headersTimeout = 66000;
   httpServer.requestTimeout = 30000;
-  httpServer.maxConnections = 0;
 
   httpServer.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {

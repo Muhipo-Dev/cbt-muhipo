@@ -28,7 +28,7 @@ function sqlEscapeValue(val: any): string {
     return 'NULL';
   }
   if (typeof val === 'boolean') {
-    return val ? '1' : '0';
+    return val ? 'true' : 'false';
   }
   if (typeof val === 'number') {
     if (isNaN(val)) return 'NULL';
@@ -78,27 +78,24 @@ export async function GET(request: NextRequest) {
 
     let sqlDump = '';
 
-    // 1. Header HeidiSQL / MySQL Compatible Dump
-    sqlDump += `/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;\n`;
-    sqlDump += `/*!40101 SET NAMES utf8mb4 */;\n`;
-    sqlDump += `/*!50503 SET NAMES utf8mb4 */;\n`;
-    sqlDump += `/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;\n`;
-    sqlDump += `/*!40103 SET TIME_ZONE='+00:00' */;\n`;
-    sqlDump += `/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;\n`;
-    sqlDump += `/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;\n`;
-    sqlDump += `/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;\n\n`;
-
+    // 1. Header PostgreSQL Compatible Dump
     sqlDump += `-- ========================================================\n`;
-    sqlDump += `-- CBT MUHIPO STANDALONE DATABASE DUMP (MySQL / HeidiSQL)\n`;
+    sqlDump += `-- CBT MUHIPO STANDALONE DATABASE DUMP (PostgreSQL)\n`;
     sqlDump += `-- Application: CBT SMA Muhammadiyah 1 Ponorogo\n`;
     sqlDump += `-- Exported By : ${user.name} (${user.username} [${user.role}])\n`;
     sqlDump += `-- Export Date: ${dateStr} ${timeStr} (UTC: ${nowIso})\n`;
-    sqlDump += `-- Format     : Standard MySQL Data & Table SQL Script\n`;
-    sqlDump += `-- HeidiSQL Compatible: YES\n`;
-    sqlDump += `-- phpMyAdmin Compatible: YES\n`;
+    sqlDump += `-- Format     : Standard PostgreSQL Data SQL Script\n`;
     sqlDump += `-- ========================================================\n\n`;
 
-    // 2. Dump data for each table in order
+    if (includeDrop) {
+      sqlDump += `-- Clean existing data in reverse Foreign Key order\n`;
+      for (const table of [...TABLE_CONFIGS].reverse()) {
+        sqlDump += `DELETE FROM "${table.name}";\n`;
+      }
+      sqlDump += `\n`;
+    }
+
+    // 2. Dump data for each table in forward Foreign Key order
     for (const table of TABLE_CONFIGS) {
       try {
         const modelDelegate = (prisma as any)[table.model];
@@ -109,18 +106,13 @@ export async function GET(request: NextRequest) {
         const rows = await modelDelegate.findMany();
 
         sqlDump += `-- --------------------------------------------------------\n`;
-        sqlDump += `-- Dumping data for table \`${table.name}\` (${rows.length} rows)\n`;
+        sqlDump += `-- Dumping data for table "${table.name}" (${rows.length} rows)\n`;
         sqlDump += `-- --------------------------------------------------------\n`;
-
-        if (includeDrop) {
-          sqlDump += `/*!40000 ALTER TABLE \`${table.name}\` DISABLE KEYS */;\n`;
-          sqlDump += `DELETE FROM \`${table.name}\`;\n`;
-        }
 
         if (rows.length > 0) {
           const sample = rows[0];
           const columns = Object.keys(sample);
-          const colNamesEscaped = columns.map((c) => `\`${c}\``).join(', ');
+          const colNamesEscaped = columns.map((c) => `"${c}"`).join(', ');
 
           // Batch insert in chunks of 100 rows
           const chunkSize = 100;
@@ -131,31 +123,22 @@ export async function GET(request: NextRequest) {
               return `  (${vals.join(', ')})`;
             });
 
-            sqlDump += `INSERT INTO \`${table.name}\` (${colNamesEscaped}) VALUES\n`;
-            sqlDump += valueLines.join(',\n') + ';\n';
+            sqlDump += `INSERT INTO "${table.name}" (${colNamesEscaped}) VALUES\n`;
+            sqlDump += valueLines.join(',\n') + ' ON CONFLICT DO NOTHING;\n';
           }
         }
 
-        if (includeDrop) {
-          sqlDump += `/*!40000 ALTER TABLE \`${table.name}\` ENABLE KEYS */;\n\n`;
-        } else {
-          sqlDump += `\n`;
-        }
+        sqlDump += `\n`;
       } catch (tableErr: any) {
         console.error(`Error dumping table ${table.name}:`, tableErr);
         sqlDump += `-- [Error exporting table ${table.name}: ${tableErr.message}]\n\n`;
       }
     }
 
-    // 3. Footer Reset Constraints
+    // 3. Footer
     sqlDump += `-- ========================================================\n`;
     sqlDump += `-- End of CBT MUHIPO Database Dump\n`;
     sqlDump += `-- ========================================================\n`;
-    sqlDump += `/*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;\n`;
-    sqlDump += `/*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;\n`;
-    sqlDump += `/*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;\n`;
-    sqlDump += `/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;\n`;
-    sqlDump += `/*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;\n`;
 
     const filename = `CBT_MUHIPO_MYSQL_DUMP_${dateStr}.sql`;
     const headers = new Headers();
@@ -235,16 +218,7 @@ function splitSqlStatements(sqlText: string): string[] {
       continue;
     }
     if (char === '/' && nextChar === '*') {
-      // MySQL conditional comment /*!40101 ... */
-      if (i + 2 < len && sqlText[i + 2] === '!') {
-        const closingIdx = sqlText.indexOf('*/', i + 3);
-        if (closingIdx !== -1) {
-          const conditionalContent = sqlText.slice(i + 3, closingIdx).replace(/^\d{5}\s*/, '');
-          currentStatement += ' ' + conditionalContent + ' ';
-          i = closingIdx + 1;
-          continue;
-        }
-      }
+      // Skip both standard /* ... */ and MySQL conditional /*!40101 ... */ comments
       inMultiLineComment = true;
       i++;
       continue;
@@ -317,30 +291,69 @@ export async function POST(request: NextRequest) {
     let skippedCount = 0;
     const errors: string[] = [];
 
-    // Temporarily disable foreign key checks for the session
-    await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0;');
-
-    try {
-      for (const statement of statements) {
-        // Skip empty or comment-only commands
-        if (!statement || statement.trim().length === 0) continue;
-
-        try {
-          await prisma.$executeRawUnsafe(statement);
-          successCount++;
-        } catch (stmtErr: any) {
-          const msg = stmtErr?.message || String(stmtErr);
-          if (statement.toUpperCase().startsWith('SET ') || statement.toUpperCase().startsWith('/*!')) {
-            skippedCount++;
+    // Helper: convert MySQL backticks outside single-quoted strings to PostgreSQL double quotes
+    const normalizeSqlForPostgres = (stmt: string): string => {
+      let out = '';
+      let inSingleQuote = false;
+      let escaped = false;
+      for (let i = 0; i < stmt.length; i++) {
+        const ch = stmt[i];
+        if (escaped) {
+          out += ch;
+          escaped = false;
+          continue;
+        }
+        if (inSingleQuote) {
+          if (ch === '\\') {
+            escaped = true;
+            out += ch;
+          } else if (ch === "'") {
+            inSingleQuote = false;
+            out += ch;
           } else {
-            console.warn('SQL statement warning during import:', msg, '\nStatement:', statement.slice(0, 120));
-            errors.push(msg.slice(0, 160));
+            out += ch;
+          }
+        } else {
+          if (ch === "'") {
+            inSingleQuote = true;
+            out += ch;
+          } else if (ch === '`') {
+            out += '"';
+          } else {
+            out += ch;
           }
         }
       }
-    } finally {
-      // Always re-enable foreign key checks
-      await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1;');
+      return out;
+    };
+
+    for (const rawStatement of statements) {
+      const trimmed = rawStatement.trim();
+      if (!trimmed) continue;
+
+      const upper = trimmed.toUpperCase();
+      // Skip MySQL-specific session/lock/alter-keys statements that are invalid in PostgreSQL
+      if (
+        upper.startsWith('SET ') ||
+        upper.startsWith('/*!') ||
+        upper.startsWith('LOCK TABLES') ||
+        upper.startsWith('UNLOCK TABLES') ||
+        (upper.startsWith('ALTER TABLE') && (upper.includes('DISABLE KEYS') || upper.includes('ENABLE KEYS')))
+      ) {
+        skippedCount++;
+        continue;
+      }
+
+      const pgStatement = normalizeSqlForPostgres(trimmed);
+
+      try {
+        await prisma.$executeRawUnsafe(pgStatement);
+        successCount++;
+      } catch (stmtErr: any) {
+        const msg = stmtErr?.message || String(stmtErr);
+        console.warn('SQL statement warning during import:', msg, '\nStatement:', pgStatement.slice(0, 120));
+        errors.push(msg.slice(0, 160));
+      }
     }
 
     return NextResponse.json({

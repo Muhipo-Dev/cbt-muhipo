@@ -134,8 +134,8 @@ function Ensure-DatabaseRunning {
 
         # 2. Coba nyalakan standalone jika ada data simasmuh
         $simasmuhData = "D:\simasmuh\database\data"
-        $pgCtl = "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe"
-        if ((Test-Path $simasmuhData) -and (Test-Path $pgCtl)) {
+        $pgCtl = @("18", "17", "16", "15", "14") | ForEach-Object { "C:\Program Files\PostgreSQL\$_\bin\pg_ctl.exe" } | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if ((Test-Path $simasmuhData) -and $pgCtl) {
             Start-Process -FilePath $pgCtl -ArgumentList "-D `"$simasmuhData`" -o `"-p $DB_PORT`" start" -WindowStyle Hidden
             for ($i = 0; $i -lt 15; $i++) {
                 Start-Sleep -Milliseconds 500
