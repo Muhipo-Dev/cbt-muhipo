@@ -204,6 +204,7 @@ model Ujian {
   acakOpsi          Boolean        @default(true)
   tampilkanHasil    Boolean        @default(false)
   lockBrowser       Boolean        @default(true) // Mode anti cheat fullscreen
+  modePenilaian     String         @default("SKALA_100") // SKALA_100 (dibagi 100 semua soal) | POIN_SOAL (PG & pilihan lain = 1 poin, isian/esai = 0)
   token             String?        @default("ABCDEF") // Token ujian CBT (opsional)
   
   status            String         @default("DIJADWALKAN") // DRAFT, DIJADWALKAN, SEDANG_BERJALAN, SELESAI, NONAKTIF

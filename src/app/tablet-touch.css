@@ -40,7 +40,8 @@
   /* Smooth momentum scrolling for tablet touch cards */
   .tablet-scroll-view {
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
+    overscroll-behavior-x: none;
+    touch-action: pan-y pinch-zoom;
   }
 }
 

@@ -820,6 +820,7 @@ export function evaluateExamSubmissionItems(params: {
   nilaiMaksimal?: number | null;
   nilaiMinimal?: number | null;
   preserveManualEssayScores?: boolean;
+  modePenilaian?: string | null;
 }): UnifiedExamGradeSummary {
   const {
     soalList,
@@ -827,7 +828,10 @@ export function evaluateExamSubmissionItems(params: {
     nilaiMaksimal = 100.0,
     nilaiMinimal = 0.0,
     preserveManualEssayScores = false,
+    modePenilaian = 'SKALA_100',
   } = params;
+
+  const isPoinSoalMode = String(modePenilaian || 'SKALA_100').toUpperCase() === 'POIN_SOAL';
 
   const jawabanMap = new Map(jawabanList.map((j) => [j.soalId, j]));
 
@@ -838,7 +842,7 @@ export function evaluateExamSubmissionItems(params: {
   const updates: GradedSoalUpdate[] = [];
 
   for (const soal of soalList) {
-    const bobot = Number(soal.bobot) > 0 ? Number(soal.bobot) : 1.0;
+    const bobot = isPoinSoalMode ? 1.0 : Number(soal.bobot) > 0 ? Number(soal.bobot) : 1.0;
     totalBobotAssigned += bobot;
 
     const existingJ = jawabanMap.get(soal.id);
@@ -890,7 +894,17 @@ export function evaluateExamSubmissionItems(params: {
         skor: res.skor,
       });
     } else if (tipe === 'ISIAN') {
-      if (preserveManualEssayScores && existingJ && typeof existingJ.skor === 'number') {
+      if (isPoinSoalMode) {
+        updates.push({
+          soalId: soal.id,
+          jawabanId: existingJ?.id,
+          jawabanDipilih: chosenText,
+          tipeSoal: tipe,
+          isBenar: false,
+          skor: 0,
+          catatanKoreksi: 'Mode Poin Soal: Isian dinilai 0.',
+        });
+      } else if (preserveManualEssayScores && existingJ && typeof existingJ.skor === 'number') {
         const manualSkor = Math.max(0, Math.min(bobot, Number(existingJ.skor)));
         rawEarnedTulisan += manualSkor;
         updates.push({
@@ -922,6 +936,17 @@ export function evaluateExamSubmissionItems(params: {
         });
       }
     } else if (tipe === 'ESAI') {
+      if (isPoinSoalMode) {
+        updates.push({
+          soalId: soal.id,
+          jawabanId: existingJ?.id,
+          jawabanDipilih: chosenText,
+          tipeSoal: tipe,
+          isBenar: false,
+          skor: 0,
+          catatanKoreksi: 'Mode Poin Soal: Esai dinilai 0.',
+        });
+      } else {
       const hasKey = Boolean(stripHtmlAndDecodeEntities(soal.kunciJawabanTeks || ''));
       if (preserveManualEssayScores && existingJ && typeof existingJ.skor === 'number') {
         const manualSkor = Math.max(0, Math.min(bobot, Number(existingJ.skor)));
@@ -960,7 +985,19 @@ export function evaluateExamSubmissionItems(params: {
           catatanKoreksi: 'Menunggu koreksi guru (kunci/rubrik esai belum diisi).',
         });
       }
+      }
     }
+  }
+
+  if (isPoinSoalMode) {
+    const finalPoinPG = Number(rawEarnedPilihan.toFixed(2));
+    return {
+      updates,
+      nilaiPG: finalPoinPG,
+      nilaiEsai: 0,
+      nilaiTotal: finalPoinPG,
+      isKoreksiSelesai: true,
+    };
   }
 
   const maxNilai = Number(nilaiMaksimal) > 0 ? Number(nilaiMaksimal) : 100.0;

@@ -57,6 +57,7 @@ import {
   registerGlobalExambroBridge,
   enforceExambroKioskSecurity,
   releaseExambroKioskSecurity,
+  registerKioskExitAlertHandler,
 } from '@/lib/cbt-exambro-bridge';
 
 interface OpsiJawaban {
@@ -128,6 +129,7 @@ export default function LembarUjianPage({
   const [isSEB, setIsSEB] = useState(false);
   const [isKeyboardTyping, setIsKeyboardTyping] = useState(false);
   const [wasExitedForKeyboard, setWasExitedForKeyboard] = useState(false);
+  const lastMatchingInteractRef = useRef<number>(0);
 
   // Kiosk 2-Finger Pinch-to-Zoom ("Cubit Layar") State — memastikan cubit layar & zoom tetap berfungsi 100%
   // meskipun Chromium Fullscreen API mengunci visualViewport.scale bawaan browser di mode layar penuh!
@@ -235,8 +237,21 @@ export default function LembarUjianPage({
       },
     });
 
+    const unregisterKioskExitAlert = registerKioskExitAlertHandler((reason) => {
+      if (isSubmittedRef.current) return;
+      window.dispatchEvent(
+        new CustomEvent('cbt-security-violation', {
+          detail: {
+            type: 'KIOSK_EXIT_ATTEMPT',
+            message: reason || 'Percobaan keluar dari aplikasi Kiosk terdeteksi',
+          },
+        })
+      );
+    });
+
     fetchUjianData();
     return () => {
+      unregisterKioskExitAlert();
       if (timerRef.current) clearInterval(timerRef.current);
       if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
       cbtWakeLock.releaseWakeLock();
@@ -731,6 +746,15 @@ export default function LembarUjianPage({
   // Listener ini memastikan gesture cubit 2 jari ("cubit layar") tetap memperbesar/memperkecil soal & opsi (100% - 300%)
   // tanpa mengganggu scroll 1 jari maupun ketukan tombol touchscreen!
   useEffect(() => {
+    document.documentElement.classList.add('cbt-exam-active');
+    document.body.classList.add('cbt-exam-active');
+    return () => {
+      document.documentElement.classList.remove('cbt-exam-active');
+      document.body.classList.remove('cbt-exam-active');
+    };
+  }, []);
+
+  useEffect(() => {
     const stageEl = questionStageRef.current;
     if (!stageEl || loading) return;
 
@@ -783,7 +807,7 @@ export default function LembarUjianPage({
     };
 
     stageEl.addEventListener('touchstart', onTouchStart, { passive: true });
-    stageEl.addEventListener('touchmove', onTouchMove, { passive: false });
+    stageEl.addEventListener('touchmove', onTouchMove, { passive: true });
     stageEl.addEventListener('touchend', onTouchEnd, { passive: true });
     stageEl.addEventListener('touchcancel', onTouchEnd, { passive: true });
     stageEl.addEventListener('wheel', onWheelZoom, { passive: false });
@@ -910,11 +934,13 @@ export default function LembarUjianPage({
     const handleWindowBlur = () => {
       if (document.hidden || isSubmittedRef.current) return;
       if (isEditableExamInput(document.activeElement)) return;
+      if (Date.now() - lastMatchingInteractRef.current < 2500) return;
 
       if (blurTimeout) clearTimeout(blurTimeout);
       blurTimeout = setTimeout(() => {
         if (isSubmittedRef.current || document.hidden) return;
         if (isEditableExamInput(document.activeElement)) return;
+        if (Date.now() - lastMatchingInteractRef.current < 2500) return;
 
         if (!document.hasFocus()) {
           setIsPrivacyObscured(true);
@@ -971,7 +997,10 @@ export default function LembarUjianPage({
       // Jika di ponsel Android peserta mengetuk kolom input ISIAN/ESAI, Chrome Android otomatis keluar fullscreen sementara
       // untuk menampilkan keyboard on-screen. Jangan hukum siswa atas perilaku bawaan OS Android ini!
       if (!inFullscreen && devInfo.hasFullscreen) {
-        if ((devInfo.isMobile || devInfo.isTablet) && isEditableExamInput(document.activeElement)) {
+        if (
+          ((devInfo.isMobile || devInfo.isTablet) && isEditableExamInput(document.activeElement)) ||
+          document.activeElement?.tagName === 'SELECT'
+        ) {
           setWasExitedForKeyboard(true);
           return;
         }
@@ -1096,7 +1125,7 @@ export default function LembarUjianPage({
     }
 
     const now = Date.now();
-    if (now - lastViolationTimeRef.current < 4000) {
+    if (now - lastViolationTimeRef.current < 1500) {
       return;
     }
     lastViolationTimeRef.current = now;
@@ -1113,27 +1142,28 @@ export default function LembarUjianPage({
 
       if (resJson.data?.isLocked) {
         isSubmittedRef.current = true;
+        setIsPrivacyObscured(true);
         await exitUniversalFullscreen();
         releaseExambroKioskSecurity();
         cbtSecurityAudio.triggerFullWarning(
-          'Perhatian. Anda telah melampaui batas maksimal sepuluh kali pelanggaran tata tertib ujian. Sesi pengerjaan Anda kini dikunci oleh sistem. Silakan melapor kepada Pengawas Ruang dengan sopan dan tertib.'
+          'Perhatian. Anda telah melampaui batas maksimal lima kali pelanggaran tata tertib ujian. Sesi pengerjaan Anda kini dikunci oleh sistem dan nilai telah disimpan. Silakan melapor kepada Pengawas Ruang dengan sopan dan tertib.'
         );
         setSystemNoticeModal({
           variant: 'locked',
-          title: 'Sesi Ujian Terkunci Otomatis (10/10 Pelanggaran)',
+          title: 'Sesi Ujian Terkunci Otomatis (5/5 Pelanggaran)',
           subtitle:
-            'Anda telah mencapai batas maksimal 10 kali pelanggaran tata tertib keamanan ujian. Demi menjaga integritas akademik, sesi pengerjaan ini ditangguhkan sementara. Silakan melapor kepada Pengawas Ruang dengan tertib.',
+            'Anda telah mencapai batas maksimal 5 kali pelanggaran tata tertib keamanan ujian. Sesi pengerjaan dikunci otomatis dan nilai dari jawaban yang telah masuk telah tersimpan. Silakan melapor kepada Pengawas Ruang dengan tertib.',
           redirectTo: '/siswa',
         });
       } else if (currentViolation > 0) {
-        const sisaPelanggaran = Math.max(0, 10 - currentViolation);
+        const sisaPelanggaran = Math.max(0, 5 - currentViolation);
         setCheatWarning(
-          `Catatan Pelanggaran (${currentViolation}/10): ${detail} Sisa batas toleransi ${sisaPelanggaran} kali sebelum sesi ujian dikunci otomatis.`
+          `Catatan Pelanggaran (${currentViolation}/5): ${detail} Sisa batas toleransi ${sisaPelanggaran} kali sebelum sesi ujian dikunci otomatis.`
         );
-        // Peringatan suara khusus saat mendekati ambang penguncian (pelanggaran ke-8 atau ke-9)
+        // Peringatan suara khusus saat mendekati ambang penguncian (pelanggaran ke-3 atau ke-4)
         if (sisaPelanggaran <= 2 && baseVoiceMsg) {
           cbtSecurityAudio.speakWarning(
-            `Peringatan penting. Ini adalah catatan pelanggaran ke-${currentViolation} dari batas maksimal sepuluh kali. Tersisa ${sisaPelanggaran} kesempatan sebelum sesi ujian Anda dikunci secara otomatis.`
+            `Peringatan penting. Ini adalah catatan pelanggaran ke-${currentViolation} dari batas maksimal lima kali. Tersisa ${sisaPelanggaran} kesempatan sebelum sesi ujian Anda dikunci secara otomatis.`
           );
         }
       }
@@ -1273,6 +1303,7 @@ export default function LembarUjianPage({
   };
 
   const handleSelectMatching = (soalId: string, leftText: string, rightText: string) => {
+    lastMatchingInteractRef.current = Date.now();
     if (submitting || isSubmittedRef.current) return;
     const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
     let mapping: Record<string, string> = {};
@@ -1467,7 +1498,7 @@ export default function LembarUjianPage({
                 >
                   {wasExitedForKeyboard
                     ? 'Penyesuaian Papan Ketik • Tanpa Sanksi'
-                    : `Catatan Pelanggaran ${violationCount}/10`}
+                    : `Catatan Pelanggaran ${violationCount}/5`}
                 </span>
                 <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-1">
                   Kembalikan Tampilan Layar Penuh
@@ -1540,7 +1571,7 @@ export default function LembarUjianPage({
                 />
                 {violationCount > 0 && (
                   <span className="text-[10px] font-bold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.2 rounded border border-rose-200 dark:border-rose-800 shrink-0">
-                    Pelanggaran {violationCount}/10
+                    Pelanggaran {violationCount}/5
                   </span>
                 )}
               </div>
@@ -1700,10 +1731,10 @@ export default function LembarUjianPage({
       <main
         ref={questionStageRef}
         id="cbt-question-zoom-stage"
-        className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-5 lg:px-6 pt-3 sm:pt-5 pb-24 sm:pb-8 flex flex-col justify-between overscroll-contain"
-        style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
+        className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-5 lg:px-6 pt-3 sm:pt-5 pb-24 sm:pb-8 flex flex-col justify-between"
+        style={{ touchAction: 'pan-y pinch-zoom' }}
       >
-        <div className="w-full overflow-x-auto custom-scrollbar rounded-xl">
+        <div className={`w-full rounded-xl ${examZoomScale > 1.01 ? 'overflow-x-auto custom-scrollbar' : 'overflow-visible'}`}>
           <div
             id="cbt-question-zoom-surface"
             style={examZoomScale > 1.01 ? ({ zoom: examZoomScale } as React.CSSProperties) : undefined}
@@ -1891,7 +1922,15 @@ export default function LembarUjianPage({
 
             {/* Opsi Jawaban: Mencocokkan / Menjodohkan */}
             {currentSoal.tipeSoal === 'MENJODOHKAN' && (
-              <div className="space-y-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <div
+                className="space-y-2.5 pt-3 border-t border-slate-200 dark:border-slate-800"
+                onTouchStart={() => {
+                  lastMatchingInteractRef.current = Date.now();
+                }}
+                onPointerDown={() => {
+                  lastMatchingInteractRef.current = Date.now();
+                }}
+              >
                 <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 border-l-4 border-l-blue-600 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-md text-xs font-medium">
                   Pasangkan setiap pernyataan di sebelah kiri dengan pasangan yang sesuai di sebelah kanan.
                 </div>
@@ -1949,29 +1988,37 @@ export default function LembarUjianPage({
                               </div>
                             </div>
 
-                            <div className="flex-1 sm:max-w-xs">
-                              <select
-                                value={selectedRight}
-                                onChange={(e) => handleSelectMatching(currentSoal.id, pair.left, e.target.value)}
-                                className={`min-h-[42px] w-full px-3 py-2 rounded-lg text-base sm:text-xs font-semibold border cursor-pointer transition focus:outline-none focus:border-blue-600 ${
-                                  isMatched
-                                    ? 'bg-blue-600 text-white border-blue-600'
-                                    : 'bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                                }`}
-                              >
-                                <option value="" className="bg-white dark:bg-slate-900 text-slate-500">
-                                  -- Pilih Pasangan --
-                                </option>
-                                {rightOptions.map((opt, oIdx) => (
-                                  <option
-                                    key={oIdx}
-                                    value={opt}
-                                    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                                  >
-                                    {opt.replace(/\$/g, '')}
-                                  </option>
-                                ))}
-                              </select>
+                            <div className="flex-1 sm:max-w-md w-full">
+                              <div className="flex flex-wrap gap-2">
+                                {rightOptions.map((opt, oIdx) => {
+                                  const isSelectedOpt = selectedRight === opt;
+                                  return (
+                                    <button
+                                      key={oIdx}
+                                      type="button"
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => {
+                                        handleSelectMatching(
+                                          currentSoal.id,
+                                          pair.left,
+                                          isSelectedOpt ? '' : opt
+                                        );
+                                      }}
+                                      aria-pressed={isSelectedOpt}
+                                      className={`min-h-[44px] px-3 py-2 rounded-lg text-left text-sm sm:text-xs font-medium border transition active:scale-[0.98] flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
+                                        isSelectedOpt
+                                          ? 'bg-blue-600 text-white border-blue-600 font-semibold shadow-sm'
+                                          : 'bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                      }`}
+                                    >
+                                      <span className="min-w-0">
+                                        <MathRenderer content={opt} />
+                                      </span>
+                                      {isSelectedOpt && <span className="text-white text-xs shrink-0">✓</span>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </div>
                         );

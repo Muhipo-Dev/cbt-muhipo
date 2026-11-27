@@ -274,7 +274,7 @@ export function convertEquationToKatex(text: string | null | undefined): string 
           // Pecahan Unicode: ½, ⅓, ¼, ¾, dsb.
           Object.entries(FRACTION_MAP).forEach(([char, latex]) => {
             if (sub.includes(char)) {
-              sub = sub.replaceAll(char, `$${latex}$`);
+              sub = sub.split(char).join(`$${latex}$`);
             }
           });
 
@@ -301,7 +301,7 @@ export function convertEquationToKatex(text: string | null | undefined): string 
           // Simbol Khusus (Greek, Operasi)
           Object.entries(SYMBOL_MAP).forEach(([char, latex]) => {
             if (sub.includes(char)) {
-              sub = sub.replaceAll(char, ` $${latex}$ `);
+              sub = sub.split(char).join(` $${latex}$ `);
             }
           });
 

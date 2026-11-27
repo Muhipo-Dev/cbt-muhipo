@@ -79,6 +79,9 @@ export default function RootLayout({
                   if (isOldWebView || isOldChrome || lowRam || (isLowPowerMobile && lowCpu)) {
                     document.documentElement.classList.add('low-end-webview');
                   }
+                  if (isAndroid && (/wv|Version\\/[0-9.]+/i.test(ua) || typeof window.Android !== 'undefined' || typeof window.Exambro !== 'undefined')) {
+                    document.documentElement.classList.add('android-kiosk-webview');
+                  }
                 } catch (e) {}
               })();
             `,
@@ -92,15 +95,15 @@ export default function RootLayout({
                   var CBT_BUILD_VERSION = 'cbt-ai-math-engine-v4.3';
                   var cachedVer = localStorage.getItem('cbt_client_cache_ver');
                   if (cachedVer !== CBT_BUILD_VERSION) {
-                    if ('caches' in window) {
+                    if ('caches' in window && window.caches && typeof caches.keys === 'function') {
                       caches.keys().then(function(names) {
-                        for (var name of names) caches.delete(name);
-                      });
+                        for (var i = 0; i < names.length; i++) { caches.delete(names[i]); }
+                      }).catch(function() {});
                     }
-                    if ('serviceWorker' in navigator) {
+                    if ('serviceWorker' in navigator && navigator.serviceWorker && typeof navigator.serviceWorker.getRegistrations === 'function') {
                       navigator.serviceWorker.getRegistrations().then(function(regs) {
-                        for (var r of regs) r.unregister();
-                      });
+                        for (var j = 0; j < regs.length; j++) { regs[j].unregister(); }
+                      }).catch(function() {});
                     }
                     localStorage.setItem('cbt_client_cache_ver', CBT_BUILD_VERSION);
                   }
@@ -110,7 +113,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col antialiased font-sans">
+      <body className="min-h-full flex flex-col antialiased font-sans bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

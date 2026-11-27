@@ -75,6 +75,7 @@ export function TesDaftarView({
     waktuMulai: '',
     waktuSelesai: '',
     lockBrowser: true,
+    modePenilaian: 'SKALA_100',
     acakSoal: true,
     acakOpsi: true,
     tampilkanHasil: false,
@@ -98,6 +99,7 @@ export function TesDaftarView({
       waktuMulai: u.waktuMulai ? formatLocalDatetime(new Date(u.waktuMulai)) : '',
       waktuSelesai: u.waktuSelesai ? formatLocalDatetime(new Date(u.waktuSelesai)) : '',
       lockBrowser: u.lockBrowser !== false,
+      modePenilaian: u.modePenilaian === 'POIN_SOAL' ? 'POIN_SOAL' : 'SKALA_100',
       acakSoal: u.acakSoal !== false,
       acakOpsi: u.acakOpsi !== false,
       tampilkanHasil: u.tampilkanHasil === true,
@@ -957,6 +959,20 @@ export function TesDaftarView({
                     />
                     <span>Tampilkan Nilai ke Siswa</span>
                   </label>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Mode Penilaian Ujian
+                  </label>
+                  <select
+                    value={editForm.modePenilaian}
+                    onChange={(e) => setEditForm({ ...editForm, modePenilaian: e.target.value })}
+                    className="w-full px-3 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="SKALA_100">Pembagian Total Nilai 100 (Semua Soal Dibagi 100)</option>
+                    <option value="POIN_SOAL">Mode Poin Soal (PG &amp; Pilihan Lain = 1 Poin, Isian/Esai = 0)</option>
+                  </select>
                 </div>
               </div>
 

@@ -110,7 +110,7 @@ export function SecurityLockModal({
                 {isApple && isMobileOrTablet
                   ? 'Peserta wajib tetap berada pada halaman ujian Safari. Tidak diperkenankan berpindah aplikasi, membuka tab baru, atau mengaktifkan tampilan layar terbagi (Split View).'
                   : isMobileOrTablet
-                  ? 'Halaman ujian dikunci dalam mode layar penuh. Tidak diperkenankan berpindah aplikasi, menekan tombol navigasi keluar, atau menggunakan tampilan layar terbagi (Split-Screen).'
+                  ? 'Aplikasi Kiosk dikunci & di-pin dalam mode layar penuh. Percobaan menekan tombol keluar, kembali, berpindah aplikasi, atau Split-Screen akan memicu alert dan tercatat sebagai pelanggaran.'
                   : 'Peramban dikunci dalam mode layar penuh. Tidak diperkenankan berpindah tab, membuka jendela aplikasi lain, atau keluar dari layar penuh sebelum ujian selesai.'}
               </span>
             </div>

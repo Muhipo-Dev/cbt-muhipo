@@ -53,17 +53,27 @@
    ========================================================================== */
 @media screen and (max-width: 767.98px) {
   /* 1. ROOT & BODY ENGINE WITH DESKTOP CURSOR SCROLL PERMISSION */
-  html, body {
-    background-color: transparent !important;
-    color: var(--ion-text-color) !important;
+  html {
     touch-action: pan-y pinch-zoom;
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
     -webkit-overflow-scrolling: touch;
     overflow-y: auto !important;
     overflow-x: hidden !important;
+    height: 100%;
     scrollbar-width: thin !important;
     scrollbar-color: rgba(148, 163, 184, 0.4) transparent !important;
+  }
+
+  body {
+    background-color: transparent !important;
+    color: var(--ion-text-color) !important;
+    touch-action: pan-y pinch-zoom;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    overflow-y: visible !important;
+    overflow-x: hidden !important;
+    height: auto !important;
   }
 
   /* Universal Custom Pointer Scrollbar for Desktop Testing on Mobile Viewport */

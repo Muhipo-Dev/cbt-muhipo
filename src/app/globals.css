@@ -77,33 +77,33 @@
 }
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #eef2f6;
+  --foreground: #020617;
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #020617;
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
+  --popover-foreground: #020617;
   --primary: #2563eb;
   --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
-  --destructive: #ef4444;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #3b82f6;
+  --secondary: #e2e8f0;
+  --secondary-foreground: #020617;
+  --muted: #e2e8f0;
+  --muted-foreground: #475569;
+  --accent: #e2e8f0;
+  --accent-foreground: #020617;
+  --destructive: #dc2626;
+  --border: #cbd5e1;
+  --input: #cbd5e1;
+  --ring: #2563eb;
   --radius: 0.625rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #0f172a;
+  --sidebar-foreground: #020617;
   --sidebar-primary: #2563eb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f8fafc;
-  --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: #e2e8f0;
-  --sidebar-ring: #3b82f6;
+  --sidebar-accent: #e2e8f0;
+  --sidebar-accent-foreground: #020617;
+  --sidebar-border: #cbd5e1;
+  --sidebar-ring: #2563eb;
 
   --mobile-safe-top: env(safe-area-inset-top, 0px);
   --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -113,31 +113,31 @@
 }
 
 .dark {
-  --background: #090d16;
-  --foreground: #f8fafc;
+  --background: #020617;
+  --foreground: #ffffff;
   --card: #0f172a;
-  --card-foreground: #f8fafc;
+  --card-foreground: #ffffff;
   --popover: #0f172a;
-  --popover-foreground: #f8fafc;
+  --popover-foreground: #ffffff;
   --primary: #3b82f6;
   --primary-foreground: #ffffff;
   --secondary: #1e293b;
-  --secondary-foreground: #f8fafc;
+  --secondary-foreground: #ffffff;
   --muted: #1e293b;
-  --muted-foreground: #94a3b8;
+  --muted-foreground: #cbd5e1;
   --accent: #1e293b;
-  --accent-foreground: #f8fafc;
+  --accent-foreground: #ffffff;
   --destructive: #f43f5e;
-  --border: #1e293b;
-  --input: #1e293b;
+  --border: #334155;
+  --input: #334155;
   --ring: #3b82f6;
   --sidebar: #0b0f19;
-  --sidebar-foreground: #f8fafc;
+  --sidebar-foreground: #ffffff;
   --sidebar-primary: #3b82f6;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #1e293b;
-  --sidebar-accent-foreground: #f8fafc;
-  --sidebar-border: #1e293b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #334155;
   --sidebar-ring: #3b82f6;
 }
 
@@ -153,9 +153,9 @@ body {
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   transition: background-color 0.2s ease, color 0.2s ease;
   overflow-x: hidden;
+  overflow-y: visible;
   touch-action: pan-y pinch-zoom;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
 }
 
 /* =========================================================================
@@ -644,14 +644,23 @@ img {
    - Mencegah visual jitter pada scroll dan form focus di Android & iOS
    ========================================================================== */
 @media screen and (max-width: 768px) {
-  html, body {
+  html {
     -webkit-tap-highlight-color: transparent;
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
     touch-action: pan-y pinch-zoom;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
     overflow-y: auto;
+    height: 100%;
+  }
+
+  body {
+    -webkit-tap-highlight-color: transparent;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+    touch-action: pan-y pinch-zoom;
+    overflow-y: visible;
+    height: auto;
   }
 
   /* Optimalisasi form & input pada Android WebView */
@@ -749,18 +758,25 @@ header img,
    ========================================================================== */
 html:fullscreen,
 html:-webkit-full-screen,
-:fullscreen body,
-:-webkit-full-screen body,
-html:has(.cbt-exam-lockdown),
-body:has(.cbt-exam-lockdown) {
+html.cbt-exam-active {
   overflow-y: auto !important;
   overflow-x: hidden !important;
-  height: auto !important;
-  min-height: 100dvh !important;
+  height: 100% !important;
   -webkit-overflow-scrolling: touch !important;
   overscroll-behavior-x: none !important;
-  overscroll-behavior-y: contain !important;
-  touch-action: pan-x pan-y pinch-zoom !important;
+  touch-action: pan-y pinch-zoom !important;
+}
+
+:fullscreen body,
+:-webkit-full-screen body,
+body.cbt-exam-active {
+  overflow-y: visible !important;
+  overflow-x: hidden !important;
+  height: auto !important;
+  min-height: 100vh !important;
+  min-height: 100dvh !important;
+  overscroll-behavior-x: none !important;
+  touch-action: pan-y pinch-zoom !important;
 }
 
 .cbt-exam-lockdown,
@@ -770,7 +786,7 @@ body:has(.cbt-exam-lockdown) {
   -ms-user-select: none !important;
   user-select: none !important;
   -webkit-touch-callout: none !important;
-  touch-action: pan-x pan-y pinch-zoom;
+  touch-action: pan-y pinch-zoom;
 }
 
 .cbt-exam-lockdown button,
@@ -787,7 +803,7 @@ body:has(.cbt-exam-lockdown) {
   -ms-user-select: none !important;
   user-select: none !important;
   -webkit-touch-callout: none !important;
-  touch-action: pan-x pan-y pinch-zoom !important;
+  touch-action: pan-y pinch-zoom !important;
 }
 
 .cbt-exam-lockdown ::selection {
@@ -808,3 +824,37 @@ body:has(.cbt-exam-lockdown) {
   pointer-events: none !important;
   user-select: none !important;
 }
+
+/* ==========================================================================
+   ANDROID KIOSK WEBVIEW OPTIMIZATION (Android 7 Nougat - Android 17)
+   - Mencegah pull-to-refresh bawaan WebView (overscroll-behavior-y: contain)
+   - Mencegah long-press context menu/callout pada teks soal & tombol
+   - Mendukung Edge-to-Edge Safe Area (Android 15-17) dengan fallback Android 7-9
+   ========================================================================== */
+html.android-kiosk-webview,
+html.android-kiosk-webview body {
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.android-kiosk-webview *:not(input):not(textarea):not([contenteditable="true"]) {
+  -webkit-touch-callout: none;
+}
+
+.kiosk-safe-top {
+  padding-top: 0px;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.kiosk-safe-bottom {
+  padding-bottom: 0px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.kiosk-safe-x {
+  padding-left: 0px;
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: 0px;
+  padding-right: env(safe-area-inset-right, 0px);
+}
+

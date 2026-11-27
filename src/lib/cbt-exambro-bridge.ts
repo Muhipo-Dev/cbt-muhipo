@@ -348,6 +348,9 @@ export function enforceExambroKioskSecurity(): { isKioskLocked: boolean; method:
       if (typeof w.Exambro.lockNavigation === 'function') {
         w.Exambro.lockNavigation(true);
       }
+      if (typeof w.Exambro.startLockTask === 'function') w.Exambro.startLockTask();
+      if (typeof w.Exambro.pinApp === 'function') w.Exambro.pinApp(true);
+      if (typeof w.Exambro.setExamActive === 'function') w.Exambro.setExamActive(true);
     }
 
     // 2. Coba interface window.Android
@@ -362,6 +365,9 @@ export function enforceExambroKioskSecurity(): { isKioskLocked: boolean; method:
       if (typeof w.Android.blockScreenshot === 'function') {
         w.Android.blockScreenshot(true);
       }
+      if (typeof w.Android.startLockTask === 'function') w.Android.startLockTask();
+      if (typeof w.Android.pinApp === 'function') w.Android.pinApp(true);
+      if (typeof w.Android.setExamActive === 'function') w.Android.setExamActive(true);
     }
 
     // 3. Coba interface window.cbtBridge
@@ -373,12 +379,18 @@ export function enforceExambroKioskSecurity(): { isKioskLocked: boolean; method:
       if (typeof w.cbtBridge.setKioskMode === 'function') {
         w.cbtBridge.setKioskMode(true);
       }
+      if (typeof w.cbtBridge.startLockTask === 'function') w.cbtBridge.startLockTask();
+      if (typeof w.cbtBridge.pinApp === 'function') w.cbtBridge.pinApp(true);
+      if (typeof w.cbtBridge.setExamActive === 'function') w.cbtBridge.setExamActive(true);
     }
 
     // 4. Safe Exam Browser (SEB) JavaScript API
     if (w.SafeExamBrowser) {
       method = 'SafeExamBrowser';
     }
+
+    // 5. Broadcast event ke WebView / APK Kiosk listener
+    window.dispatchEvent(new CustomEvent('cbt-kiosk-lock', { detail: { locked: true, method } }));
 
     console.log(`[Exambro Kiosk] Enforce kiosk security executed: method=${method}`);
     return { isKioskLocked: method !== 'web', method };
@@ -402,18 +414,52 @@ export function releaseExambroKioskSecurity(): void {
       if (typeof w.Exambro.setKioskMode === 'function') w.Exambro.setKioskMode(false);
       if (typeof w.Exambro.blockScreenshot === 'function') w.Exambro.blockScreenshot(false);
       if (typeof w.Exambro.lockNavigation === 'function') w.Exambro.lockNavigation(false);
+      if (typeof w.Exambro.stopLockTask === 'function') w.Exambro.stopLockTask();
+      if (typeof w.Exambro.pinApp === 'function') w.Exambro.pinApp(false);
+      if (typeof w.Exambro.setExamActive === 'function') w.Exambro.setExamActive(false);
     }
     if (w.Android) {
       if (typeof w.Android.setFlagSecure === 'function') w.Android.setFlagSecure(false);
       if (typeof w.Android.enableKioskMode === 'function') w.Android.enableKioskMode(false);
       if (typeof w.Android.blockScreenshot === 'function') w.Android.blockScreenshot(false);
+      if (typeof w.Android.stopLockTask === 'function') w.Android.stopLockTask();
+      if (typeof w.Android.pinApp === 'function') w.Android.pinApp(false);
+      if (typeof w.Android.setExamActive === 'function') w.Android.setExamActive(false);
     }
     if (w.cbtBridge) {
       if (typeof w.cbtBridge.setSecureMode === 'function') w.cbtBridge.setSecureMode(false);
       if (typeof w.cbtBridge.setKioskMode === 'function') w.cbtBridge.setKioskMode(false);
+      if (typeof w.cbtBridge.stopLockTask === 'function') w.cbtBridge.stopLockTask();
+      if (typeof w.cbtBridge.pinApp === 'function') w.cbtBridge.pinApp(false);
+      if (typeof w.cbtBridge.setExamActive === 'function') w.cbtBridge.setExamActive(false);
     }
+    window.dispatchEvent(new CustomEvent('cbt-kiosk-unlock', { detail: { locked: false } }));
     console.log('[Exambro Kiosk] Kiosk security released.');
   } catch (e) {
     console.warn('[Exambro Kiosk] Gagal melepaskan kiosk mode:', e);
   }
+}
+
+/**
+ * Mendaftarkan callback global untuk APK Android Kiosk agar dapat mengirim
+ * sinyal percobaan keluar aplikasi (Back/Home/Unpin) ke sistem Anti-Cheat CBT.
+ */
+export function registerKioskExitAlertHandler(onExitAttempt: (reason?: string) => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const w = window as any;
+
+  const handleEvent = (e: Event) => {
+    const customEvent = e as CustomEvent<{ reason?: string }>;
+    onExitAttempt(customEvent?.detail?.reason || 'Percobaan keluar dari aplikasi Kiosk');
+  };
+
+  w.onKioskExitAttempt = (reason?: string) => {
+    onExitAttempt(reason || 'Percobaan keluar dari aplikasi Kiosk');
+  };
+
+  window.addEventListener('cbt-kiosk-exit-attempt', handleEvent);
+  return () => {
+    window.removeEventListener('cbt-kiosk-exit-attempt', handleEvent);
+    if (w.onKioskExitAttempt) delete w.onKioskExitAttempt;
+  };
 }

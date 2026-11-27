@@ -1,65 +1,47 @@
-'use client'
+'use client';
 
-import Link from 'next/link'
+import React from 'react';
 
 export default function GlobalError({
   error,
   reset,
 }: {
-  error: Error & { digest?: string }
-  reset: () => void
+  error: Error & { digest?: string };
+  reset: () => void;
 }) {
   return (
     <html lang="id">
-      <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui, -apple-system, sans-serif', backgroundColor: '#090d16', color: '#f8fafc', display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ maxWidth: '480px', padding: '32px 24px', textAlign: 'center' }}>
-          <div style={{ display: 'inline-flex', padding: '12px', borderRadius: '16px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', marginBottom: '20px' }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-          </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>
-            Terjadi Kesalahan Sistem CBT
-          </h1>
-          <p style={{ color: '#94a3b8', fontSize: '14px', lineHeight: '1.6', margin: '0 0 24px 0' }}>
-            {error?.message || 'Terjadi gangguan internal pada server CBT v2 SMA Muhipo. Silakan muat ulang halaman atau kembali ke portal login.'}
+      <body className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-900 p-4 font-sans">
+        <div className="max-w-md w-full bg-white border border-slate-300 rounded-xl p-6 shadow-lg text-center space-y-4">
+          <h2 className="text-lg font-bold text-slate-900">
+            Tampilan WebView Perlu Dimuat Ulang
+          </h2>
+          <p className="text-sm text-slate-600">
+            Terjadi gangguan sementara saat memuat halaman di aplikasi Exambro/WebView.
           </p>
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          {error?.message ? (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2 break-words">
+              {error.message}
+            </p>
+          ) : null}
+          <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
             <button
+              type="button"
               onClick={() => reset()}
-              style={{
-                backgroundColor: '#2563eb',
-                color: '#ffffff',
-                border: 'none',
-                padding: '10px 20px',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
+              className="px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold min-h-[44px]"
             >
               Coba Lagi
             </button>
-            <Link
-              href="/"
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                color: '#f8fafc',
-                textDecoration: 'none',
-                padding: '10px 20px',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: 600,
-                display: 'inline-block'
-              }}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="px-4 py-2.5 rounded-lg bg-slate-200 text-slate-900 text-sm font-semibold min-h-[44px]"
             >
-              Beranda
-            </Link>
+              Muat Ulang Halaman
+            </button>
           </div>
         </div>
       </body>
     </html>
-  )
+  );
 }

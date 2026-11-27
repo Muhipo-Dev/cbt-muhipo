@@ -386,6 +386,22 @@ export async function POST(
       },
     });
 
+    if (totalPelanggaran >= 5) {
+      await prisma.pesertaUjian.update({
+        where: { id: peserta.id },
+        data: { status: 'TERKUNCI' },
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          isLocked: true,
+          message:
+            'Akun ujian Anda terkunci karena mencapai batas maksimal 5 kali pelanggaran. Nilai dari jawaban yang telah masuk sudah tersimpan.',
+        },
+        { status: 403 }
+      );
+    }
+
     const jawabanTersimpan = await prisma.jawabanPeserta.findMany({
       where: { pesertaUjianId: peserta.id },
       select: {

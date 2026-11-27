@@ -538,6 +538,7 @@ export async function POST(request: NextRequest) {
         nilaiMaksimal: mapel.nilaiMaksimal,
         nilaiMinimal: mapel.nilaiMinimal,
         preserveManualEssayScores: false,
+        modePenilaian: (pesertaUjian.ujian as any).modePenilaian,
       });
 
       for (const item of gradeSummary.updates) {
