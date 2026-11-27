@@ -115,7 +115,6 @@ function appendUjianWorksheet(
     'Poin PG / Pilihan',
     'Poin Isian & Esai',
     'Poin Total',
-    'Mode Penilaian',
     'Status Ujian',
   ]
 
@@ -178,7 +177,6 @@ function appendUjianWorksheet(
       Number(Number(p.nilaiPG || 0).toFixed(2)),
       Number(Number(p.nilaiEsai || 0).toFixed(2)),
       totalPoin,
-      isPoinSoal ? 'Poin Jumlah Soal' : 'Skala 100',
       p.status || '-',
     ]
 
@@ -203,7 +201,7 @@ function appendUjianWorksheet(
         }
       }
 
-      const centerCols = new Set([0, 2, 3, 5, 6, 7, 8, 9, 10, 12])
+      const centerCols = new Set([0, 2, 3, 5, 6, 7, 8, 9, 10, 11])
       cell.alignment = {
         vertical: 'middle',
         horizontal: centerCols.has(colIdx) ? 'center' : 'left',
