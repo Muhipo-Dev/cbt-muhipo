@@ -2,7 +2,12 @@
 
 import React, { useState, useEffect } from 'react'
 import { Download, FileSpreadsheet, CheckCircle2, AlertTriangle, Search, Award, TrendingUp, BarChart2 } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import {
+  exportRekapHasilToExcel,
+  formatDateTimeId,
+  formatDurationBetween,
+} from '@/lib/rekap-export'
+import { MultiTesExportPanel } from './MultiTesExportPanel'
 
 interface TesRekapViewProps {
   ujianList: any[]
@@ -56,6 +61,10 @@ export function TesRekapView({
 
     const matchKelas = selectedKelas === 'ALL' || h.siswa?.kelas?.nama === selectedKelas
     return matchSearch && matchKelas
+  }).sort((a: any, b: any) => {
+    const noA = String(a.siswa?.nomorPeserta || a.siswa?.username || '')
+    const noB = String(b.siswa?.nomorPeserta || b.siswa?.username || '')
+    return noA.localeCompare(noB, 'id', { numeric: true, sensitivity: 'base' })
   })
 
   // Statistics calculation
@@ -67,55 +76,25 @@ export function TesRekapView({
   const passedCount = filtered.filter((h: any) => (Number(h.nilaiTotal) || 0) >= kkm).length
   const passPercentage = totalStudents > 0 ? Math.round((passedCount / totalStudents) * 100) : 0
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!filtered.length) {
       showNotification('Informasi', 'Belum ada data nilai untuk diekspor.', 'info')
       return
     }
 
-    const currentUjian = data?.activeUjian || ujianList.find((u: any) => u.id === selectedUjianId)
-    const isPoinSoal = String(currentUjian?.modePenilaian || 'SKALA_100').toUpperCase() === 'POIN_SOAL'
-
-    const rows = filtered.map((p: any, idx: number) => {
-      if (isPoinSoal) {
-        return {
-          No: idx + 1,
-          Username: p.siswa.username,
-          'Nomor Peserta': p.siswa.nomorPeserta || p.siswa.username,
-          'Nama Lengkap': p.siswa.name,
-          'Group / Kelas': p.siswa.kelas?.nama || '-',
-          'Poin PG / Pilihan': Number(Number(p.nilaiPG || 0).toFixed(2)),
-          'Poin Isian & Esai': Number(Number(p.nilaiEsai || 0).toFixed(2)),
-          'Total Poin': Number(Number(p.nilaiTotal || 0).toFixed(2)),
-          'Mode Penilaian': 'Poin Jumlah Soal',
-          'Status Ujian': p.status,
-        }
-      }
-      const isTuntas = Number(p.nilaiTotal ?? 0) >= kkm
-      return {
-        No: idx + 1,
-        Username: p.siswa.username,
-        'Nomor Peserta': p.siswa.nomorPeserta || p.siswa.username,
-        'Nama Lengkap': p.siswa.name,
-        'Group / Kelas': p.siswa.kelas?.nama || '-',
-        'Nilai PG / Pilihan': Number(Number(p.nilaiPG || 0).toFixed(2)),
-        'Nilai Isian & Esai': Number(Number(p.nilaiEsai || 0).toFixed(2)),
-        'Total Nilai CBT': Number(Number(p.nilaiTotal || 0).toFixed(2)),
-        'KKM Mapel': kkm,
-        Ketuntasan: isTuntas ? 'TUNTAS' : 'REMIDIAL',
-        'Status Ujian': p.status,
-      }
-    })
-
-    const worksheet = XLSX.utils.json_to_sheet(rows)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap_Nilai')
-    const suffix = selectedKelas !== 'ALL' ? `_${selectedKelas}` : ''
-    const rawNamaTes = data?.activeUjian?.judul || data?.activeUjian?.kodeUjian || 'Tes'
-    const safeNamaTes = rawNamaTes.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
-    const dateStr = new Date().toISOString().slice(0, 10)
-    XLSX.writeFile(workbook, `Hasil_Tes_${safeNamaTes}${suffix}_${dateStr}.xlsx`)
-    showNotification('Berhasil', 'Rekap nilai berhasil diekspor ke Excel.', 'success')
+    try {
+      const currentUjian = data?.activeUjian || ujianList.find((u: any) => u.id === selectedUjianId)
+      await exportRekapHasilToExcel({
+        rows: filtered,
+        activeUjian: currentUjian,
+        filterKelas: selectedKelas,
+        sheetName: 'Rekap_Nilai',
+        filePrefix: 'Rekap_Tes',
+      })
+      showNotification('Berhasil', 'Rekap nilai berhasil diekspor ke Excel.', 'success')
+    } catch (err: any) {
+      showNotification('Gagal', 'Gagal mengekspor Excel: ' + (err?.message || 'Error'), 'error')
+    }
   }
 
   // Backup Hasil Tes (JSON)
@@ -193,6 +172,12 @@ export function TesRekapView({
         </div>
       </div>
 
+      <MultiTesExportPanel
+        ujianList={ujianList}
+        filterKelas={selectedKelas}
+        showNotification={showNotification}
+      />
+
       {/* Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
         <div className="p-4 rounded-2xl bg-white/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-white/10 shadow-xs backdrop-blur-md">
@@ -244,10 +229,10 @@ export function TesRekapView({
             onChange={(e) => setSelectedKelas(e.target.value)}
             className="w-full px-3.5 py-2.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-white/10 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
           >
-            <option value="ALL">Semua Kelas ({data?.pesertaList?.length || 0})</option>
+            <option value="ALL">Semua Kelas ({data?.hasilList?.length || 0})</option>
             {kelasOptions.map((k: any) => (
               <option key={k} value={k}>
-                Kelas {k} ({data?.pesertaList?.filter((p: any) => p.kelas === k).length || 0})
+                Kelas {k} ({data?.hasilList?.filter((p: any) => p.siswa?.kelas?.nama === k).length || 0})
               </option>
             ))}
           </select>
@@ -261,25 +246,28 @@ export function TesRekapView({
             <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-white/10 font-bold uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="py-3.5 px-4">No</th>
-                <th className="py-3.5 px-4">Username / ID</th>
+                <th className="py-3.5 px-4">Nomor Peserta</th>
                 <th className="py-3.5 px-4">Nama Lengkap Siswa</th>
-                <th className="py-3.5 px-4">Group</th>
-                <th className="py-3.5 px-4 text-center">Nilai PG</th>
-                <th className="py-3.5 px-4 text-center">Nilai Esai</th>
-                <th className="py-3.5 px-4 text-center">Nilai Total</th>
+                <th className="py-3.5 px-4">Kelas</th>
+                <th className="py-3.5 px-4">Waktu Masuk</th>
+                <th className="py-3.5 px-4">Waktu Selesai</th>
+                <th className="py-3.5 px-4">Durasi</th>
+                <th className="py-3.5 px-4 text-center">Poin PG</th>
+                <th className="py-3.5 px-4 text-center">Poin Esai</th>
+                <th className="py-3.5 px-4 text-center">Poin Total</th>
                 <th className="py-3.5 px-4 text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-slate-400">
+                  <td colSpan={11} className="text-center py-12 text-slate-400">
                     Memuat rekapitulasi nilai...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-slate-400">
+                  <td colSpan={11} className="text-center py-12 text-slate-400">
                     Tidak ada data nilai peserta untuk filter ini.
                   </td>
                 </tr>
@@ -289,13 +277,22 @@ export function TesRekapView({
                     <tr key={p.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                       <td className="py-3.5 px-4 font-medium text-slate-400">{idx + 1}</td>
                       <td className="py-3.5 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">
-                        {p.siswa?.username}
+                        {p.siswa?.nomorPeserta || p.siswa?.username || '-'}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        {p.siswa?.name}
+                        {p.siswa?.name || '-'}
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-slate-600 dark:text-slate-300">
                         {p.kelas || p.siswa?.kelas?.nama || '-'}
+                      </td>
+                      <td className="py-3.5 px-4 text-[11px] font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        {formatDateTimeId(p.waktuMulai)}
+                      </td>
+                      <td className="py-3.5 px-4 text-[11px] font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        {formatDateTimeId(p.waktuSelesai)}
+                      </td>
+                      <td className="py-3.5 px-4 text-[11px] font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                        {formatDurationBetween(p.waktuMulai, p.waktuSelesai)}
                       </td>
                       <td className="py-3.5 px-4 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
                         {p.nilaiPG ?? 0}

@@ -2,7 +2,12 @@
 
 import React, { useState, useEffect } from 'react'
 import { CheckCircle2, RotateCcw, Search, GraduationCap, ShieldAlert, Award, AlertTriangle, Download, FileSpreadsheet } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import {
+  exportRekapHasilToExcel,
+  formatDateTimeId,
+  formatDurationBetween,
+} from '@/lib/rekap-export'
+import { MultiTesExportPanel } from './MultiTesExportPanel'
 
 interface TesHasilViewProps {
   ujianList: any[]
@@ -70,56 +75,25 @@ export function TesHasilView({
   }
 
   // Ekspor Hasil Tes ke Excel (.xlsx)
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!filtered.length) {
       showNotification('Informasi', 'Belum ada data hasil tes untuk diekspor.', 'info')
       return
     }
 
-    const currentUjian = data?.activeUjian || ujianList.find((u: any) => u.id === selectedUjianId)
-    const isPoinSoal = String(currentUjian?.modePenilaian || 'SKALA_100').toUpperCase() === 'POIN_SOAL'
-    const kkm = Number(currentUjian?.bankSoal?.kkm || currentUjian?.mataPelajaran?.kkm || 75.0)
-
-    const rows = filtered.map((p: any, idx: number) => {
-      const totalNilai = Number(p.nilaiTotal ?? 0)
-      if (isPoinSoal) {
-        return {
-          No: idx + 1,
-          Username: p.siswa?.username || '-',
-          'Nomor Peserta': p.siswa?.nomorPeserta || p.siswa?.username || '-',
-          'Nama Lengkap': p.siswa?.name || '-',
-          Kelas: p.siswa?.kelas?.nama || '-',
-          'Poin PG / Pilihan': Number(Number(p.nilaiPG || 0).toFixed(2)),
-          'Poin Isian & Esai': Number(Number(p.nilaiEsai || 0).toFixed(2)),
-          'Total Poin': Number(totalNilai.toFixed(2)),
-          'Mode Penilaian': 'Poin Jumlah Soal',
-          'Status Ujian': p.status || '-',
-        }
-      }
-      return {
-        No: idx + 1,
-        Username: p.siswa?.username || '-',
-        'Nomor Peserta': p.siswa?.nomorPeserta || p.siswa?.username || '-',
-        'Nama Lengkap': p.siswa?.name || '-',
-        Kelas: p.siswa?.kelas?.nama || '-',
-        'Nilai PG / Pilihan': Number(Number(p.nilaiPG || 0).toFixed(2)),
-        'Nilai Isian & Esai': Number(Number(p.nilaiEsai || 0).toFixed(2)),
-        'Total Nilai': Number(totalNilai.toFixed(2)),
-        'KKM Mapel': kkm,
-        Ketuntasan: totalNilai >= kkm ? 'TUNTAS' : 'REMIDIAL',
-        'Status Ujian': p.status || '-',
-      }
-    })
-
-    const worksheet = XLSX.utils.json_to_sheet(rows)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Hasil_Tes')
-    const suffix = filterKelas !== 'ALL' ? `_${filterKelas}` : ''
-    const rawNamaTes = currentUjian?.judul || currentUjian?.kodeUjian || 'Tes'
-    const safeNamaTes = rawNamaTes.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
-    const dateStr = new Date().toISOString().slice(0, 10)
-    XLSX.writeFile(workbook, `Hasil_Tes_${safeNamaTes}${suffix}_${dateStr}.xlsx`)
-    showNotification('Berhasil', 'Hasil tes berhasil diekspor ke Excel.', 'success')
+    try {
+      const currentUjian = data?.activeUjian || ujianList.find((u: any) => u.id === selectedUjianId)
+      await exportRekapHasilToExcel({
+        rows: filtered,
+        activeUjian: currentUjian,
+        filterKelas,
+        sheetName: 'Hasil_Tes',
+        filePrefix: 'Hasil_Tes',
+      })
+      showNotification('Berhasil', 'Hasil tes berhasil diekspor ke Excel.', 'success')
+    } catch (err: any) {
+      showNotification('Gagal', 'Gagal mengekspor Excel: ' + (err?.message || 'Error'), 'error')
+    }
   }
 
   const handleResetPeserta = (p: any) => {
@@ -217,6 +191,12 @@ export function TesHasilView({
         </div>
       </div>
 
+      <MultiTesExportPanel
+        ujianList={ujianList}
+        filterKelas={filterKelas}
+        showNotification={showNotification}
+      />
+
       {/* Filter & Search Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="relative sm:col-span-2">
@@ -252,12 +232,15 @@ export function TesHasilView({
           <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
             <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-white/10 font-bold uppercase tracking-wider text-[11px]">
               <tr>
-                <th className="py-3.5 px-4">Username / ID</th>
+                <th className="py-3.5 px-4">Nomor Peserta</th>
                 <th className="py-3.5 px-4">Nama Peserta</th>
-                <th className="py-3.5 px-4">Group</th>
-                <th className="py-3.5 px-4 text-center">Nilai PG</th>
-                <th className="py-3.5 px-4 text-center">Nilai Esai</th>
-                <th className="py-3.5 px-4 text-center">Nilai Total</th>
+                <th className="py-3.5 px-4">Kelas</th>
+                <th className="py-3.5 px-4">Waktu Masuk</th>
+                <th className="py-3.5 px-4">Waktu Selesai</th>
+                <th className="py-3.5 px-4">Durasi</th>
+                <th className="py-3.5 px-4 text-center">Poin PG</th>
+                <th className="py-3.5 px-4 text-center">Poin Esai</th>
+                <th className="py-3.5 px-4 text-center">Poin Total</th>
                 <th className="py-3.5 px-4 text-center">Status Pengerjaan</th>
                 <th className="py-3.5 px-4 text-right">Aksi</th>
               </tr>
@@ -265,13 +248,13 @@ export function TesHasilView({
             <tbody className="divide-y divide-slate-200/60 dark:divide-white/5">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-slate-400">
+                  <td colSpan={11} className="text-center py-12 text-slate-400">
                     Memuat hasil tes...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-slate-400">
+                  <td colSpan={11} className="text-center py-12 text-slate-400">
                     Tidak ada data pengerjaan peserta yang ditemukan.
                   </td>
                 </tr>
@@ -279,13 +262,22 @@ export function TesHasilView({
                 filtered.map((p: any) => (
                   <tr key={p.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                     <td className="py-3.5 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">
-                      {p.siswa?.username}
+                      {p.siswa?.nomorPeserta || p.siswa?.username || '-'}
                     </td>
                     <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                      {p.siswa?.name}
+                      {p.siswa?.name || '-'}
                     </td>
                     <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
                       {p.siswa?.kelas?.nama || '-'}
+                    </td>
+                    <td className="py-3.5 px-4 text-[11px] font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                      {formatDateTimeId(p.waktuMulai)}
+                    </td>
+                    <td className="py-3.5 px-4 text-[11px] font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                      {formatDateTimeId(p.waktuSelesai)}
+                    </td>
+                    <td className="py-3.5 px-4 text-[11px] font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                      {formatDurationBetween(p.waktuMulai, p.waktuSelesai)}
                     </td>
                     <td className="py-3.5 px-4 text-center font-bold text-slate-700 dark:text-slate-300">
                       {p.nilaiPG ?? 0}
@@ -315,7 +307,7 @@ export function TesHasilView({
                       <button
                         type="button"
                         onClick={() => handleResetPeserta(p)}
-                        className="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[11px] font-bold hover:bg-rose-100 transition cursor-pointer flex items-center gap-1 ml-auto"
+                        className="min-h-[44px] px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[11px] font-bold hover:bg-rose-100 transition cursor-pointer touch-manipulation flex items-center gap-1 ml-auto"
                         title="Reset status ujian siswa"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
