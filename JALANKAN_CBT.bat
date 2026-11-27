@@ -72,33 +72,41 @@ call :CHECK_PORT_STATUS 5560  "Prisma Studio    "
 call :CHECK_PORT_STATUS %DB_PORT% "PostgreSQL (DB)  "
 echo.
 echo  +=========================================+
-echo  |               MENU UTAMA                |
+echo  ^|               MENU UTAMA                ^|
 echo  +=========================================+
-echo  |  [1] Jalankan Semua Layanan (App+Studio)|
-echo  |  [2] Hentikan Semua Layanan             |
-echo  |  [3] Jalankan CBT Web App Saja (:4020)  |
-echo  |  [4] Jalankan Prisma Studio GUI (:5560) |
-echo  |  [5] Restart CBT Web App (:4020)        |
-echo  |  [6] Restart Database PostgreSQL        |
-echo  |  [7] Restart Semua Layanan (Full)       |
-echo  |  [8] Rebuild ^& Restart CBT (Compile)   |
-echo  |  [9] Inisialisasi Database (Push+Seed)  |
-echo  |  [10] Buka Browser CBT (:4020)          |
-echo  |  [0] Keluar dari Launcher               |
+echo  ^|  [1] Mulai Aplikasi (Mode Development)  ^|
+echo  ^|  [2] Mulai Aplikasi (Mode Production)   ^|
+echo  ^|  [3] Buka Prisma Studio (Port 5560)     ^|
+echo  ^|  [4] Restart Database PostgreSQL        ^|
+echo  ^|  [5] Inisialisasi Database (Push+Seed)  ^|
+echo  ^|  [7] Restart Aplikasi                   ^|
+echo  ^|  [8] Rebuild ^& Restart (Full)           ^|
+echo  ^|  [9] Menonaktifkan Mode / Stop Aplikasi ^|
+echo  ^|  [10] Build Aplikasi (Tanpa Jalankan)   ^|
+echo  ^|  [11] Cek Kesiapan Sistem               ^|
+echo  ^|  [12] Buka Browser (localhost:4020)     ^|
+echo  ^|  [13] Update ^& Git Pull (Fetch/Merge)   ^|
+echo  ^|  [14] Push Perubahan ke GitHub (Commit) ^|
+echo  ^|  [15] Tampilkan Konfigurasi .env        ^|
+echo  ^|  [0] Keluar dari Script                 ^|
 echo  +=========================================+
 echo.
-set /p "CHOICE=  Pilih menu [0-10]: "
+set /p "CHOICE=  Pilih menu [0-15]: "
 
-if "%CHOICE%"=="1" goto CMD_START_ALL
-if "%CHOICE%"=="2" goto CMD_STOP_ALL
-if "%CHOICE%"=="3" goto CMD_START_APP
-if "%CHOICE%"=="4" goto CMD_START_STUDIO
-if "%CHOICE%"=="5" goto CMD_RESTART_APP
-if "%CHOICE%"=="6" goto CMD_RESTART_DB
+if "%CHOICE%"=="1" goto CMD_START_DEV
+if "%CHOICE%"=="2" goto CMD_START_ALL
+if "%CHOICE%"=="3" goto CMD_START_STUDIO
+if "%CHOICE%"=="4" goto CMD_RESTART_DB
+if "%CHOICE%"=="5" goto CMD_DB_INIT
 if "%CHOICE%"=="7" goto CMD_RESTART_ALL
 if "%CHOICE%"=="8" goto CMD_REBUILD
-if "%CHOICE%"=="9" goto CMD_DB_INIT
-if "%CHOICE%"=="10" goto CMD_OPEN_BROWSER
+if "%CHOICE%"=="9" goto CMD_STOP_ALL
+if "%CHOICE%"=="10" goto CMD_BUILD_ONLY
+if "%CHOICE%"=="11" goto CMD_MAIN_MENU
+if "%CHOICE%"=="12" goto CMD_OPEN_BROWSER
+if "%CHOICE%"=="13" goto CMD_GIT_PULL
+if "%CHOICE%"=="14" goto CMD_GIT_PUSH
+if "%CHOICE%"=="15" goto CMD_SHOW_ENV
 if "%CHOICE%"=="0" exit /b 0
 
 echo [ERROR] Pilihan tidak valid!
@@ -125,6 +133,16 @@ goto :eof
 :: ------------------------------------------------------------
 :: ACTIONS
 :: ------------------------------------------------------------
+:CMD_START_DEV
+cls
+echo [INFO] Menyalakan Database PostgreSQL...
+call :SUB_ENSURE_DB
+echo [INFO] Menyalakan CBT Web App (Mode Development) di port 4020...
+call :SUB_STOP_APP
+start "" cmd.exe /c "set PORT=4020& npm run dev"
+pause
+goto CMD_MAIN_MENU
+
 :CMD_START_ALL
 cls
 echo [INFO] Menyalakan Database PostgreSQL...
@@ -232,6 +250,42 @@ goto CMD_MAIN_MENU
 
 :CMD_OPEN_BROWSER
 start http://localhost:4020
+goto CMD_MAIN_MENU
+
+:CMD_BUILD_ONLY
+cls
+echo [INFO] Build Aplikasi (Tanpa Menjalankan)...
+call npx prisma generate
+call npm run build
+pause
+goto CMD_MAIN_MENU
+
+:CMD_GIT_PULL
+cls
+echo [INFO] Mengambil update dari Git (git pull)...
+git pull
+pause
+goto CMD_MAIN_MENU
+
+:CMD_GIT_PUSH
+cls
+set /p "GIT_MSG=  Masukkan pesan commit: "
+if not "%GIT_MSG%"=="" (
+    git add -A
+    git commit -m "%GIT_MSG%"
+    git push
+)
+pause
+goto CMD_MAIN_MENU
+
+:CMD_SHOW_ENV
+cls
+if exist ".env" (
+    type ".env"
+) else (
+    echo [ERROR] File .env tidak ditemukan.
+)
+pause
 goto CMD_MAIN_MENU
 
 :: ------------------------------------------------------------

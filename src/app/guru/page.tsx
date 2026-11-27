@@ -1312,10 +1312,27 @@ export default function GuruDashboardPage() {
       return;
     }
 
+    const isPoinSoal = String(koreksiData?.activeUjian?.modePenilaian || 'SKALA_100').toUpperCase() === 'POIN_SOAL';
+
     const rows = listToExport.map((p: any, idx: number) => {
       const nilaiPGFormatted = p.nilaiPG != null ? Number(Number(p.nilaiPG).toFixed(2)) : 0;
       const nilaiEsaiFormatted = p.nilaiEsai != null ? Number(Number(p.nilaiEsai).toFixed(2)) : 0;
       const nilaiTotalFormatted = p.nilaiTotal != null ? Number(Number(p.nilaiTotal).toFixed(2)) : 0;
+
+      if (isPoinSoal) {
+        return {
+          No: idx + 1,
+          Username: p.siswa.username,
+          'Nomor Peserta': p.siswa.nomorPeserta || p.siswa.username,
+          'Nama Siswa': p.siswa.name,
+          Kelas: p.siswa.kelas?.nama || '-',
+          'Poin PG/Pilihan': nilaiPGFormatted,
+          'Poin Isian/Essay': nilaiEsaiFormatted,
+          'Total Poin': nilaiTotalFormatted,
+          'Mode Penilaian': 'Poin Jumlah Soal',
+          'Status Ujian': p.status || 'SELESAI',
+        };
+      }
 
       return {
         No: idx + 1,

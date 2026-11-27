@@ -366,37 +366,75 @@ while ($true) {
     Write-Banner
     Show-Status
 
-    Write-Host "  PILIHAN MENU MANAJEMEN CBT STANDALONE:" -ForegroundColor White
-    Write-Host "  [1] Jalankan Semua Layanan (CBT App + Prisma Studio)" -ForegroundColor Green
-    Write-Host "  [2] Hentikan Semua Layanan" -ForegroundColor Red
-    Write-Host "  [3] Jalankan CBT Web App Saja (:4020)" -ForegroundColor Cyan
-    Write-Host "  [4] Jalankan Prisma Studio GUI Saja (:5560)" -ForegroundColor Cyan
-    Write-Host "  [5] Restart CBT Web App (:4020)" -ForegroundColor Yellow
-    Write-Host "  [6] Restart Database PostgreSQL (:$DB_PORT)" -ForegroundColor Yellow
-    Write-Host "  [7] Restart Semua Layanan (Aplikasi + DB + Studio)" -ForegroundColor Yellow
-    Write-Host "  [8] Rebuild & Restart CBT (Compile Ulang + Nyalakan)" -ForegroundColor Cyan
-    Write-Host "  [9] Inisialisasi Ulang Skema Database (Prisma db push & seed)" -ForegroundColor Magenta
-    Write-Host "  [10] Buka Browser CBT Web App (http://localhost:4020)" -ForegroundColor Yellow
-    Write-Host "  [0] Keluar" -ForegroundColor DarkGray
+    Write-Host "  +=========================================+" -ForegroundColor DarkCyan
+    Write-Host "  |               MENU UTAMA                |" -ForegroundColor DarkCyan
+    Write-Host "  +=========================================+" -ForegroundColor DarkCyan
+    Write-Host "  |  [1] Mulai Aplikasi (Mode Development)  |" -ForegroundColor White
+    Write-Host "  |  [2] Mulai Aplikasi (Mode Production)   |" -ForegroundColor White
+    Write-Host "  |  [3] Buka Prisma Studio (Port 5560)     |" -ForegroundColor Green
+    Write-Host "  |  [4] Restart Database PostgreSQL        |" -ForegroundColor Yellow
+    Write-Host "  |  [5] Inisialisasi Database (Push+Seed)  |" -ForegroundColor Magenta
+    Write-Host "  |  [7] Restart Aplikasi                   |" -ForegroundColor White
+    Write-Host "  |  [8] Rebuild & Restart (Full)           |" -ForegroundColor White
+    Write-Host "  |  [9] Menonaktifkan Mode / Stop Aplikasi |" -ForegroundColor Red
+    Write-Host "  |  [10] Build Aplikasi (Tanpa Jalankan)   |" -ForegroundColor White
+    Write-Host "  |  [11] Cek Kesiapan Sistem               |" -ForegroundColor Green
+    Write-Host "  |  [12] Buka Browser (localhost:4020)     |" -ForegroundColor White
+    Write-Host "  |  [13] Update & Git Pull (Fetch/Merge)   |" -ForegroundColor Cyan
+    Write-Host "  |  [14] Push Perubahan ke GitHub (Commit) |" -ForegroundColor Green
+    Write-Host "  |  [15] Tampilkan Konfigurasi .env        |" -ForegroundColor White
+    Write-Host "  |  [0] Keluar dari Script                 |" -ForegroundColor White
+    Write-Host "  +=========================================+" -ForegroundColor DarkCyan
     Write-Host ""
-    $choice = Read-Host "  Pilih nomor menu (0-10)"
+    $choice = Read-Host "  Pilih menu [0-15]"
 
     switch ($choice) {
-        "1" { Start-AllServices; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "2" { Stop-AllServices; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "3" { Start-CBTApp; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "4" { Start-PrismaStudio; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "5" { Restart-CBTApp; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "6" { Restart-Database; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "7" { Restart-AllServices; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "8" { Rebuild-CBTApp; Read-Host "  Tekan Enter untuk kembali ke menu..." }
-        "9" {
+        "1" {
+            Write-Status "Memulai CBT Web App (Mode Development) di port 4020..." "Cyan"
+            Ensure-DatabaseRunning
+            Stop-CBTApp
+            Start-Process "cmd.exe" -ArgumentList "/c cd /d `"$ROOT`" && set PORT=4020&& npm run dev" -WindowStyle Normal
+            Read-Host "  Tekan ENTER untuk kembali ke menu"
+        }
+        "2" { Start-AllServices; Read-Host "  Tekan ENTER untuk kembali ke menu" }
+        "3" { Start-PrismaStudio; Read-Host "  Tekan ENTER untuk kembali ke menu" }
+        "4" { Restart-Database; Read-Host "  Tekan ENTER untuk kembali ke menu" }
+        "5" {
             Write-Status "Inisialisasi database..." "Cyan"
             Ensure-DatabaseRunning
             cmd.exe /c "cd /d `"$ROOT`" && npx prisma db push && npx tsx prisma/seed.ts"
-            Read-Host "  Tekan Enter untuk kembali ke menu..."
+            Read-Host "  Tekan ENTER untuk kembali ke menu"
         }
-        "10" { Start-Process "http://localhost:4020" }
+        "7" { Restart-AllServices; Read-Host "  Tekan ENTER untuk kembali ke menu" }
+        "8" { Rebuild-CBTApp; Read-Host "  Tekan ENTER untuk kembali ke menu" }
+        "9" { Stop-AllServices; Read-Host "  Tekan ENTER untuk kembali ke menu" }
+        "10" {
+            Write-Status "Build Aplikasi (Tanpa Menjalankan)..." "Cyan"
+            cmd.exe /c "cd /d `"$ROOT`" && npx prisma generate && npm run build"
+            Read-Host "  Tekan ENTER untuk kembali ke menu"
+        }
+        "11" {
+            Write-Banner
+            Show-Status
+            Read-Host "  Tekan ENTER untuk kembali ke menu"
+        }
+        "12" { Start-Process "http://localhost:4020" }
+        "13" {
+            Write-Status "Mengambil update dari Git (git pull)..." "Cyan"
+            cmd.exe /c "cd /d `"$ROOT`" && git pull"
+            Read-Host "  Tekan ENTER untuk kembali ke menu"
+        }
+        "14" {
+            $msg = Read-Host "  Masukkan pesan commit"
+            if (-not [string]::IsNullOrWhiteSpace($msg)) {
+                cmd.exe /c "cd /d `"$ROOT`" && git add -A && git commit -m `"$msg`" && git push"
+            }
+            Read-Host "  Tekan ENTER untuk kembali ke menu"
+        }
+        "15" {
+            if (Test-Path "$ROOT\.env") { Get-Content "$ROOT\.env" } else { Write-Err ".env tidak ditemukan." }
+            Read-Host "  Tekan ENTER untuk kembali ke menu"
+        }
         "0" { exit 0 }
         default { Write-Err "Pilihan tidak valid."; Start-Sleep -Seconds 1 }
     }

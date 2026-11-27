@@ -73,7 +73,24 @@ export function TesRekapView({
       return
     }
 
+    const currentUjian = data?.activeUjian || ujianList.find((u: any) => u.id === selectedUjianId)
+    const isPoinSoal = String(currentUjian?.modePenilaian || 'SKALA_100').toUpperCase() === 'POIN_SOAL'
+
     const rows = filtered.map((p: any, idx: number) => {
+      if (isPoinSoal) {
+        return {
+          No: idx + 1,
+          Username: p.siswa.username,
+          'Nomor Peserta': p.siswa.nomorPeserta || p.siswa.username,
+          'Nama Lengkap': p.siswa.name,
+          'Group / Kelas': p.siswa.kelas?.nama || '-',
+          'Poin PG / Pilihan': Number(Number(p.nilaiPG || 0).toFixed(2)),
+          'Poin Isian & Esai': Number(Number(p.nilaiEsai || 0).toFixed(2)),
+          'Total Poin': Number(Number(p.nilaiTotal || 0).toFixed(2)),
+          'Mode Penilaian': 'Poin Jumlah Soal',
+          'Status Ujian': p.status,
+        }
+      }
       const isTuntas = Number(p.nilaiTotal ?? 0) >= kkm
       return {
         No: idx + 1,

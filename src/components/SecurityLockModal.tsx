@@ -121,7 +121,7 @@ export function SecurityLockModal({
             <div>
               <b className="text-slate-900 dark:text-white">3. Aksesibilitas Layar &amp; Integritas Akademik:</b>
               <span className="text-slate-600 dark:text-slate-400 block text-[11px] mt-0.5 leading-relaxed">
-                Peserta <b>tetap dapat menyentuh layar, menggulir halaman, serta memperbesar tampilan soal dengan dua jari</b>. Fitur salin-tempel, seleksi teks, dan tangkapan layar dinonaktifkan (batas toleransi <b>10 kali pelanggaran</b>). Mode layar penuh berakhir otomatis setelah seluruh soal selesai dikumpulkan.
+                Peserta <b>tetap dapat menyentuh layar, menggulir halaman, serta memperbesar tampilan soal dengan dua jari</b>. Fitur salin-tempel, seleksi teks, dan tangkapan layar dinonaktifkan (batas toleransi <b>5 kali pelanggaran</b>). Mode layar penuh berakhir otomatis setelah seluruh soal selesai dikumpulkan.
               </span>
             </div>
           </div>

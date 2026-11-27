@@ -455,7 +455,7 @@ export async function POST(request: NextRequest) {
       }
 
       // PENTING: Ketika Proktor membuka kunci ujian (UNLOCK_EXAM), bersihkan juga log pelanggaran lama yang membuat
-      // pelanggaran >= 10 agar akun siswa tidak langsung terkunci lagi saat terjadi 1 event adaptasi!
+      // pelanggaran >= 5 agar akun siswa tidak langsung terkunci lagi saat terjadi 1 event adaptasi!
       await prisma.logAktivitasUjian.deleteMany({
         where: {
           pesertaUjianId,

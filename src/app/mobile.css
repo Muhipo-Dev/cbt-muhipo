@@ -160,13 +160,13 @@
     position: sticky;
     top: 0;
     z-index: 45;
-    padding-top: 0.5rem;
-    padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+    padding-top: 0.625rem;
+    padding-top: max(0.625rem, env(safe-area-inset-top, 0px));
     padding-left: 0.875rem;
     padding-left: max(0.875rem, env(safe-area-inset-left, 0px));
     padding-right: 0.875rem;
     padding-right: max(0.875rem, env(safe-area-inset-right, 0px));
-    padding-bottom: 0.625rem;
+    padding-bottom: 0.25rem;
     background: rgba(255, 255, 255, 0.98);
     border-bottom: 1px solid var(--border);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);

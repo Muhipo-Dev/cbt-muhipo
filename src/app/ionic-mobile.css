@@ -96,7 +96,8 @@
   header:not(#cbt-exam-header),
   .ion-header,
   .mobile-appbar {
-    padding-top: var(--ion-safe-area-top) !important;
+    padding-top: max(0.625rem, var(--ion-safe-area-top)) !important;
+    padding-bottom: 0.25rem !important;
     padding-left: max(0.75rem, var(--ion-safe-area-left)) !important;
     padding-right: max(0.75rem, var(--ion-safe-area-right)) !important;
     position: sticky !important;
@@ -105,7 +106,8 @@
   }
 
   header#cbt-exam-header {
-    padding-top: max(0.375rem, var(--ion-safe-area-top)) !important;
+    padding-top: max(0.625rem, var(--ion-safe-area-top)) !important;
+    padding-bottom: 0.25rem !important;
     padding-left: max(0.75rem, var(--ion-safe-area-left)) !important;
     padding-right: max(0.75rem, var(--ion-safe-area-right)) !important;
     position: sticky !important;

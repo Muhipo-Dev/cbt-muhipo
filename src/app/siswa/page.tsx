@@ -362,7 +362,7 @@ export default function SiswaPortalPage() {
         <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/90 dark:border-amber-900/60 border-l-4 border-l-amber-500 rounded-lg px-3.5 py-2.5 flex items-start sm:items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300">
           <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
           <p className="leading-relaxed">
-            <b className="text-slate-900 dark:text-white">Tata Tertib Kiosk CBT:</b> Selama ujian berlangsung layar dikunci penuh. Dilarang keluar layar penuh atau berpindah aplikasi (batas maksimal <b>10x pelanggaran</b> sebelum akun terkunci otomatis).
+            <b className="text-slate-900 dark:text-white">Tata Tertib Kiosk CBT:</b> Selama ujian berlangsung layar dikunci penuh. Dilarang keluar layar penuh atau berpindah aplikasi (batas maksimal <b>5x pelanggaran</b> sebelum akun terkunci otomatis).
           </p>
         </div>
 

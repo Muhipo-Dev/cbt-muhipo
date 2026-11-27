@@ -42,7 +42,7 @@ export function AppNavbar({
 
   return (
     <header
-      className={`print:hidden mobile-appbar sticky top-0 z-40 w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-5 lg:px-6 shrink-0 ${className}`}
+      className={`print:hidden mobile-appbar sticky top-0 z-40 w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-5 lg:px-6 pt-2 sm:pt-2.5 pb-0.5 shrink-0 ${className}`}
     >
       <div
         className={`w-full ${

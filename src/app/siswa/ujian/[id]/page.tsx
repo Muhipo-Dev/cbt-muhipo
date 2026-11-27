@@ -1537,7 +1537,7 @@ export default function LembarUjianPage({
       {/* Sticky Header CBT: Sejajar Presisi dengan Main max-w-5xl (Tanpa Offset Kiri/Kanan) */}
       <header
         id="cbt-exam-header"
-        className="sticky top-0 z-40 w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-5 lg:px-6"
+        className="sticky top-0 z-40 w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-5 lg:px-6 pt-2 sm:pt-2.5 pb-0.5"
       >
         <div className="max-w-5xl w-full mx-auto min-h-[52px] py-1.5 flex items-center justify-between gap-2">
           {/* Left: Nomor Soal Aktif & Judul */}
