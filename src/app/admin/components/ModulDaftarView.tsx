@@ -19,6 +19,7 @@ import {
   Download,
 } from 'lucide-react'
 import { MathRenderer } from '@/components/MathRenderer'
+import { RichSoalEditor } from '@/components/RichSoalEditor'
 
 interface ModulDaftarViewProps {
   mapelList: any[]
@@ -797,14 +798,11 @@ export function ModulDaftarView({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Teks Pertanyaan Soal (Mendukung HTML & KaTeX $...$)
+                  Teks Pertanyaan Soal (Bold, Italic, Underline, Gambar, Arab &amp; KaTeX $...$)
                 </label>
-                <textarea
-                  rows={5}
-                  required
+                <RichSoalEditor
                   value={editPertanyaan}
-                  onChange={(e) => setEditPertanyaan(e.target.value)}
-                  className="w-full p-3 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 leading-relaxed font-sans"
+                  onChange={setEditPertanyaan}
                 />
               </div>
 

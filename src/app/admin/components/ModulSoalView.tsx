@@ -155,6 +155,9 @@ export function ModulSoalView({
   // KaTeX Assistant & Live Preview
   const [showKatexAssistant, setShowKatexAssistant] = useState(true)
   const [showArabicAssistant, setShowArabicAssistant] = useState(false)
+  const [showTableAssistant, setShowTableAssistant] = useState(false)
+  const [tableRows, setTableRows] = useState(3)
+  const [tableCols, setTableCols] = useState(3)
   const [showJavaneseAssistant, setShowJavaneseAssistant] = useState(false)
   const [showLivePreview, setShowLivePreview] = useState(true)
   const [katexModalOpen, setKatexModalOpen] = useState(false)
@@ -1352,6 +1355,19 @@ export function ModulSoalView({
                   <span>{showKatexAssistant ? 'KaTeX' : 'Bantuan KaTeX'}</span>
                 </button>
 
+                <button
+                  type="button"
+                  onClick={() => setShowTableAssistant(!showTableAssistant)}
+                  className={`px-2 py-1 rounded text-xs font-medium flex items-center gap-1 border cursor-pointer transition ${
+                    showTableAssistant
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-50'
+                  }`}
+                  title="Buat & Edit Tabel Dasar"
+                >
+                  <span>Tabel</span>
+                </button>
+
                 {/* Bahasa Arab Quick Assistant Button */}
                 <button
                   type="button"
@@ -1454,6 +1470,44 @@ export function ModulSoalView({
               )}
 
               {/* Bahasa Arab Assistant Bar (Keyboard & Harakat Helper) */}
+              {showTableAssistant && (
+                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-semibold text-indigo-800 dark:text-indigo-200">Tabel:</span>
+                  <label className="flex items-center gap-1">
+                    <span>Baris</span>
+                    <input type="number" min={1} max={20} value={tableRows} onChange={(e) => setTableRows(Number(e.target.value) || 1)} className="w-12 px-1.5 py-0.5 rounded border bg-white dark:bg-slate-900" />
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>Kolom</span>
+                    <input type="number" min={1} max={12} value={tableCols} onChange={(e) => setTableCols(Number(e.target.value) || 1)} className="w-12 px-1.5 py-0.5 rounded border bg-white dark:bg-slate-900" />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rCount = Math.max(1, Math.min(20, tableRows))
+                      const cCount = Math.max(1, Math.min(12, tableCols))
+                      let html = '<table class="cbt-table w-full border-collapse border border-slate-400 my-2 text-xs"><thead><tr>'
+                      for (let c = 0; c < cCount; c++) {
+                        html += `<th class="border border-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1.5 font-bold text-left">Header ${c + 1}</th>`
+                      }
+                      html += '</tr></thead><tbody>'
+                      for (let r = 1; r < rCount; r++) {
+                        html += '<tr>'
+                        for (let c = 0; c < cCount; c++) {
+                          html += '<td class="border border-slate-400 px-2 py-1.5">Isi</td>'
+                        }
+                        html += '</tr>'
+                      }
+                      html += '</tbody></table><p><br/></p>'
+                      insertTextAtCursor(html)
+                    }}
+                    className="px-2.5 py-1 rounded bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer"
+                  >
+                    + Sisipkan Tabel
+                  </button>
+                </div>
+              )}
+
               {showArabicAssistant && (
                 <div className="p-2.5 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-md space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-emerald-900 dark:text-emerald-300 font-bold">
@@ -1573,6 +1627,28 @@ export function ModulSoalView({
                     if (editorRef.current) {
                       setPertanyaan(editorRef.current.innerHTML)
                     }
+                  }}
+                  onKeyDown={(e) => {
+                    if (!(e.ctrlKey || e.metaKey)) return
+                    const key = e.key.toLowerCase()
+                    const run = (cmd: string) => {
+                      e.preventDefault()
+                      document.execCommand(cmd, false)
+                      if (editorRef.current) setPertanyaan(editorRef.current.innerHTML)
+                    }
+                    if (key === 'b') run('bold')
+                    else if (key === 'i') run('italic')
+                    else if (key === 'u') run('underline')
+                    else if (key === 'l' && e.shiftKey) run('insertUnorderedList')
+                    else if (key === '7' && e.shiftKey) run('insertOrderedList')
+                    else if (key === 'l') run('justifyLeft')
+                    else if (key === 'e') run('justifyCenter')
+                    else if (key === 'r') run('justifyRight')
+                    else if (key === 'j') run('justifyFull')
+                    else if (key === 'z' && e.shiftKey) run('redo')
+                    else if (key === 'z') run('undo')
+                    else if (key === 'y') run('redo')
+                    else if (key === '\\') run('removeFormat')
                   }}
                   onPaste={async (e) => {
                     const items = Array.from(e.clipboardData?.items || [])
