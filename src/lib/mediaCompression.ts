@@ -169,3 +169,63 @@ export async function extractAndCompressBase64Media(content: string): Promise<st
   return updatedContent;
 }
 
+/**
+ * Mengunduh gambar eksternal (http:// atau https://) secara otomatis ke /uploads/
+ * dan mengompresinya agar soal dapat ditampilkan secara offline melalui jaringan intranet sekolah.
+ */
+export async function cacheExternalImagesToLocal(content: string): Promise<string> {
+  if (!content || typeof content !== 'string') return content;
+
+  const urlRegex = /(?:src=["']|!\[[^\]]*\]\()(https?:\/\/[^"')\s>]+)/gi;
+  const urls = new Set<string>();
+  let match: RegExpExecArray | null;
+
+  while ((match = urlRegex.exec(content)) !== null) {
+    const url = match[1];
+    if (url && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+      urls.add(url);
+    }
+  }
+
+  if (urls.size === 0) return content;
+
+  const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  let updatedContent = content;
+
+  for (const url of urls) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!res.ok) continue;
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.startsWith('image/')) continue;
+
+      const arrayBuffer = await res.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const extFromType = contentType.split('/')[1]?.split(';')[0] || 'png';
+      const compressed = await compressImageBuffer(buffer, extFromType);
+
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substring(2, 8);
+      const filename = `soal_ext_${timestamp}_${randomStr}${compressed.ext}`;
+      const destPath = path.join(uploadDir, filename);
+
+      fs.writeFileSync(destPath, compressed.buffer);
+      const localUrl = `/uploads/${filename}`;
+
+      updatedContent = updatedContent.split(url).join(localUrl);
+    } catch {
+      // Abaikan jika server offline atau URL gagal diunduh; biarkan URL asli
+    }
+  }
+
+  return updatedContent;
+}
+

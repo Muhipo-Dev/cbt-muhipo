@@ -385,15 +385,23 @@ export function normalizeIncomingSoalItem(raw: any): NormalizedSoalPayload | nul
     }
   }
 
+  const resolvedMediaGambar =
+    (raw.mediaGambar || raw.gambar || raw.image || raw.imageUrl || raw.gambarUrl || raw.img || null) as string | null;
+
+  const finalPertanyaanWithImage =
+    resolvedMediaGambar && !cleanPertanyaan.includes(resolvedMediaGambar)
+      ? `<p><img src="${resolvedMediaGambar}" alt="Gambar Soal" class="cbt-zoomable-media my-2 max-h-72 max-w-full object-contain cursor-zoom-in" /></p>${cleanPertanyaan}`
+      : cleanPertanyaan;
+
   return {
     tipeSoal,
-    pertanyaan: cleanPertanyaan,
+    pertanyaan: finalPertanyaanWithImage,
     bobot,
     opsi,
     kunciJawabanTeks,
     matchingData,
-    mediaGambar: raw.mediaGambar || null,
-    mediaAudio: raw.mediaAudio || null,
+    mediaGambar: resolvedMediaGambar,
+    mediaAudio: (raw.mediaAudio || raw.audio || raw.audioUrl || null) as string | null,
     tingkatKesulitan: Number(raw.tingkatKesulitan) || 1,
   };
 }

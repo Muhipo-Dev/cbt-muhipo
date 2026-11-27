@@ -244,13 +244,20 @@ export function ModulSoalView({
   useEffect(() => {
     if (isSourceMode || !editorRef.current) return
     const el = editorRef.current
+    let rafId: number | null = null
     const syncFromDom = () => {
-      const html = el.innerHTML
-      setPertanyaan((prev) => (prev === html ? prev : html))
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        const html = el.innerHTML
+        setPertanyaan((prev) => (prev === html ? prev : html))
+      })
     }
     const observer = new MutationObserver(syncFromDom)
     observer.observe(el, { childList: true, subtree: true, characterData: true })
-    return () => observer.disconnect()
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      observer.disconnect()
+    }
   }, [isSourceMode, activeMapelId])
 
   // Reset form
@@ -1546,6 +1553,7 @@ export function ModulSoalView({
                 <div
                   id="soal-pertanyaan-editor"
                   data-ai-field="pertanyaan"
+                  dir="auto"
                   role="textbox"
                   aria-multiline="true"
                   aria-label="Editor Teks Pertanyaan Soal"
@@ -1566,7 +1574,29 @@ export function ModulSoalView({
                       setPertanyaan(editorRef.current.innerHTML)
                     }
                   }}
-                  onPaste={() => {
+                  onPaste={async (e) => {
+                    const items = Array.from(e.clipboardData?.items || [])
+                    const imageItem = items.find((item) => item.type.startsWith('image/'))
+                    if (imageItem) {
+                      e.preventDefault()
+                      const file = imageItem.getAsFile()
+                      if (file) {
+                        try {
+                          const formData = new FormData()
+                          formData.append('file', file)
+                          const res = await fetch('/api/upload', { method: 'POST', body: formData })
+                          const data = await res.json()
+                          if (res.ok && data?.url) {
+                            insertTextAtCursor(
+                              `<img src="${data.url}" alt="Gambar Soal" class="cbt-zoomable-media my-2 max-h-72 max-w-full object-contain cursor-zoom-in" />`
+                            )
+                          }
+                        } catch {
+                          // Abaikan jika gagal upload
+                        }
+                      }
+                      return
+                    }
                     setTimeout(() => {
                       if (editorRef.current) {
                         setPertanyaan(editorRef.current.innerHTML)

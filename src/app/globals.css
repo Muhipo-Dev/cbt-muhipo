@@ -323,12 +323,12 @@ main,
   font-family: var(--font-arabic) !important;
   direction: rtl;
   unicode-bidi: isolate;
-  font-size: 1.2em;
+  font-size: 1.15em;
   line-height: 1.9 !important;
-  display: inline-block;
-  vertical-align: middle;
-  padding: 0 0.25em;
+  display: inline;
+  padding: 0 0.15em;
   font-feature-settings: "cv01" 1, "cv02" 1, "liga" 1, "clig" 1, "calt" 1, "kern" 1;
+  text-rendering: optimizeLegibility;
 }
 
 /* Aksara Jawa (Hanacaraka, Pasangan, Sandhangan, Angka Jawa) */

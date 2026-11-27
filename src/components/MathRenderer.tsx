@@ -311,13 +311,14 @@ function normalizeRadicalNotations(chunk: string): string {
  * teks Bahasa Arab (dengan tata letak & harakat optimal), Aksara Jawa (Hanacaraka),
  * serta media embed (gambar, audio, video, dan YouTube iframe).
  */
-export const MathRenderer: React.FC<MathRendererProps> = ({ content, className = '' }) => {
-  if (!content) return null;
-
-  const hasArabic = ARABIC_REGEX.test(content);
-  const hasJavanese = JAVANESE_REGEX.test(content);
-
-  const renderContentWithMathAndMedia = (text: string) => {
+export const MathRenderer: React.FC<MathRendererProps> = React.memo(({ content, className = '' }) => {
+  const { hasArabic, hasJavanese, renderedHtml } = React.useMemo(() => {
+    if (!content) {
+      return { hasArabic: false, hasJavanese: false, renderedHtml: '' };
+    }
+    const arabic = ARABIC_REGEX.test(content);
+    const javanese = JAVANESE_REGEX.test(content);
+    const renderContentWithMathAndMedia = (text: string) => {
     // 0. Dukung delimiter LaTeX \( ... \) dan \[ ... \] menjadi $...$ dan $$...$$
     let processed = text
       .replace(/\\\[([\s\S]*?)\\\]/g, (_, m) => `$$${m}$$`)
@@ -407,8 +408,8 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
 
     // 8. Auto-wrap raw Teks Arab yang belum dibungkus tag HTML agar harakat dan arah RTL sempurna
     formatted = formatted.replace(
-      /(?<!<[^>]*)([\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF][\u0600-\u06FF\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s\u060C\u061B\u061F\u0640]*[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]|[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])/g,
-      `<bdi class="font-arabic-inline dir-rtl" dir="rtl">$1</bdi>`
+      /(?<!<[^>]*)([\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF][\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s\u060C\u061B\u061F\u0640\u0660-\u0669\u06F0-\u06F9]*[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0660-\u0669\u06F0-\u06F9]|[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])/g,
+      `<bdi class="font-arabic-inline" dir="rtl">$1</bdi>`
     );
 
     // 9. Dukung line breaks (spasi ke bawah / baris baru)
@@ -416,6 +417,14 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
 
     return formatted;
   };
+    return {
+      hasArabic: arabic,
+      hasJavanese: javanese,
+      renderedHtml: renderContentWithMathAndMedia(content),
+    };
+  }, [content]);
+
+  if (!content) return null;
 
   // Tentukan class penyesuaian untuk Arab / Aksara Jawa jika terdapat aksara
   const extraClasses = [
@@ -427,7 +436,8 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
     <div
       dir="auto"
       className={`prose max-w-none text-slate-800 dark:text-slate-100 leading-relaxed font-sans ${extraClasses} ${className}`}
-      dangerouslySetInnerHTML={{ __html: renderContentWithMathAndMedia(content) }}
+      dangerouslySetInnerHTML={{ __html: renderedHtml }}
     />
   );
-};
+});
+MathRenderer.displayName = 'MathRenderer';

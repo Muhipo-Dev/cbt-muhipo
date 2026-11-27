@@ -3,7 +3,7 @@ import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { TipeSoal } from '@/lib/enums';
 import { convertEquationToKatex } from '@/lib/katexConverter';
-import { extractAndCompressBase64Media } from '@/lib/mediaCompression';
+import { extractAndCompressBase64Media, cacheExternalImagesToLocal } from '@/lib/mediaCompression';
 import {
   normalizeIncomingSoalItem,
   parseAIQuestionsFromTextOrJson,
@@ -478,7 +478,8 @@ export async function POST(request: NextRequest) {
 
       for (const item of normalizedList) {
         const tipe = item.tipeSoal;
-        const pertanyaan = await extractAndCompressBase64Media(item.pertanyaan);
+        let pertanyaan = await extractAndCompressBase64Media(item.pertanyaan);
+        pertanyaan = await cacheExternalImagesToLocal(pertanyaan);
         if (!pertanyaan) continue;
 
         const bobot = Number(item.bobot) || 1.0;
@@ -686,6 +687,7 @@ export async function POST(request: NextRequest) {
 
       let cleanPertanyaan = convertEquationToKatex(String(pertanyaan || '').trim());
       cleanPertanyaan = await extractAndCompressBase64Media(cleanPertanyaan);
+      cleanPertanyaan = await cacheExternalImagesToLocal(cleanPertanyaan);
 
       let cleanKunciTeks = kunciJawabanTeks ? convertEquationToKatex(String(kunciJawabanTeks)) : null;
       if (cleanKunciTeks) {
