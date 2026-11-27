@@ -593,6 +593,12 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, message: 'Jadwal waktu selesai harus setelah waktu mulai.' }, { status: 400 });
         }
         const rentangMenit = Math.floor((endDt.getTime() - startDt.getTime()) / (1000 * 60));
+        if (rentangMenit > 1440) {
+          return NextResponse.json({
+            success: false,
+            message: 'Jadwal pengerjaan tidak boleh lebih dari 1 hari (maksimal 24 jam).',
+          }, { status: 400 });
+        }
         if (rentangMenit < duration) {
           return NextResponse.json({
             success: false,

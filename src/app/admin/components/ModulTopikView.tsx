@@ -60,6 +60,7 @@ export function ModulTopikView({
 
   const [selectedModul, setSelectedModul] = useState<string>('SEMUA')
   const [statusFilter, setStatusFilter] = useState<'SEMUA' | 'AKTIF' | 'NONAKTIF'>('SEMUA')
+  const [tingkatFilter, setTingkatFilter] = useState<string>('SEMUA')
   const [searchQuery, setSearchQuery] = useState('')
   const [entriesPerPage, setEntriesPerPage] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
@@ -513,16 +514,25 @@ export function ModulTopikView({
   // Filter Data
   const baseItems = activeAllItems
 
+  const availableTingkat = Array.from(
+    new Set(baseItems.map((m: any) => m.tingkat).filter((t: any) => t !== undefined && t !== null && t !== ''))
+  ).sort((a: any, b: any) => Number(a) - Number(b))
+
   const filteredByStatus = baseItems.filter((m: any) => {
     if (statusFilter === 'AKTIF') return m.status !== 'NONAKTIF'
     if (statusFilter === 'NONAKTIF') return m.status === 'NONAKTIF'
     return true
   })
 
+  const filteredByTingkat = filteredByStatus.filter((m: any) => {
+    if (tingkatFilter === 'SEMUA') return true
+    return String(m.tingkat) === tingkatFilter
+  })
+
   const modulItems =
     selectedModul === 'SEMUA'
-      ? filteredByStatus
-      : filteredByStatus.filter(
+      ? filteredByTingkat
+      : filteredByTingkat.filter(
           (m: any) => (m.namaModul || m.modul?.nama || 'Default').toLowerCase() === selectedModul.toLowerCase()
         )
 
@@ -688,6 +698,26 @@ export function ModulTopikView({
                     <option value="SEMUA">Semua Status</option>
                     <option value="AKTIF">Aktif</option>
                     <option value="NONAKTIF">Arsip</option>
+                  </select>
+                </div>
+
+                {/* Tingkat Filter Selector */}
+                <div className="flex items-center gap-1 ml-2">
+                  <span className="font-semibold">Tingkat:</span>
+                  <select
+                    value={tingkatFilter}
+                    onChange={(e) => {
+                      setTingkatFilter(e.target.value)
+                      setCurrentPage(1)
+                    }}
+                    className="px-2.5 py-1 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="SEMUA">Semua Tingkat</option>
+                    {availableTingkat.map((t: any) => (
+                      <option key={String(t)} value={String(t)}>
+                        Tingkat {t}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

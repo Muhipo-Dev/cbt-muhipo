@@ -15,13 +15,16 @@ export async function POST(request: NextRequest) {
 
     const trimmedInput = username.trim();
 
-    // 1. CARI USER DI DATABASE CBT (Bisa via username, nomorPeserta, atau nip)
+    // 1. CARI USER DI DATABASE CBT
+    // Untuk SISWA, username login wajib menggunakan Nomor Peserta (nomorPeserta)
+    // Untuk ADMIN/GURU/PROKTOR, bisa via username atau nip
     const user = await prisma.user.findFirst({
       where: {
         OR: [
-          { username: trimmedInput },
-          { nomorPeserta: trimmedInput },
-          { nip: trimmedInput },
+          { nomorPeserta: trimmedInput, role: 'SISWA' },
+          { username: trimmedInput, nomorPeserta: null, role: 'SISWA' },
+          { username: trimmedInput, role: { not: 'SISWA' } },
+          { nip: trimmedInput, role: { not: 'SISWA' } },
         ],
       },
       include: {

@@ -1379,13 +1379,21 @@ export default function LembarUjianPage({
   const currentSoal = soalList[currentIndex];
   const currentJawaban = jawabanMap[currentSoal?.id] || { jawabanDipilih: '', raguRagu: false };
 
+  const isPoinSoalMode = String(ujianInfo?.modePenilaian || 'SKALA_100').toUpperCase() === 'POIN_SOAL';
+  const requiredSoalList = isPoinSoalMode
+    ? soalList.filter((s) => {
+        const tipe = String(s.tipeSoal || 'PG').toUpperCase();
+        return tipe !== 'ISIAN' && tipe !== 'ESAI';
+      })
+    : soalList;
   const totalTerjawab = soalList.filter((s) => isSoalAnswered(s, jawabanMap[s.id]?.jawabanDipilih)).length;
+  const totalTerjawabRequired = requiredSoalList.filter((s) => isSoalAnswered(s, jawabanMap[s.id]?.jawabanDipilih)).length;
   const totalWajibDijawab =
     ujianInfo?.minJawaban && Number(ujianInfo.minJawaban) > 0
-      ? Math.min(soalList.length, Number(ujianInfo.minJawaban))
-      : soalList.length;
-  const belumDijawabCount = Math.max(0, totalWajibDijawab - totalTerjawab);
-  const isAllRequiredAnswered = totalTerjawab >= totalWajibDijawab;
+      ? Math.min(requiredSoalList.length, Number(ujianInfo.minJawaban))
+      : requiredSoalList.length;
+  const belumDijawabCount = Math.max(0, totalWajibDijawab - totalTerjawabRequired);
+  const isAllRequiredAnswered = totalTerjawabRequired >= totalWajibDijawab;
   const totalRagu = Object.values(jawabanMap).filter((j) => j.raguRagu).length;
 
   const questionFontClass =

@@ -463,6 +463,7 @@ export async function POST(
           waktuMulai: ujian.waktuMulai,
           waktuSelesai: ujian.waktuSelesai,
           minJawaban: (ujian as any).minJawaban ?? null,
+          modePenilaian: (ujian as any).modePenilaian || 'SKALA_100',
           sisaWaktuDetik: currentSisaDetik,
           lockBrowser: ujian.lockBrowser !== false,
           mapel: ujian.mataPelajaran.nama,

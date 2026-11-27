@@ -1332,6 +1332,12 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, message: 'Jadwal waktu selesai harus setelah waktu mulai.' }, { status: 400 });
         }
         const rentangMenit = Math.floor((endDt.getTime() - startDt.getTime()) / (1000 * 60));
+        if (rentangMenit > 1440) {
+          return NextResponse.json({
+            success: false,
+            message: 'Jadwal pengerjaan tidak boleh lebih dari 1 hari (maksimal 24 jam).',
+          }, { status: 400 });
+        }
         if (rentangMenit < durasiNum) {
           return NextResponse.json({
             success: false,
@@ -1355,9 +1361,9 @@ export async function POST(request: NextRequest) {
           waktuMulai: waktuMulai ? new Date(waktuMulai) : new Date(),
           waktuSelesai: waktuSelesai
             ? new Date(waktuSelesai)
-            : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            : new Date(Date.now() + 24 * 60 * 60 * 1000),
           lockBrowser: lockBrowser !== false,
-          modePenilaian: modePenilaian === 'POIN_SOAL' ? 'POIN_SOAL' : 'SKALA_100',
+          modePenilaian: modePenilaian === 'SKALA_100' ? 'SKALA_100' : 'POIN_SOAL',
           acakSoal: acakSoal !== false,
           acakOpsi: acakOpsi !== false,
           tampilkanHasil: tampilkanHasil === true,
@@ -1451,6 +1457,12 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, message: 'Jadwal waktu selesai harus setelah waktu mulai.' }, { status: 400 });
         }
         const rentangMenit = Math.floor((finalWaktuSelesai.getTime() - finalWaktuMulai.getTime()) / (1000 * 60));
+        if (rentangMenit > 1440) {
+          return NextResponse.json({
+            success: false,
+            message: 'Jadwal pengerjaan tidak boleh lebih dari 1 hari (maksimal 24 jam).',
+          }, { status: 400 });
+        }
         if (rentangMenit < finalDurasi) {
           return NextResponse.json({
             success: false,

@@ -49,6 +49,7 @@ export function ProktorLiveView({
 }: ProktorLiveViewProps) {
   const [localUjianId, setLocalUjianId] = useState<string>('')
   const [selectedKelas, setSelectedKelas] = useState<string>('ALL')
+  const [selectedStatus, setSelectedStatus] = useState<string>('ALL')
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [isLiveAutoRefresh, setIsLiveAutoRefresh] = useState<boolean>(true)
   const [lastRefreshedTime, setLastRefreshedTime] = useState<Date>(new Date())
@@ -76,6 +77,7 @@ export function ProktorLiveView({
   const handleChangeUjian = (uid: string) => {
     setLocalUjianId(uid)
     setSelectedKelas('ALL')
+    setSelectedStatus('ALL')
     if (onSelectUjian) onSelectUjian(uid)
   }
 
@@ -253,21 +255,52 @@ export function ProktorLiveView({
     return pesertaList.filter((p: any) => {
       const matchUjian = !currentUjianId || !p.ujianId || p.ujianId === currentUjianId
       const matchKelas = selectedKelas === 'ALL' || p.kelas === selectedKelas
+
+      let matchStatus = true
+      if (selectedStatus === 'MENGERJAKAN') {
+        matchStatus = p.status === 'SEDANG_MENGERJAKAN' || p.status === 'MENGERJAKAN' || p.status === 'RESET_LOGIN'
+      } else if (selectedStatus === 'SELESAI') {
+        matchStatus = p.status === 'SELESAI'
+      } else if (selectedStatus === 'TERKUNCI') {
+        matchStatus = p.status === 'TERKUNCI'
+      } else if (selectedStatus === 'PELANGGARAN') {
+        matchStatus = (p.jumlahPelanggaran || p.pelanggaranCount || 0) > 0 || p.status === 'TERKUNCI'
+      } else if (selectedStatus === 'RESET_LOGIN') {
+        matchStatus = p.status === 'RESET_LOGIN'
+      } else if (selectedStatus === 'BELUM_MENGERJAKAN') {
+        matchStatus =
+          p.status !== 'SEDANG_MENGERJAKAN' &&
+          p.status !== 'MENGERJAKAN' &&
+          p.status !== 'RESET_LOGIN' &&
+          p.status !== 'SELESAI' &&
+          p.status !== 'TERKUNCI'
+      }
+
       const matchSearch =
         !searchQuery.trim() ||
         p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.nomorPeserta?.toLowerCase().includes(searchQuery.toLowerCase())
-      return matchUjian && matchKelas && matchSearch
+      return matchUjian && matchKelas && matchStatus && matchSearch
     })
-  }, [pesertaList, currentUjianId, selectedKelas, searchQuery])
+  }, [pesertaList, currentUjianId, selectedKelas, selectedStatus, searchQuery])
 
   const totalMengerjakan = pesertaList.filter(
     (p) => p.status === 'SEDANG_MENGERJAKAN' || p.status === 'MENGERJAKAN' || p.status === 'RESET_LOGIN'
   ).length
   const totalSelesai = pesertaList.filter((p) => p.status === 'SELESAI').length
+  const totalTerkunci = pesertaList.filter((p) => p.status === 'TERKUNCI').length
+  const totalResetLogin = pesertaList.filter((p) => p.status === 'RESET_LOGIN').length
   const totalPelanggaran = pesertaList.filter(
     (p) => (p.jumlahPelanggaran || p.pelanggaranCount || 0) > 0 || p.status === 'TERKUNCI'
+  ).length
+  const totalBelum = pesertaList.filter(
+    (p) =>
+      p.status !== 'SEDANG_MENGERJAKAN' &&
+      p.status !== 'MENGERJAKAN' &&
+      p.status !== 'RESET_LOGIN' &&
+      p.status !== 'SELESAI' &&
+      p.status !== 'TERKUNCI'
   ).length
 
   return (
@@ -398,7 +431,15 @@ export function ProktorLiveView({
 
         {/* Live Counters */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/60 dark:border-white/5 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setSelectedStatus('ALL')}
+            className={`p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border flex items-center justify-between text-left transition cursor-pointer touch-manipulation ${
+              selectedStatus === 'ALL'
+                ? 'border-slate-400 dark:border-slate-500 ring-2 ring-slate-400/30'
+                : 'border-slate-200/60 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/20'
+            }`}
+          >
             <div>
               <span className="text-[11px] font-bold text-slate-500 block">Total Peserta</span>
               <span className="text-xl font-black text-slate-900 dark:text-white">{pesertaList.length}</span>
@@ -406,9 +447,17 @@ export function ProktorLiveView({
             <div className="w-8 h-8 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold text-xs">
               👥
             </div>
-          </div>
+          </button>
 
-          <div className="p-3 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-800/40 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setSelectedStatus(selectedStatus === 'MENGERJAKAN' ? 'ALL' : 'MENGERJAKAN')}
+            className={`p-3 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border flex items-center justify-between text-left transition cursor-pointer touch-manipulation ${
+              selectedStatus === 'MENGERJAKAN'
+                ? 'border-blue-500 ring-2 ring-blue-500/30'
+                : 'border-blue-200/60 dark:border-blue-800/40 hover:border-blue-400'
+            }`}
+          >
             <div>
               <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 block">Sedang Mengerjakan</span>
               <span className="text-xl font-black text-blue-700 dark:text-blue-300">{totalMengerjakan}</span>
@@ -416,9 +465,17 @@ export function ProktorLiveView({
             <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs">
               ⏳
             </div>
-          </div>
+          </button>
 
-          <div className="p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setSelectedStatus(selectedStatus === 'SELESAI' ? 'ALL' : 'SELESAI')}
+            className={`p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border flex items-center justify-between text-left transition cursor-pointer touch-manipulation ${
+              selectedStatus === 'SELESAI'
+                ? 'border-emerald-500 ring-2 ring-emerald-500/30'
+                : 'border-emerald-200/60 dark:border-emerald-800/40 hover:border-emerald-400'
+            }`}
+          >
             <div>
               <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 block">Sudah Selesai</span>
               <span className="text-xl font-black text-emerald-700 dark:text-emerald-300">{totalSelesai}</span>
@@ -426,9 +483,16 @@ export function ProktorLiveView({
             <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xs">
               ✓
             </div>
-          </div>
+          </button>
 
-          <div className="p-3 rounded-2xl bg-rose-50/60 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-800/40 flex items-center justify-between">
+          <div
+            onClick={() => setSelectedStatus(selectedStatus === 'PELANGGARAN' ? 'ALL' : 'PELANGGARAN')}
+            className={`p-3 rounded-2xl bg-rose-50/60 dark:bg-rose-950/30 border flex items-center justify-between transition cursor-pointer touch-manipulation ${
+              selectedStatus === 'PELANGGARAN'
+                ? 'border-rose-500 ring-2 ring-rose-500/30'
+                : 'border-rose-200/60 dark:border-rose-800/40 hover:border-rose-400'
+            }`}
+          >
             <div>
               <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 block">Pelanggaran / Terkunci</span>
               <div className="flex items-center gap-2">
@@ -436,7 +500,10 @@ export function ProktorLiveView({
                 {totalPelanggaran > 0 && (
                   <button
                     type="button"
-                    onClick={() => onResetAllPelanggaran(currentUjianId)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onResetAllPelanggaran(currentUjianId)
+                    }}
                     className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-rose-600 hover:bg-rose-500 text-white cursor-pointer shadow-xs transition flex items-center gap-1"
                     title="Reset semua pelanggaran"
                   >
@@ -453,7 +520,7 @@ export function ProktorLiveView({
         </div>
 
         {/* Filter Toolbar */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-200/60 dark:border-white/5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-slate-200/60 dark:border-white/5">
           <div>
             <label className="block text-[11px] font-bold text-slate-500 mb-1">Pilih Jadwal Ujian Aktif</label>
             <select
@@ -486,6 +553,23 @@ export function ProktorLiveView({
                   {k} ({pesertaList.filter((p) => p.kelas === k).length})
                 </option>
               ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-500 mb-1">Filter Status Peserta</label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full min-h-[44px] sm:min-h-0 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-base sm:text-xs font-semibold text-slate-800 dark:text-white cursor-pointer touch-manipulation"
+            >
+              <option value="ALL">Semua Status ({pesertaList.length})</option>
+              <option value="MENGERJAKAN">Sedang Mengerjakan ({totalMengerjakan})</option>
+              <option value="SELESAI">Sudah Selesai ({totalSelesai})</option>
+              <option value="TERKUNCI">Terkunci ({totalTerkunci})</option>
+              <option value="PELANGGARAN">Ada Pelanggaran ({totalPelanggaran})</option>
+              <option value="RESET_LOGIN">Reset Login ({totalResetLogin})</option>
+              <option value="BELUM_MENGERJAKAN">Belum Mengerjakan ({totalBelum})</option>
             </select>
           </div>
 

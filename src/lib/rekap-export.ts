@@ -108,7 +108,6 @@ function appendUjianWorksheet(
     'Nama',
     'Nomor Peserta',
     'Kelas',
-    'Topik / Tes',
     'Tanggal & Jam Masuk',
     'Tanggal & Jam Selesai',
     'Durasi Pengerjaan',
@@ -170,7 +169,6 @@ function appendUjianWorksheet(
       p.siswa?.name || '-',
       p.siswa?.nomorPeserta || p.siswa?.username || '-',
       p.siswa?.kelas?.nama || p.kelas || '-',
-      `${namaTopik} - ${namaTes}`,
       formatDateTimeId(p.waktuMulai),
       formatDateTimeId(p.waktuSelesai),
       formatDurationBetween(p.waktuMulai, p.waktuSelesai),
@@ -190,8 +188,8 @@ function appendUjianWorksheet(
       cell.font = {
         name: 'Calibri',
         size: 10.5,
-        bold: colIdx === 10,
-        color: { argb: colIdx === 10 ? 'FF1D4ED8' : 'FF0F172A' },
+        bold: colIdx === 9,
+        color: { argb: colIdx === 9 ? 'FF1D4ED8' : 'FF0F172A' },
       }
       if (isEven) {
         cell.fill = {
@@ -201,7 +199,7 @@ function appendUjianWorksheet(
         }
       }
 
-      const centerCols = new Set([0, 2, 3, 5, 6, 7, 8, 9, 10, 11])
+      const centerCols = new Set([0, 2, 3, 4, 5, 6, 7, 8, 9, 10])
       cell.alignment = {
         vertical: 'middle',
         horizontal: centerCols.has(colIdx) ? 'center' : 'left',

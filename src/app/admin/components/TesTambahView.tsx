@@ -44,23 +44,26 @@ export function TesTambahView({
   const defaultSelectedItem = items.find((it) => it.status !== 'NONAKTIF') || items[0]
   const defaultSelectedId = defaultSelectedItem?.id || ''
   const now = new Date()
-  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59)
+  const defaultEnd = endOfToday > now ? endOfToday : new Date(now.getTime() + 60 * 60 * 1000)
+  const initialDurasi = Math.max(1, Math.floor((defaultEnd.getTime() - now.getTime()) / (1000 * 60)))
 
   const [form, setForm] = useState({
     kodeUjian: `TES-${Date.now().toString().slice(-4)}`,
     judul: generateJudulTes(defaultSelectedItem),
     deskripsi: '',
     mataPelajaranId: defaultSelectedId,
-    durasiMenit: 90,
+    durasiMenit: initialDurasi,
     minSoal: '' as string | number,
     maxSoal: '' as string | number,
     minJawaban: '' as string | number,
     waktuMulai: formatLocalDatetime(now),
-    waktuSelesai: formatLocalDatetime(nextWeek),
+    waktuSelesai: formatLocalDatetime(defaultEnd),
     acakSoal: true,
     acakOpsi: true,
     tampilkanHasil: false,
     lockBrowser: true,
+    modePenilaian: 'POIN_SOAL',
     kelasIds: [] as string[],
   })
   const [saving, setSaving] = useState(false)
@@ -108,6 +111,14 @@ export function TesTambahView({
       }
 
       const rentangMenit = Math.floor((endDt.getTime() - startDt.getTime()) / (1000 * 60))
+      if (rentangMenit > 1440) {
+        showNotification(
+          'Waktu Tidak Sinkron',
+          'Jadwal pengerjaan tidak boleh lebih dari 1 hari (maksimal 24 jam).',
+          'warning'
+        )
+        return
+      }
       if (rentangMenit < durasiNum) {
         showNotification(
           'Waktu Tidak Sinkron',
@@ -219,9 +230,9 @@ export function TesTambahView({
               data-ai-field="durasiMenit"
               type="number"
               required
+              readOnly
               value={form.durasiMenit}
-              onChange={(e) => setForm({ ...form, durasiMenit: parseInt(e.target.value) || 90 })}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-bold text-slate-600 dark:text-slate-300 cursor-not-allowed focus:outline-none"
             />
           </div>
 
@@ -236,7 +247,18 @@ export function TesTambahView({
               step="60"
               required
               value={form.waktuMulai}
-              onChange={(e) => setForm({ ...form, waktuMulai: e.target.value })}
+              onChange={(e) => {
+                const newMulai = e.target.value
+                let newDurasi = form.durasiMenit
+                if (newMulai && form.waktuSelesai) {
+                  const s = new Date(newMulai)
+                  const end = new Date(form.waktuSelesai)
+                  if (!isNaN(s.getTime()) && !isNaN(end.getTime()) && end > s) {
+                    newDurasi = Math.max(1, Math.floor((end.getTime() - s.getTime()) / (1000 * 60)))
+                  }
+                }
+                setForm({ ...form, waktuMulai: newMulai, durasiMenit: newDurasi })
+              }}
               className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
             />
           </div>
@@ -251,8 +273,20 @@ export function TesTambahView({
               type="datetime-local"
               step="60"
               required
+              min={form.waktuMulai || undefined}
               value={form.waktuSelesai}
-              onChange={(e) => setForm({ ...form, waktuSelesai: e.target.value })}
+              onChange={(e) => {
+                const newSelesai = e.target.value
+                let newDurasi = form.durasiMenit
+                if (form.waktuMulai && newSelesai) {
+                  const s = new Date(form.waktuMulai)
+                  const end = new Date(newSelesai)
+                  if (!isNaN(s.getTime()) && !isNaN(end.getTime()) && end > s) {
+                    newDurasi = Math.max(1, Math.floor((end.getTime() - s.getTime()) / (1000 * 60)))
+                  }
+                }
+                setForm({ ...form, waktuSelesai: newSelesai, durasiMenit: newDurasi })
+              }}
               className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
             />
           </div>
@@ -316,6 +350,21 @@ export function TesTambahView({
           <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-blue-100/60 dark:border-white/5">
             💡 <b>Petunjuk Singkat:</b> Kosongkan jika seluruh soal ditampilkan dan bebas dikumpulkan kapan saja. Jika <b>Min. Wajib Dijawab</b> diisi (misal: <i>25</i>), siswa wajib menjawab minimal 25 butir soal sebelum diperbolehkan menyelesaikan ujian.
           </p>
+        </div>
+
+        {/* Jenis Penilaian */}
+        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/5 space-y-2">
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+            Jenis Penilaian:
+          </label>
+          <select
+            value={form.modePenilaian}
+            onChange={(e) => setForm({ ...form, modePenilaian: e.target.value })}
+            className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-base sm:text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+          >
+            <option value="SKALA_100">Skala 100 (Semua soal dinilai hingga total 100)</option>
+            <option value="POIN_SOAL">Poin Soal (PG, Kompleks & Menjodohkan = 1 poin; Isian/Esai = 0 & dapat dilewati)</option>
+          </select>
         </div>
 
         {/* Parameter Pengerjaan & Anti-Cheat */}
