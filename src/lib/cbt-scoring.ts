@@ -726,6 +726,51 @@ export function matchPGKompleks(
 }
 
 /**
+ * Algoritma Pencocokan Benar/Salah Kompleks (Majemuk AKM)
+ * - Satu butir soal memiliki beberapa rincian pernyataan (opsiJawaban).
+ * - Siswa memilih BENAR atau SALAH untuk masing-masing pernyataan: JSON Record<opsiId, "BENAR" | "SALAH">.
+ * - Penilaian proporsional: (jumlah pernyataan tepat / total pernyataan) * bobot.
+ */
+export function matchBenarSalahKompleks(
+  jawabanRaw: string | undefined,
+  opsiJawaban: OpsiItem[],
+  bobot: number
+): { isBenar: boolean; skor: number } {
+  const total = opsiJawaban.length;
+  if (total === 0 || !jawabanRaw) return { isBenar: false, skor: 0 };
+
+  let parsed: Record<string, unknown> = {};
+  try {
+    const json = JSON.parse(jawabanRaw);
+    if (json && typeof json === 'object' && !Array.isArray(json)) {
+      parsed = json as Record<string, unknown>;
+    }
+  } catch {
+    return { isBenar: false, skor: 0 };
+  }
+
+  let correctCount = 0;
+  for (const opsi of opsiJawaban) {
+    const val = parsed[opsi.id];
+    if (val === undefined || val === null || val === '') continue;
+    const normalized = String(val).trim().toUpperCase();
+    const userIsBenar = normalized === 'BENAR' || normalized === 'TRUE' || normalized === 'B' || normalized === '1';
+    const userIsSalah = normalized === 'SALAH' || normalized === 'FALSE' || normalized === 'S' || normalized === '0';
+    if (!userIsBenar && !userIsSalah) continue;
+    if (userIsBenar === Boolean(opsi.isBenar)) {
+      correctCount++;
+    }
+  }
+
+  const ratio = correctCount / total;
+  const skor = Number((ratio * bobot).toFixed(2));
+  return {
+    isBenar: correctCount === total,
+    skor,
+  };
+}
+
+/**
  * Algoritma Pencocokan Menjodohkan
  */
 export function matchMenjodohkan(
@@ -871,6 +916,18 @@ export function evaluateExamSubmissionItems(params: {
         chosenIds = [];
       }
       const res = matchPGKompleks(chosenIds, soal.opsiJawaban || [], bobot);
+      rawEarnedPilihan += res.skor;
+
+      updates.push({
+        soalId: soal.id,
+        jawabanId: existingJ?.id,
+        jawabanDipilih: chosenText,
+        tipeSoal: tipe,
+        isBenar: res.isBenar,
+        skor: res.skor,
+      });
+    } else if (tipe === 'BENAR_SALAH_KOMPLEKS') {
+      const res = matchBenarSalahKompleks(chosenText || undefined, soal.opsiJawaban || [], bobot);
       rawEarnedPilihan += res.skor;
 
       updates.push({

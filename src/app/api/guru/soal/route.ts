@@ -34,6 +34,7 @@ async function recalculateTopikPoints(mataPelajaranId: string) {
         case 'ISIAN':
           return 2.0;
         case 'PG_KOMPLEKS':
+        case 'BENAR_SALAH_KOMPLEKS':
           return 1.5;
         case 'MENJODOHKAN':
           return 1.0;
@@ -489,7 +490,7 @@ export async function POST(request: NextRequest) {
         }
 
         const opsiList: { label: string; konten: string; isBenar: boolean }[] = [];
-        if (tipe === 'PG' || tipe === 'PG_KOMPLEKS' || tipe === 'BENAR_SALAH') {
+        if (tipe === 'PG' || tipe === 'PG_KOMPLEKS' || tipe === 'BENAR_SALAH' || tipe === 'BENAR_SALAH_KOMPLEKS') {
           if (item.opsi.length > 0) {
             for (const o of item.opsi) {
               if (o.konten && String(o.konten).trim()) {
@@ -727,7 +728,7 @@ export async function POST(request: NextRequest) {
         const effectiveMapelId = targetMapelId || existingSoal.mataPelajaranId;
 
         // Validasi dan sinkronisasi opsiJawaban
-        const isChoiceType = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal);
+        const isChoiceType = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH', 'BENAR_SALAH_KOMPLEKS'].includes(tipeSoal);
         let finalOpsiToSave: { label: string; konten: string; isBenar: boolean }[] | null = null;
 
         if (isChoiceType) {
@@ -836,7 +837,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, message: 'Pilih Topik / Mata Pelajaran terlebih dahulu' }, { status: 400 });
         }
 
-        const isChoiceType = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal);
+        const isChoiceType = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH', 'BENAR_SALAH_KOMPLEKS'].includes(tipeSoal);
         const count = await prisma.soal.count({ where: { mataPelajaranId: targetMapelId } });
 
         let finalOpsiToCreate: { label: string; konten: string; isBenar: boolean }[] | undefined = undefined;

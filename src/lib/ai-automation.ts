@@ -15,6 +15,7 @@ export type CanonicalTipeSoal =
   | 'PG'
   | 'PG_KOMPLEKS'
   | 'BENAR_SALAH'
+  | 'BENAR_SALAH_KOMPLEKS'
   | 'ISIAN'
   | 'ESAI'
   | 'MENJODOHKAN';
@@ -72,6 +73,18 @@ export function normalizeTipeSoalAI(rawType?: unknown, fallback: CanonicalTipeSo
     ].includes(clean)
   ) {
     return 'PG_KOMPLEKS';
+  }
+  if (
+    [
+      'BENAR_SALAH_KOMPLEKS',
+      'BENAR_SALAH_MAJEMUK',
+      'BS_KOMPLEKS',
+      'B/S_KOMPLEKS',
+      'TABEL_BENAR_SALAH',
+      'BENAR/SALAH_KOMPLEKS',
+    ].includes(clean)
+  ) {
+    return 'BENAR_SALAH_KOMPLEKS';
   }
   if (
     [
@@ -250,7 +263,7 @@ export function normalizeIncomingSoalItem(raw: any): NormalizedSoalPayload | nul
 
   // 2. Opsi Jawaban (PG, PG_KOMPLEKS, BENAR_SALAH)
   const opsi: NormalizedOpsiItem[] = [];
-  const isChoice = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(tipeSoal);
+  const isChoice = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH', 'BENAR_SALAH_KOMPLEKS'].includes(tipeSoal);
 
   if (isChoice) {
     const rawOpsiSource = raw.opsiJawaban ?? raw.opsi ?? raw.options ?? raw.pilihan ?? raw.choices;

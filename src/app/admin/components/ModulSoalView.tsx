@@ -738,7 +738,7 @@ export function ModulSoalView({
     // Periksa apakah pengguna / AI Agent telah mengisi opsi jawaban inline langsung pada form
     const filledInlineOpsi = inlineOpsiList.filter((o) => o.konten.trim() !== '')
     const hasInlineChoiceFilled =
-      (tipeSoal === 'PG' || tipeSoal === 'PG_KOMPLEKS') && filledInlineOpsi.length >= 2
+      (tipeSoal === 'PG' || tipeSoal === 'PG_KOMPLEKS' || tipeSoal === 'BENAR_SALAH_KOMPLEKS') && filledInlineOpsi.length >= 2
     const filledInlinePairs = inlineMatchingPairs.filter((p) => p.left.trim() !== '' || p.right.trim() !== '')
     const hasInlineMatchingFilled = tipeSoal === 'MENJODOHKAN' && filledInlinePairs.length >= 1
 
@@ -754,7 +754,7 @@ export function ModulSoalView({
         { label: 'A', konten: 'Benar', isBenar: inlineBenarSalah === 'BENAR' },
         { label: 'B', konten: 'Salah', isBenar: inlineBenarSalah === 'SALAH' },
       ]
-    } else if (['PG', 'PG_KOMPLEKS'].includes(tipeSoal) && !editingSoalId) {
+    } else if (['PG', 'PG_KOMPLEKS', 'BENAR_SALAH_KOMPLEKS'].includes(tipeSoal) && !editingSoalId) {
       payloadOpsiJawaban = [
         { label: 'A', konten: 'Pilihan Jawaban A', isBenar: true },
         { label: 'B', konten: 'Pilihan Jawaban B', isBenar: false },
@@ -803,7 +803,7 @@ export function ModulSoalView({
           tipeSoal === 'ISIAN' ||
           tipeSoal === 'ESAI'
 
-        if (!alreadyCompleteInline && ['PG', 'PG_KOMPLEKS', 'MENJODOHKAN'].includes(tipeSoal) && savedSoal) {
+        if (!alreadyCompleteInline && ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH_KOMPLEKS', 'MENJODOHKAN'].includes(tipeSoal) && savedSoal) {
           handleOpenKelolaJawaban(savedSoal)
         }
       } else {
@@ -852,7 +852,7 @@ export function ModulSoalView({
     try {
       setSavingJawaban(true)
       const isMatching = currentSoalJawaban.tipeSoal === 'MENJODOHKAN'
-      const isChoice = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(currentSoalJawaban.tipeSoal)
+      const isChoice = ['PG', 'PG_KOMPLEKS', 'BENAR_SALAH', 'BENAR_SALAH_KOMPLEKS'].includes(currentSoalJawaban.tipeSoal)
 
       const validPairs = matchingPairs.filter((p) => p.left.trim() || p.right.trim())
 
@@ -1786,6 +1786,7 @@ export function ModulSoalView({
                 >
                   <option value="PG">Pilihan Ganda</option>
                   <option value="PG_KOMPLEKS">Pilihan Ganda Kompleks</option>
+                  <option value="BENAR_SALAH_KOMPLEKS">Benar / Salah Majemuk (Kompleks)</option>
                   <option value="ISIAN">Isian Singkat</option>
                   <option value="ESAI">Uraian / Esai</option>
                   <option value="BENAR_SALAH">Pernyataan Benar / Salah</option>
@@ -1818,7 +1819,7 @@ export function ModulSoalView({
               Pilihan &amp; Kunci Jawaban
             </label>
             <div className="flex-1 space-y-2.5">
-              {(tipeSoal === 'PG' || tipeSoal === 'PG_KOMPLEKS') && (
+              {(tipeSoal === 'PG' || tipeSoal === 'PG_KOMPLEKS' || tipeSoal === 'BENAR_SALAH_KOMPLEKS') && (
                 <div className="p-3 rounded-md bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-600 dark:text-slate-400">
                     <span>
@@ -2071,6 +2072,7 @@ export function ModulSoalView({
                   <option value="SEMUA">Semua Jenis ({allSoal.length})</option>
                   <option value="PG">Pilihan Ganda ({allSoal.filter((s: any) => s.tipeSoal === 'PG').length})</option>
                   <option value="PG_KOMPLEKS">PG Kompleks ({allSoal.filter((s: any) => s.tipeSoal === 'PG_KOMPLEKS').length})</option>
+                  <option value="BENAR_SALAH_KOMPLEKS">B/S Majemuk ({allSoal.filter((s: any) => s.tipeSoal === 'BENAR_SALAH_KOMPLEKS').length})</option>
                   <option value="BENAR_SALAH">Benar / Salah ({allSoal.filter((s: any) => s.tipeSoal === 'BENAR_SALAH').length})</option>
                   <option value="MENJODOHKAN">Menjodohkan ({allSoal.filter((s: any) => s.tipeSoal === 'MENJODOHKAN').length})</option>
                   <option value="ISIAN">Isian Singkat ({allSoal.filter((s: any) => s.tipeSoal === 'ISIAN').length})</option>
@@ -2413,7 +2415,7 @@ export function ModulSoalView({
               </div>
 
               {/* A. OPSI PILIHAN GANDA / PG KOMPLEKS / BENAR SALAH */}
-              {['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(currentSoalJawaban.tipeSoal) && (
+              {['PG', 'PG_KOMPLEKS', 'BENAR_SALAH', 'BENAR_SALAH_KOMPLEKS'].includes(currentSoalJawaban.tipeSoal) && (
                 <div className="space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>

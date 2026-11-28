@@ -70,7 +70,7 @@ interface OpsiJawaban {
 interface SoalItem {
   id: string;
   nomorUrutTampil: number;
-  tipeSoal: 'PG' | 'PG_KOMPLEKS' | 'BENAR_SALAH' | 'MENJODOHKAN' | 'ISIAN' | 'ESAI';
+  tipeSoal: 'PG' | 'PG_KOMPLEKS' | 'BENAR_SALAH' | 'BENAR_SALAH_KOMPLEKS' | 'MENJODOHKAN' | 'ISIAN' | 'ESAI';
   pertanyaan: string;
   mediaAudio?: string;
   mediaGambar?: string;
@@ -1287,6 +1287,26 @@ export default function LembarUjianPage({
     saveJawaban(soalId, JSON.stringify(currentIds), curr.raguRagu, true);
   };
 
+  const handleSelectBenarSalahKompleks = (soalId: string, opsiId: string, value: 'BENAR' | 'SALAH') => {
+    if (submitting || isSubmittedRef.current || isMultiTouchPinchingRef.current) return;
+    ensureKioskFullscreenOnGesture();
+    const curr = jawabanMap[soalId] || { jawabanDipilih: '', raguRagu: false };
+    let currentMap: Record<string, string> = {};
+    try {
+      if (curr.jawabanDipilih) {
+        const parsed = JSON.parse(curr.jawabanDipilih);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          currentMap = parsed;
+        }
+      }
+    } catch {
+      currentMap = {};
+    }
+
+    currentMap[opsiId] = value;
+    saveJawaban(soalId, JSON.stringify(currentMap), curr.raguRagu, true);
+  };
+
   const handleToggleRagu = () => {
     if (submitting || isSubmittedRef.current) return;
     ensureKioskFullscreenOnGesture();
@@ -1925,6 +1945,78 @@ export default function LembarUjianPage({
                     </button>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Opsi Jawaban: Benar / Salah Kompleks (Majemuk) */}
+            {currentSoal.tipeSoal === 'BENAR_SALAH_KOMPLEKS' && (
+              <div className="space-y-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 border-l-4 border-l-emerald-600 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-md text-xs font-medium">
+                  Benar / Salah Majemuk: Tentukan apakah setiap pernyataan berikut Benar atau Salah.
+                </div>
+                <div className="space-y-2">
+                  {currentSoal.opsiJawaban.map((opsi, idx) => {
+                    let chosenMap: Record<string, string> = {};
+                    try {
+                      if (currentJawaban.jawabanDipilih) {
+                        const parsed = JSON.parse(currentJawaban.jawabanDipilih);
+                        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                          chosenMap = parsed;
+                        }
+                      }
+                    } catch {
+                      chosenMap = {};
+                    }
+                    const selectedVal = chosenMap[opsi.id];
+
+                    return (
+                      <div
+                        key={opsi.id}
+                        className="p-3 sm:px-4 sm:py-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <span className="flex-shrink-0 w-7 h-7 rounded-md font-bold flex items-center justify-center text-xs bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                            {opsi.label || idx + 1}
+                          </span>
+                          <div className={`flex-1 pt-0.5 break-words min-w-0 space-y-2 ${optionFontClass}`}>
+                            <MathRenderer content={opsi.konten} />
+                            {opsi.gambar && (
+                              <img
+                                src={opsi.gambar}
+                                alt={`Gambar Pernyataan ${opsi.label || idx + 1}`}
+                                className="cbt-zoomable-media max-h-44 w-auto rounded-lg object-contain cursor-zoom-in"
+                              />
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                          <button
+                            type="button"
+                            onClick={() => handleSelectBenarSalahKompleks(currentSoal.id, opsi.id, 'BENAR')}
+                            className={`min-h-[44px] min-w-[76px] px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold border transition-colors cursor-pointer touch-manipulation active:scale-[0.98] ${
+                              selectedVal === 'BENAR'
+                                ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                                : 'bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+                            }`}
+                          >
+                            Benar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectBenarSalahKompleks(currentSoal.id, opsi.id, 'SALAH')}
+                            className={`min-h-[44px] min-w-[76px] px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold border transition-colors cursor-pointer touch-manipulation active:scale-[0.98] ${
+                              selectedVal === 'SALAH'
+                                ? 'bg-rose-600 border-rose-600 text-white shadow-sm'
+                                : 'bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/30'
+                            }`}
+                          >
+                            Salah
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

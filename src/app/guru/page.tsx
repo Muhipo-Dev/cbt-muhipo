@@ -2213,6 +2213,7 @@ export default function GuruDashboardPage() {
                             >
                               <option value="PG">Pilihan Ganda (PG Tunggal)</option>
                               <option value="PG_KOMPLEKS">PG Kompleks (Multi Select)</option>
+                              <option value="BENAR_SALAH_KOMPLEKS">Benar / Salah Majemuk (Kompleks)</option>
                               <option value="MENJODOHKAN">Mencocokkan / Menjodohkan (4-7 Kotak)</option>
                               <option value="BENAR_SALAH">Benar / Salah</option>
                               <option value="ISIAN">Isian Singkat</option>
@@ -2497,7 +2498,7 @@ export default function GuruDashboardPage() {
                         })()}
 
                         {/* Opsi Jawaban untuk PG & PG Kompleks */}
-                        {(soalForm.tipeSoal === 'PG' || soalForm.tipeSoal === 'PG_KOMPLEKS') && (
+                        {(soalForm.tipeSoal === 'PG' || soalForm.tipeSoal === 'PG_KOMPLEKS' || soalForm.tipeSoal === 'BENAR_SALAH_KOMPLEKS') && (
                           <div className="space-y-2 pt-1">
                             <label className="block text-slate-700 dark:text-slate-300 font-semibold">Pilihan Jawaban & Sisip Media:</label>
                             {soalForm.opsiJawaban.map((op: any, idx: number) => (
@@ -3005,6 +3006,7 @@ export default function GuruDashboardPage() {
                                     <option value="SEMUA">Semua Jenis ({allSoal.length})</option>
                                     <option value="PG">Pilihan Ganda ({allSoal.filter((s: any) => s.tipeSoal === 'PG').length})</option>
                                     <option value="PG_KOMPLEKS">PG Kompleks ({allSoal.filter((s: any) => s.tipeSoal === 'PG_KOMPLEKS').length})</option>
+                                    <option value="BENAR_SALAH_KOMPLEKS">B/S Majemuk ({allSoal.filter((s: any) => s.tipeSoal === 'BENAR_SALAH_KOMPLEKS').length})</option>
                                     <option value="BENAR_SALAH">Benar / Salah ({allSoal.filter((s: any) => s.tipeSoal === 'BENAR_SALAH').length})</option>
                                     <option value="MENJODOHKAN">Menjodohkan ({allSoal.filter((s: any) => s.tipeSoal === 'MENJODOHKAN').length})</option>
                                     <option value="ISIAN">Isian Singkat ({allSoal.filter((s: any) => s.tipeSoal === 'ISIAN').length})</option>
@@ -3131,7 +3133,7 @@ export default function GuruDashboardPage() {
                                         </div>
                                       )}
 
-                                      {['PG', 'PG_KOMPLEKS', 'BENAR_SALAH'].includes(s.tipeSoal) && s.opsiJawaban && s.opsiJawaban.length > 0 && (
+                                      {['PG', 'PG_KOMPLEKS', 'BENAR_SALAH', 'BENAR_SALAH_KOMPLEKS'].includes(s.tipeSoal) && s.opsiJawaban && s.opsiJawaban.length > 0 && (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-8 pt-1">
                                           {[...s.opsiJawaban]
                                             .sort((a: any, b: any) => (a.label || '').localeCompare(b.label || ''))
