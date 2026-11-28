@@ -920,16 +920,14 @@ export function ModulDaftarView({
                           )}
                         </div>
 
-                        <textarea
-                          rows={2}
+                        <RichSoalEditor
                           value={op.konten}
-                          onChange={(e) => {
+                          onChange={(val) => {
                             const updated = [...opsiList]
-                            updated[idx].konten = e.target.value
+                            updated[idx].konten = val
                             setOpsiList(updated)
                           }}
-                          placeholder={`Teks atau rumus KaTeX opsi ${op.label}...`}
-                          className="w-full p-2.5 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-sans"
+                          placeholder={`Teks, gambar, tabel, Arab, atau rumus KaTeX opsi ${op.label}...`}
                         />
                       </div>
                     ))}
@@ -940,12 +938,10 @@ export function ModulDaftarView({
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                     Kunci Jawaban Teks / Kata Kunci Penilaian
                   </label>
-                  <textarea
-                    rows={4}
+                  <RichSoalEditor
                     value={kunciJawabanTeks}
-                    onChange={(e) => setKunciJawabanTeks(e.target.value)}
+                    onChange={setKunciJawabanTeks}
                     placeholder="Masukkan jawaban yang benar atau kata kunci..."
-                    className="w-full p-3 rounded bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/20 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-sans"
                   />
                 </div>
               )}
